@@ -1,0 +1,315 @@
+import type { CircuitDoc } from '../model/types';
+import { getDef } from '../components/registry';
+import { buildNetlist, type Netlist } from './netlist';
+import { Circuit } from './solver';
+import { NodeAllocator, SimBuilder, type PrimRecord, type SimComponent, type SimWarning } from './builder';
+import { McuRuntime, type McuError } from '../mcu/runtime';
+import { unoPinIndex } from '../components/defs/arduino';
+
+export interface SimSnapshot {
+  time: number;
+  comps: Record<string, Record<string, any> | undefined>;
+  warnings: SimWarning[];
+  /** wire id → current in amps, positive when flowing from end a to end b */
+  wireFlow: Record<string, number>;
+  /** net index → voltage relative to the circuit's ground */
+  netVolts: Float64Array;
+  netOfPin: Map<string, number>;
+  slow: boolean;
+  solverFailed: boolean;
+}
+
+const MAX_STEP = 1e-3;
+const FRAME_BUDGET_MS = 12;
+
+export class Simulator {
+  time = 0;
+  netlist!: Netlist;
+  private circuit!: Circuit;
+  private comps = new Map<string, SimComponent>();
+  private records: PrimRecord[] = [];
+  private pinCharge = new Map<string, number>();
+  private nodeOfNet: (net: number) => number | undefined = () => undefined;
+  private staticWarnings: SimWarning[] = [];
+  private frameStart = 0;
+  persist = new Map<string, Record<string, any>>();
+  inputs = new Map<string, Record<string, any>>();
+  mcus = new Map<string, McuRuntime>();
+  slow = false;
+
+  constructor(private doc: CircuitDoc) {}
+
+  /** Compile all microcontroller sketches. Returns errors keyed by component id. */
+  compile(): Map<string, McuError> {
+    const errors = new Map<string, McuError>();
+    this.mcus.clear();
+    for (const c of this.doc.components) {
+      const def = getDef(c.type);
+      if (!def?.mcu) continue;
+      const rt = new McuRuntime();
+      const err = rt.load(String(c.props.code ?? ''));
+      if (err) errors.set(c.id, err);
+      this.mcus.set(c.id, rt);
+    }
+    return errors;
+  }
+
+  start(): Map<string, McuError> {
+    const errors = this.compile();
+    this.rebuild(this.doc);
+    return errors;
+  }
+
+  input(compId: string): Record<string, any> {
+    let i = this.inputs.get(compId);
+    if (!i) {
+      i = {};
+      this.inputs.set(compId, i);
+    }
+    return i;
+  }
+
+  /** (Re)build the electrical model, keeping per-part state (capacitor charge, motor speed, MCU). */
+  rebuild(doc: CircuitDoc) {
+    this.doc = doc;
+    this.netlist = buildNetlist(doc);
+    const alloc = new NodeAllocator(this.netlist);
+    this.records = [];
+    this.comps.clear();
+    const grounds: number[] = [];
+    const env = { grounds, signalFrequency: (k: string) => this.signalFrequency(k) };
+    const builders: SimBuilder[] = [];
+    for (const c of doc.components) {
+      const def = getDef(c.type);
+      if (!def?.build) continue;
+      let st = this.persist.get(c.id);
+      if (!st) {
+        st = {};
+        this.persist.set(c.id, st);
+      }
+      const b = new SimBuilder(alloc, c.id, st, this.input(c.id), this.mcus.get(c.id), this.records, env);
+      builders.push(b);
+      this.comps.set(c.id, def.build(b, c));
+    }
+    this.circuit = new Circuit(alloc.count);
+    for (const r of this.records) this.circuit.add(r.prim);
+    this.circuit.preferredGrounds = grounds;
+    for (const b of builders) b.v = this.circuit.v;
+    this.nodeOfNet = (n) => alloc.nodeOfNet(n);
+    this.pinCharge.clear();
+    this.frameStart = this.time;
+    this.staticWarnings = this.staticChecks();
+    // settle the initial operating point so the first frame isn't a transient from 0 V
+    if (this.time === 0) this.stepOnce(1e-6);
+  }
+
+  private stepOnce(h: number) {
+    const t = this.time;
+    for (const m of this.mcus.values()) m.runUntil((t + h) * 1e6);
+    for (const c of this.comps.values()) c.beforeStep?.(t, h);
+    this.circuit.step(h);
+    const v = this.circuit.v;
+    for (const c of this.comps.values()) c.afterStep?.(v, h, t);
+    for (const r of this.records) {
+      let cur: number[] | null = null;
+      for (let k = 0; k < r.pinKeys.length; k++) {
+        const key = r.pinKeys[k];
+        if (!key) continue;
+        cur ??= r.prim.currents(v);
+        this.pinCharge.set(key, (this.pinCharge.get(key) ?? 0) + cur[k] * h);
+      }
+    }
+    this.time = t + h;
+  }
+
+  /** Advance by `realDt` seconds of wall-clock time (capped), within a CPU budget. */
+  advance(realDt: number) {
+    const target = this.time + Math.min(realDt, 0.05);
+    const deadline = performance.now() + FRAME_BUDGET_MS;
+    this.slow = false;
+    while (this.time < target - 1e-9) {
+      let h = MAX_STEP;
+      for (const c of this.comps.values()) {
+        const m = c.maxStep?.();
+        if (m !== undefined && m < h) h = m;
+      }
+      h = Math.min(h, target - this.time);
+      if (h < 1e-7) break;
+      this.stepOnce(h);
+      if (performance.now() > deadline) {
+        this.slow = true;
+        break;
+      }
+    }
+  }
+
+  snapshot(): SimSnapshot {
+    const dt = this.time - this.frameStart;
+    this.frameStart = this.time;
+    const comps: SimSnapshot['comps'] = {};
+    const warnings: SimWarning[] = [...this.staticWarnings];
+    for (const [id, c] of this.comps) {
+      comps[id] = c.frame?.(dt);
+      for (const w of c.warnings?.() ?? []) warnings.push({ ...w, comp: id });
+    }
+    const wireFlow = this.wireFlows(dt);
+    const netVolts = new Float64Array(this.netlist.nets.length);
+    for (let n = 0; n < netVolts.length; n++) {
+      const node = this.nodeOfNet(n);
+      netVolts[n] = node === undefined ? NaN : this.circuit.v[node];
+    }
+    if (this.circuit.failed) warnings.push({ level: 'warn', message: 'The solver could not fully converge on this circuit; readings may be approximate.' });
+    return { time: this.time, comps, warnings, wireFlow, netVolts, netOfPin: this.netlist.netOf, slow: this.slow, solverFailed: this.circuit.failed };
+  }
+
+  /** Distribute pin currents over each net's wiring (spanning tree) to animate wires. */
+  private wireFlows(dt: number): Record<string, number> {
+    const flows: Record<string, number> = {};
+    if (dt <= 0) return flows;
+    const inj = new Map<string, number>();
+    for (const [k, q] of this.pinCharge) inj.set(k, -q / dt);
+    this.pinCharge.clear();
+    const adj = new Map<string, { to: string; wire?: string; forward: boolean }[]>();
+    const link = (a: string, b: string, wire: string | undefined) => {
+      if (!adj.has(a)) adj.set(a, []);
+      if (!adj.has(b)) adj.set(b, []);
+      adj.get(a)!.push({ to: b, wire, forward: true });
+      adj.get(b)!.push({ to: a, wire, forward: false });
+    };
+    for (const e of this.netlist.edges) link(e.a, e.b, e.wireId);
+    const seen = new Set<string>();
+    for (const start of inj.keys()) {
+      if (seen.has(start) || !adj.has(start)) continue;
+      // BFS tree
+      const order: string[] = [start];
+      const parent = new Map<string, { from: string; wire?: string; forward: boolean }>();
+      seen.add(start);
+      for (let i = 0; i < order.length; i++) {
+        const u = order[i];
+        for (const e of adj.get(u) ?? []) {
+          if (seen.has(e.to)) continue;
+          seen.add(e.to);
+          parent.set(e.to, { from: u, wire: e.wire, forward: e.forward });
+          order.push(e.to);
+        }
+      }
+      const sub = new Map<string, number>();
+      for (let i = order.length - 1; i > 0; i--) {
+        const u = order[i];
+        const s = (sub.get(u) ?? 0) + (inj.get(u) ?? 0);
+        const p = parent.get(u)!;
+        // `s` flows from u towards its parent
+        if (p.wire) flows[p.wire] = p.forward ? -s : s;
+        sub.set(p.from, (sub.get(p.from) ?? 0) + s);
+      }
+    }
+    return flows;
+  }
+
+  /** Walk from a pin through nearby parts to find a tone()/PWM pin driving it. */
+  private signalFrequency(pinKey: string): number {
+    const nl = this.netlist;
+    const byComp = new Map<string, string[]>();
+    for (const key of nl.netOf.keys()) {
+      const id = key.slice(0, key.indexOf(':'));
+      if (!byComp.has(id)) byComp.set(id, []);
+      byComp.get(id)!.push(key);
+    }
+    const compOf = (k: string) => k.slice(0, k.indexOf(':'));
+    const startComp = compOf(pinKey);
+    let frontier = [nl.netOf.get(pinKey)!];
+    const seenNets = new Set(frontier);
+    const seenComps = new Set([startComp]);
+    for (let depth = 0; depth < 3 && frontier.length; depth++) {
+      const next: number[] = [];
+      for (const net of frontier) {
+        for (const k of nl.nets[net] ?? []) {
+          const cid = compOf(k);
+          const mcu = this.mcus.get(cid);
+          if (mcu) {
+            const idx = unoPinIndex(k.slice(cid.length + 1));
+            if (idx >= 0) {
+              const f = mcu.pinFrequency(idx);
+              if (f) return f;
+            }
+            continue;
+          }
+          if (seenComps.has(cid)) continue;
+          seenComps.add(cid);
+          const c = this.doc.components.find((x) => x.id === cid);
+          if (!c || (getDef(c.type)?.layer ?? 1) === 0) continue;
+          for (const pk of byComp.get(cid) ?? []) {
+            const n = nl.netOf.get(pk)!;
+            if (!seenNets.has(n)) {
+              seenNets.add(n);
+              next.push(n);
+            }
+          }
+        }
+      }
+      frontier = next;
+    }
+    return 0;
+  }
+
+  /** Topology checks that don't need a solve: e.g. circuits hanging off a board with no ground return. */
+  private staticChecks(): SimWarning[] {
+    const out: SimWarning[] = [];
+    const nl = this.netlist;
+    const compOf = (k: string) => k.slice(0, k.indexOf(':'));
+    const compById = new Map(this.doc.components.map((c) => [c.id, c]));
+    const pinsOfComp = new Map<string, string[]>();
+    for (const k of nl.netOf.keys()) {
+      const id = compOf(k);
+      if (!pinsOfComp.has(id)) pinsOfComp.set(id, []);
+      pinsOfComp.get(id)!.push(k);
+    }
+    for (const [mcuId] of this.mcus) {
+      const gndNet = nl.netOf.get(`${mcuId}:GND1`);
+      const flagged = new Set<number>();
+      for (const k of pinsOfComp.get(mcuId) ?? []) {
+        const pin = k.slice(mcuId.length + 1);
+        if (unoPinIndex(pin) < 0 && pin !== '5V' && pin !== '3V3') continue;
+        const startNet = nl.netOf.get(k)!;
+        const hasOthers = nl.nets[startNet].some((x) => compOf(x) !== mcuId && (getDef(compById.get(compOf(x))?.type ?? '')?.layer ?? 1) !== 0);
+        if (!hasOthers || flagged.has(startNet)) continue;
+        // flood through parts (not through the MCU itself, not through boards)
+        const seen = new Set([startNet]);
+        const queue = [startNet];
+        let reachesGround = false;
+        let hasSource = false;
+        while (queue.length && !reachesGround) {
+          const net = queue.shift()!;
+          if (net === gndNet) {
+            reachesGround = true;
+            break;
+          }
+          for (const pk of nl.nets[net]) {
+            const cid = compOf(pk);
+            if (cid === mcuId) {
+              const p = pk.slice(mcuId.length + 1);
+              if (p !== pin && (unoPinIndex(p) >= 0 || p === '5V' || p === '3V3')) hasSource = true; // another pin can sink current
+              continue;
+            }
+            const c = compById.get(cid);
+            const def = c && getDef(c.type);
+            if (!def || def.layer === 0) continue;
+            if (def.type === 'battery' || this.mcus.has(cid)) hasSource = true;
+            for (const other of pinsOfComp.get(cid) ?? []) {
+              const n = nl.netOf.get(other)!;
+              if (!seen.has(n)) {
+                seen.add(n);
+                queue.push(n);
+              }
+            }
+          }
+        }
+        if (!reachesGround && !hasSource) {
+          flagged.add(startNet);
+          out.push({ comp: mcuId, level: 'warn', message: `Missing ground: the circuit on pin ${pin} has no path back to a GND pin, so no current can flow.` });
+        }
+      }
+    }
+    return out;
+  }
+}
