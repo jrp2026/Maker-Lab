@@ -190,7 +190,9 @@ export function tokenize(src: string): Token[] {
 
   // macro expansion
   const out: Token[] = [];
+  const IGNORED = new Set(['PROGMEM', 'IRAM_ATTR', 'ICACHE_RAM_ATTR', 'DRAM_ATTR']);
   const expand = (t: Token, depth: number) => {
+    if (t.k === 'id' && IGNORED.has(t.v)) return;
     if (t.k === 'id' && macros.has(t.v) && depth < 16) {
       for (const mt of macros.get(t.v)!) expand({ ...mt, line: t.line, col: t.col }, depth + 1);
     } else out.push(t);

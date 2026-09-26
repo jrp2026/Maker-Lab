@@ -1,6 +1,8 @@
 import { Bjt, Capacitor, CurrentSource, Diode, Prim, Resistor, Source, type BjtParams, type DiodeParams } from './solver';
 import type { Netlist } from './netlist';
 import type { McuRuntime } from '../mcu/runtime';
+import type { I2CDevice } from '../mcu/libs';
+import type { HD44780 } from './hd44780';
 
 export interface SimWarning {
   comp?: string;
@@ -49,9 +51,32 @@ export class NodeAllocator {
   }
 }
 
+/** A parallel HD44780 display: which of its pins carry RS, E and data. */
+export interface LcdRegistration {
+  compId: string;
+  ctrl: HD44780;
+  rs: string;
+  en: string;
+  data4: string[]; // D4..D7
+  /** set by the simulator when the sketch's data pins don't match the wiring */
+  dataMismatch?: boolean;
+}
+
+export interface I2CRegistration {
+  compId: string;
+  address: number;
+  device: I2CDevice;
+  sda: string;
+  scl: string;
+  powered: () => boolean;
+}
+
 export interface BuildEnv {
   grounds: number[];
   signalFrequency(pinKey: string): number;
+  signalInfo(pinKey: string): { freq: number; servoUs: number | null; vcc: number } | null;
+  lcds: LcdRegistration[];
+  i2c: I2CRegistration[];
 }
 
 export class SimBuilder {
@@ -74,6 +99,21 @@ export class SimBuilder {
   /** Prefer this pin's node as the 0 V reference of its circuit. */
   markGround(pin: string) {
     this.env.grounds.push(this.node(pin));
+  }
+
+  registerLcd(r: Omit<LcdRegistration, 'compId'>): LcdRegistration {
+    const reg = { ...r, compId: this.compId };
+    this.env.lcds.push(reg);
+    return reg;
+  }
+
+  registerI2C(r: Omit<I2CRegistration, 'compId'>) {
+    this.env.i2c.push({ ...r, compId: this.compId });
+  }
+
+  /** Periodic signal (tone/PWM/servo pulses) reaching this pin from a board, if any. */
+  signalInfo(pin: string) {
+    return this.env.signalInfo(`${this.compId}:${pin}`);
   }
 
   /** Frequency of a periodic signal (tone/PWM) reaching this pin, 0 if none. */
@@ -100,7 +140,7 @@ export class SimBuilder {
     return members.some((k) => !k.startsWith(`${this.compId}:`));
   }
 
-  private add<T extends Prim>(p: T, terms: Term[]): T {
+  add<T extends Prim>(p: T, terms: Term[]): T {
     const rec = { prim: p, pinKeys: terms.map((t) => (typeof t === 'string' ? `${this.compId}:${t}` : null)) };
     this.records.push(rec);
     this.recordsSink.push(rec);

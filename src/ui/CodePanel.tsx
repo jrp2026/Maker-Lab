@@ -36,7 +36,7 @@ function SerialMonitor({ target }: { target: string }) {
     <div className="serial">
       <div className="serial-head">
         <span>Serial Monitor</span>
-        <span className="muted small">{running ? '9600 baud' : 'start the simulation to see output'}</span>
+        <span className="muted small">{running ? (mcu?.spec.id === 'esp32' ? '115200 baud' : '9600 baud') : 'start the simulation to see output'}</span>
         <button className="link" onClick={() => setCleared(mcu?.serialOut.length ?? 0)}>Clear</button>
       </div>
       <pre ref={boxRef} className="serial-out">{text || (running ? '' : ' ')}</pre>
@@ -105,7 +105,7 @@ export function CodePanel() {
 
   const verify = () => {
     if (!comp) return;
-    const rt = new McuRuntime();
+    const rt = new McuRuntime(getDef(comp.type)!.mcu!.board);
     const e = rt.load(String(comp.props.code ?? ''));
     setCheck(e ? { ok: false, err: e } : { ok: true });
     if (e) goTo(e.line);

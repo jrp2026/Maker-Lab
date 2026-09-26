@@ -5,15 +5,45 @@
  * time and can yield, so `delay()` and busy loops interleave with the circuit solver.
  */
 import { CompileError, tokenize, type Token } from './lexer';
+import { UNO, type BoardSpec } from './boards';
 
 export { CompileError };
 
-type Base = 'void' | 'bool' | 'char' | 'uchar' | 'int' | 'uint' | 'long' | 'ulong' | 'float' | 'String';
+type Base = 'void' | 'bool' | 'char' | 'uchar' | 'int' | 'uint' | 'long' | 'ulong' | 'float' | 'String' | 'obj' | 'func';
 
 interface Type {
   b: Base;
   dims?: (number | null)[];
   isConst?: boolean;
+  /** pointer depth (int* → 1) */
+  ptr?: number;
+  /** library class for b === 'obj' */
+  cls?: string;
+  /** reference parameter / variable (int &x) */
+  ref?: boolean;
+}
+
+const isPtr = (t: Type) => !!t.ptr && !t.dims;
+
+/** Apply `n` levels of `*` to a declared type. `char*` is treated as a string. */
+function withPtr(t: Type, n: number): Type {
+  if (!n) return t;
+  if ((t.b === 'char' || t.b === 'uchar') && n === 1) return { b: 'String', isConst: t.isConst };
+  return { ...t, ptr: (t.ptr ?? 0) + n };
+}
+
+/** Element type of an array or pointer. */
+function elemOf(t: Type): Type {
+  if (t.dims) {
+    const dims = t.dims.slice(1);
+    const { dims: _d, ...rest } = t;
+    void _d;
+    return dims.length ? { ...rest, dims, isConst: false } : { ...rest, isConst: false };
+  }
+  const p = (t.ptr ?? 0) - 1;
+  const { ptr: _p, ...rest } = t;
+  void _p;
+  return p > 0 ? { ...rest, ptr: p } : rest;
 }
 
 const T = (b: Base): Type => ({ b });
@@ -35,7 +65,8 @@ type Expr =
   | { k: 'cast'; to: Type; e: Expr; tok: Token }
   | { k: 'sizeof'; type?: Type; e?: Expr; tok: Token }
   | { k: 'comma'; l: Expr; r: Expr; tok: Token }
-  | { k: 'init'; items: Expr[]; tok: Token };
+  | { k: 'init'; items: Expr[]; tok: Token }
+  | { k: 'new'; cls: string; args: Expr[]; tok: Token };
 
 interface Declarator {
   name: string;
@@ -73,14 +104,17 @@ const TYPE_WORDS = new Set([
   'uint8_t', 'int8_t', 'uint16_t', 'int16_t', 'uint32_t', 'int32_t', 'uint64_t', 'int64_t', 'size_t',
 ]);
 const QUALIFIERS = new Set(['const', 'static', 'volatile', 'inline', 'constexpr', 'register', 'extern']);
+/** Arduino library classes the simulator implements. */
+const CLASS_TYPES = new Set(['Servo', 'LiquidCrystal', 'LiquidCrystal_I2C']);
 const UNSUPPORTED_TYPES: Record<string, string> = {
-  Servo: 'The Servo library is on the roadmap (Phase 2) and not supported yet.',
-  LiquidCrystal: 'The LiquidCrystal library is on the roadmap (Phase 2) and not supported yet.',
   Adafruit_NeoPixel: 'The NeoPixel library is on the roadmap (Phase 2) and not supported yet.',
   struct: 'struct is not supported in this simulator yet.',
   class: 'class is not supported in this simulator yet.',
   typedef: 'typedef is not supported in this simulator yet.',
 };
+
+/** Set per compile: `int` is 16-bit on AVR, 32-bit on ESP32. */
+let INT32 = false;
 
 class Parser {
   i = 0;
@@ -125,7 +159,18 @@ class Parser {
     const t = this.toks[j];
     if (t.k !== 'id') return false;
     if (UNSUPPORTED_TYPES[t.v] && this.toks[j + 1]?.k === 'id') throw new CompileError(UNSUPPORTED_TYPES[t.v], t.line, t.col);
-    return TYPE_WORDS.has(t.v);
+    return TYPE_WORDS.has(t.v) || CLASS_TYPES.has(t.v);
+  }
+
+  /** Consume `*` (and `const` after them); returns the pointer depth. */
+  stars(): number {
+    let n = 0;
+    while (this.is('*')) {
+      this.i++;
+      n++;
+      while (this.is('const')) this.i++;
+    }
+    return n;
   }
 
   /** Parse qualifiers + base type. */
@@ -135,6 +180,11 @@ class Parser {
       if (this.cur.v === 'static') isStatic = true;
       if (this.cur.v === 'const' || this.cur.v === 'constexpr') isConst = true;
       this.i++;
+    }
+    if (this.cur.k === 'id' && CLASS_TYPES.has(this.cur.v)) {
+      const cls = this.cur.v;
+      this.i++;
+      return { type: { b: 'obj', cls, isConst }, isStatic };
     }
     let unsigned = false, signed = false, longs = 0, short = false;
     let base: string | null = null;
@@ -171,13 +221,12 @@ class Parser {
       case 'int32_t': case 'int64_t': b = 'long'; break;
       case 'int': case null:
         if (base === null && !unsigned && !longs && !short) this.err('expected type', start);
-        if (longs) b = unsigned ? 'ulong' : 'long';
+        if (longs || (INT32 && !short)) b = unsigned ? 'ulong' : 'long';
         else b = unsigned ? 'uint' : 'int';
         break;
       default:
         this.err(`unknown type '${base}'`, start);
     }
-    if (this.is('*')) this.err('pointers are not supported in this simulator; use arrays or globals instead');
     return { type: { b, isConst }, isStatic };
   }
 
@@ -196,17 +245,20 @@ class Parser {
         this.err(`expected declaration before '${this.cur.v}'`);
       }
       const save = this.i;
-      const { type } = this.parseType();
+      const { type: baseType } = this.parseType();
+      const type = withPtr(baseType, this.stars());
+      this.eat('&');
       const nameTok = this.ident();
-      if (this.is('(')) {
+      if (this.is('(') && type.b !== 'obj') {
         this.i++;
         const params: { name: string; type: Type }[] = [];
         if (!this.is(')')) {
           if (this.is('void') && this.peek().v === ')') this.i++;
           else
             do {
-              const { type: pt } = this.parseType();
-              if (this.is('&')) this.i++; // references: treated as values (arrays are shared anyway)
+              const { type: bt } = this.parseType();
+              let pt = withPtr(bt, this.stars());
+              if (this.eat('&')) pt = { ...pt, ref: true };
               const pn = this.cur.k === 'id' ? this.ident().v : `_p${params.length}`;
               const dims: (number | null)[] = [];
               while (this.eat('[')) {
@@ -258,11 +310,11 @@ class Parser {
   }
 
   parseDecl(requireSemi = true): Stmt {
-    const { type, isStatic } = this.parseType();
+    const { type: baseType, isStatic } = this.parseType();
     const decls: Declarator[] = [];
     do {
-      if (this.is('*')) this.err('pointers are not supported in this simulator');
-      if (this.is('&')) this.i++;
+      let type = withPtr(baseType, this.stars());
+      if (this.eat('&')) type = { ...type, ref: true };
       const nameTok = this.ident();
       const dims: (number | null)[] = [];
       while (this.eat('[')) {
@@ -277,7 +329,15 @@ class Parser {
       }
       let init: Expr | undefined;
       if (this.eat('=')) init = this.is('{') ? this.parseInitList() : this.parseAssign();
-      else if (this.is('(') && type.b === 'String') {
+      else if (this.is('(') && type.b === 'obj') {
+        // LiquidCrystal lcd(12, 11, 5, 4, 3, 2);
+        const t = this.cur;
+        this.i++;
+        const args: Expr[] = [];
+        if (!this.is(')')) do args.push(this.parseAssign()); while (this.eat(','));
+        this.expect(')');
+        init = { k: 'new', cls: type.cls!, args, tok: t };
+      } else if (this.is('(') && type.b === 'String') {
         // String s("abc");
         const t = this.cur;
         this.i++;
@@ -467,12 +527,15 @@ class Parser {
       this.i++;
       return { k: 'un', op: t.v, e: this.parseUnary(), tok: t };
     }
-    if (t.k === 'op' && (t.v === '*' || t.v === '&')) this.err('pointers are not supported in this simulator');
+    if (t.k === 'op' && (t.v === '*' || t.v === '&')) {
+      this.i++;
+      return { k: 'un', op: t.v, e: this.parseUnary(), tok: t };
+    }
     if (this.is('sizeof')) {
       this.i++;
       this.expect('(');
       let r: Expr;
-      if (this.isTypeStart()) r = { k: 'sizeof', type: this.parseType().type, tok: t };
+      if (this.isTypeStart()) r = { k: 'sizeof', type: withPtr(this.parseType().type, this.stars()), tok: t };
       else r = { k: 'sizeof', e: this.parseExpr(), tok: t };
       this.expect(')');
       return r;
@@ -480,7 +543,8 @@ class Parser {
     // C-style cast
     if (this.is('(') && this.isTypeStart(1)) {
       this.i++;
-      const { type } = this.parseType();
+      const { type: bt } = this.parseType();
+      const type = withPtr(bt, this.stars());
       this.expect(')');
       return { k: 'cast', to: type, e: this.parseUnary(), tok: t };
     }
@@ -523,7 +587,7 @@ class Parser {
       else if (s.includes('u') && s.includes('l')) type = T('ulong');
       else if (s.includes('l')) type = T('long');
       else if (s.includes('u')) type = t.n! <= 0xffff ? T('uint') : T('ulong');
-      else if (t.n! <= 32767) type = T('int');
+      else if (t.n! <= 32767 && !INT32) type = T('int');
       else if (t.n! <= 0x7fffffff) type = T('long');
       else type = T('ulong');
       return { k: 'num', v: t.n!, t: type, tok: t };
@@ -606,15 +670,26 @@ function constEval(e: Expr, consts: Map<string, number>): number | undefined {
 // ---------------------------------------------------------------- code generation
 
 const RANK: Partial<Record<Base, number>> = { bool: 1, char: 1, uchar: 1, int: 1, uint: 2, long: 3, ulong: 4, float: 5 };
-const SIZE: Record<Base, number> = { void: 0, bool: 1, char: 1, uchar: 1, int: 2, uint: 2, long: 4, ulong: 4, float: 4, String: 6 };
+const SIZE: Record<Base, number> = { void: 0, bool: 1, char: 1, uchar: 1, int: 2, uint: 2, long: 4, ulong: 4, float: 4, String: 6, obj: 2, func: 2 };
 
 function isNumeric(t: Type) {
-  return !t.dims && RANK[t.b] !== undefined;
+  return !t.dims && !t.ptr && RANK[t.b] !== undefined;
 }
+
+function typeName(t: Type): string {
+  if (t.dims) return 'array';
+  if (t.ptr) return `${t.b}${'*'.repeat(t.ptr)}`;
+  if (t.b === 'obj') return t.cls ?? 'object';
+  return t.b;
+}
+
+/** Is this generated JS expression free of side effects and cheap to repeat? */
+const SIMPLE = /^[\w$]+(\[0\])?$/;
 
 function arith(a: Type, b: Type): Type {
   const r = Math.max(RANK[a.b] ?? 1, RANK[b.b] ?? 1);
-  return T((['int', 'int', 'uint', 'long', 'ulong', 'float'] as Base[])[r]);
+  const table: Base[] = INT32 ? ['long', 'long', 'ulong', 'long', 'ulong', 'float'] : ['int', 'int', 'uint', 'long', 'ulong', 'float'];
+  return T(table[r]);
 }
 
 function wrap(code: string, b: Base): string {
@@ -633,7 +708,20 @@ function wrap(code: string, b: Base): string {
 interface VarInfo {
   js: string;
   type: Type;
+  /** scalar stored in a 1-element array so its address can be taken */
+  boxed?: boolean;
+  /** reference: `js` holds a pointer that is implicitly dereferenced */
+  ref?: boolean;
 }
+
+interface LValue {
+  code: string;
+  type: Type;
+  /** expression that must run first (temp assignment) */
+  pre?: string;
+}
+
+const withPre = (pre: string | undefined, code: string) => (pre ? `(${pre},${code})` : code);
 
 interface FuncInfo {
   js: string;
@@ -652,6 +740,45 @@ class Gen {
   staticCounter = 0;
   currentFunc: FuncInfo | null = null;
   tmp = 0;
+  temps: string[] = [];
+  board: BoardSpec = UNO;
+  /** variable names whose address is taken somewhere (they get boxed) */
+  boxedNames = new Set<string>();
+
+  newTemp(): string {
+    const t = `$t${this.tmp++}`;
+    this.temps.push(t);
+    return t;
+  }
+
+  varCode(v: VarInfo): string {
+    if (v.boxed) return `${v.js}[0]`;
+    if (v.ref) return `${v.js}.a[${v.js}.i]`;
+    return v.js;
+  }
+
+  /** Pointer to an lvalue: `&x`, `&a[i]`, `&*p`. */
+  addrOf(e: Expr): { code: string; type: Type } {
+    if (e.k === 'id') {
+      const v = this.lookup(e.name);
+      if (!v) this.err(`'${e.name}' was not declared in this scope`, e.tok);
+      if (v.type.dims) return { code: `R.ptr(${v.js},0)`, type: { ...elemOf(v.type), ptr: (elemOf(v.type).ptr ?? 0) + 1 } };
+      if (v.boxed) return { code: `R.ptr(${v.js},0)`, type: { ...v.type, ptr: (v.type.ptr ?? 0) + 1, isConst: false } };
+      if (v.ref) return { code: v.js, type: { ...v.type, ptr: (v.type.ptr ?? 0) + 1, isConst: false } };
+      this.err(`cannot take the address of '${e.name}'`, e.tok);
+    }
+    if (e.k === 'index') {
+      const o = this.expr(e.obj);
+      const idx = this.expr(e.idx);
+      const et = elemOf(o.type);
+      const pt: Type = { ...et, ptr: (et.ptr ?? 0) + 1, isConst: false };
+      if (o.type.dims) return { code: `R.ptr(${o.code},${idx.code})`, type: pt };
+      if (isPtr(o.type)) return { code: `R.padd(${o.code},${idx.code})`, type: pt };
+      this.err('cannot take the address of this expression', e.tok);
+    }
+    if (e.k === 'un' && e.op === '*') return this.expr(e.e);
+    this.err("lvalue required as unary '&' operand", e.tok);
+  }
 
   err(msg: string, t: Token): never {
     throw new CompileError(msg, t.line, t.col);
@@ -676,7 +803,27 @@ class Gen {
 
   /** Convert expression code of type `from` into type `to`. */
   conv(code: string, from: Type, to: Type, tok: Token): string {
-    if (to.dims || from.dims) return code;
+    if (to.b === 'obj' || from.b === 'obj') {
+      if (to.b === 'obj' && from.b === 'obj' && to.cls === from.cls) return code;
+      this.err(`cannot convert '${typeName(from)}' to '${typeName(to)}'`, tok);
+    }
+    if (isPtr(to)) {
+      if (isPtr(from)) return code;
+      if (from.dims) return `R.ptr(${code},0)`;
+      if (isNumeric(from)) return code === '0' ? 'null' : `R.nullPtr(${code})`;
+      this.err(`cannot convert '${typeName(from)}' to '${typeName(to)}'`, tok);
+    }
+    if (to.dims && isPtr(from)) return `R.toArr(${code})`;
+    if (to.dims || from.dims) {
+      if (from.dims && !to.dims && to.b !== 'String') this.err(`cannot convert an array to '${typeName(to)}'`, tok);
+      if (from.dims && to.b === 'String') this.err(`cannot convert an array to a string; use a String or char* literal`, tok);
+      return code;
+    }
+    if (isPtr(from)) {
+      if (to.b === 'bool') return `(${code}!=null)`;
+      this.err(`invalid conversion from '${typeName(from)}' to '${typeName(to)}'`, tok);
+    }
+    if (from.b === 'func') this.err('a function can only be used as an interrupt handler here', tok);
     if (to.b === 'String') {
       if (from.b === 'String') return code;
       return `R.str(${code},${JSON.stringify(from.b)})`;
@@ -701,12 +848,17 @@ class Gen {
         return { code: JSON.stringify(e.v), type: T('String') };
       case 'id': {
         const v = this.lookup(e.name);
-        if (v) return { code: v.js, type: v.type };
+        if (v) return { code: this.varCode(v), type: v.type };
+        const fn = this.funcs.get(e.name);
+        if (fn) return { code: fn.js, type: { b: 'func' } };
+        const bc = this.board.constants[e.name];
+        if (bc !== undefined) return { code: String(bc), type: T('int') };
         const c = CONSTANTS[e.name];
         if (c !== undefined) return { code: String(c[0]), type: T(c[1]) };
         const bm = /^B([01]{1,8})$/.exec(e.name);
         if (bm) return { code: String(parseInt(bm[1], 2)), type: T('int') };
-        if (this.funcs.has(e.name) || BUILTINS[e.name]) this.err(`'${e.name}' is a function; did you forget the ()?`, e.tok);
+        if (BUILTINS[e.name]) this.err(`'${e.name}' is a function; did you forget the ()?`, e.tok);
+        if (e.name === 'Wire' || /^Serial\d?$/.test(e.name)) this.err(`'${e.name}' can only be used to call its methods, e.g. ${e.name}.begin()`, e.tok);
         this.err(`'${e.name}' was not declared in this scope`, e.tok);
       }
       // falls through (unreachable)
@@ -725,9 +877,19 @@ class Gen {
         if (e.op === '++' || e.op === '--') {
           const lv = this.lvalue(e.e);
           const one = e.op === '++' ? '+1' : '-1';
-          return { code: `(${lv.code}=${this.conv(`${lv.code}${one}`, T('float'), lv.type, e.tok)})`, type: lv.type };
+          if (isPtr(lv.type)) return { code: withPre(lv.pre, `(${lv.code}=R.padd(${lv.code},${one}))`), type: lv.type };
+          return { code: withPre(lv.pre, `(${lv.code}=${this.conv(`${lv.code}${one}`, T('float'), lv.type, e.tok)})`), type: lv.type };
+        }
+        if (e.op === '&') return this.addrOf(e.e);
+        if (e.op === '*') {
+          const x = this.expr(e.e);
+          if (isPtr(x.type)) return { code: `R.deref(${x.code})`, type: elemOf(x.type) };
+          if (x.type.dims) return { code: `${x.code}[0]`, type: elemOf(x.type) };
+          if (x.type.b === 'String') return { code: `R.charAt(${x.code},0)`, type: T('char') };
+          this.err(`invalid type argument of unary '*' (have '${typeName(x.type)}')`, e.tok);
         }
         const x = this.expr(e.e);
+        if (e.op === '!' && isPtr(x.type)) return { code: `(${x.code}==null)`, type: T('bool') };
         if (e.op === '!') return { code: `(!(${x.code}))`, type: T('bool') };
         this.numeric(x.type, e.tok, e.op);
         const rt = arith(x.type, T('int'));
@@ -739,10 +901,14 @@ class Gen {
       case 'post': {
         const lv = this.lvalue(e.e);
         const d = e.op === '++' ? 1 : -1;
+        if (isPtr(lv.type)) {
+          const t = this.newTemp();
+          return { code: `(${lv.pre ? lv.pre + ',' : ''}${t}=${lv.code},${lv.code}=R.padd(${t},${d}),${t})`, type: lv.type };
+        }
         const calc = T('float');
         const set = `${lv.code}=${this.conv(`(${lv.code})+(${d})`, calc, lv.type, e.tok)}`;
         const back = this.conv(`(${lv.code})-(${d})`, calc, lv.type, e.tok);
-        return { code: `(${set},${back})`, type: lv.type };
+        return { code: `(${lv.pre ? lv.pre + ',' : ''}${set},${back})`, type: lv.type };
       }
       case 'bin':
         return this.binary(e.op, this.expr(e.l), this.expr(e.r), e.tok);
@@ -751,22 +917,23 @@ class Gen {
         if (lv.type.isConst) this.err(`assignment of read-only variable`, e.tok);
         if (e.r.k === 'init') {
           if (!lv.type.dims) this.err('initializer list can only be assigned to arrays', e.tok);
-          return { code: `(${lv.code}=${this.initList(e.r, lv.type)})`, type: lv.type };
+          return { code: withPre(lv.pre, `(${lv.code}=${this.initList(e.r, lv.type)})`), type: lv.type };
         }
         const r = this.expr(e.r);
         if (lv.type.dims) this.err('invalid array assignment', e.tok);
-        if (e.op === '=') return { code: `(${lv.code}=${this.conv(r.code, r.type, lv.type, e.tok)})`, type: lv.type };
+        if (lv.type.b === 'obj') this.err(`cannot assign to a ${lv.type.cls} object`, e.tok);
+        if (e.op === '=') return { code: withPre(lv.pre, `(${lv.code}=${this.conv(r.code, r.type, lv.type, e.tok)})`), type: lv.type };
         const op = e.op.slice(0, -1);
         const res = this.binary(op, { code: lv.code, type: lv.type }, r, e.tok);
-        return { code: `(${lv.code}=${this.conv(res.code, res.type, lv.type, e.tok)})`, type: lv.type };
+        return { code: withPre(lv.pre, `(${lv.code}=${this.conv(res.code, res.type, lv.type, e.tok)})`), type: lv.type };
       }
       case 'index': {
         const o = this.expr(e.obj);
         const idx = this.expr(e.idx);
         if (o.type.b === 'String' && !o.type.dims) return { code: `R.charAt(${o.code},${idx.code})`, type: T('char') };
+        if (isPtr(o.type)) return { code: `R.deref(R.padd(${o.code},${idx.code}))`, type: elemOf(o.type) };
         if (!o.type.dims) this.err('subscripted value is neither array nor pointer', e.tok);
-        const dims = o.type.dims.slice(1);
-        return { code: `${o.code}[${idx.code}]`, type: dims.length ? { b: o.type.b, dims } : { b: o.type.b } };
+        return { code: `${o.code}[${idx.code}]`, type: elemOf(o.type) };
       }
       case 'cast': {
         const x = this.expr(e.e);
@@ -777,7 +944,7 @@ class Gen {
         if (e.type) t = e.type;
         else if (e.e!.k === 'id' && this.lookup(e.e!.name)) t = this.lookup(e.e!.name)!.type;
         else t = this.expr(e.e!).type;
-        let size = SIZE[t.b];
+        let size = t.ptr && !t.dims ? 2 : SIZE[t.b];
         for (const d of t.dims ?? []) size *= d ?? 0;
         if (t.dims && e.e?.k === 'id') {
           // arrays sized by initializer: use runtime length
@@ -793,7 +960,18 @@ class Gen {
         return this.call(e);
       case 'init':
         this.err('unexpected initializer list', e.tok);
+      // falls through
+      case 'new':
+        return { code: this.newObj(e.cls, e.args, e.tok), type: { b: 'obj', cls: e.cls } };
     }
+  }
+
+  newObj(cls: string, args: Expr[], tok: Token): string {
+    const spec = LIBS[cls];
+    const [min, max] = spec.ctor;
+    if (args.length < min || args.length > max) this.err(`no matching constructor for ${cls} with ${args.length} argument(s)`, tok);
+    const a = this.args(args).map((x) => x.code);
+    return `R.lib.create(${JSON.stringify(cls)},[${a.join(',')}])`;
   }
 
   describe(e: Expr): string {
@@ -801,11 +979,26 @@ class Gen {
   }
 
   numeric(t: Type, tok: Token, op: string) {
-    if (!isNumeric(t)) this.err(`invalid operand of type '${t.dims ? 'array' : t.b}' to operator ${op}`, tok);
+    if (!isNumeric(t)) this.err(`invalid operand of type '${typeName(t)}' to operator ${op}`, tok);
   }
 
   binary(op: string, l: { code: string; type: Type }, r: { code: string; type: Type }, tok: Token): { code: string; type: Type } {
-    if (op === '&&' || op === '||') return { code: `(!!((${l.code})${op}(${r.code})))`, type: T('bool') };
+    if (op === '&&' || op === '||') {
+      const tb = (x: { code: string; type: Type }) => (isPtr(x.type) ? `(${x.code}!=null)` : `(${x.code})`);
+      return { code: `(!!(${tb(l)}${op}${tb(r)}))`, type: T('bool') };
+    }
+    const pl = isPtr(l.type) || (!!l.type.dims && op !== '='), pr = isPtr(r.type) || (!!r.type.dims && op !== '=');
+    if (pl || pr) {
+      const P = (x: { code: string; type: Type }) => (x.type.dims ? `R.ptr(${x.code},0)` : x.code);
+      const pt = pl ? (l.type.dims ? { ...elemOf(l.type), ptr: (elemOf(l.type).ptr ?? 0) + 1 } : l.type) : r.type.dims ? { ...elemOf(r.type), ptr: (elemOf(r.type).ptr ?? 0) + 1 } : r.type;
+      if (op === '==' || op === '!=') return { code: `(${op === '!=' ? '!' : ''}R.peq(${P(l)},${P(r)}))`, type: T('bool') };
+      if (['<', '>', '<=', '>='].includes(op) && pl && pr) return { code: `(R.pidx(${P(l)})${op}R.pidx(${P(r)}))`, type: T('bool') };
+      if (op === '+' && pl && !pr) { this.numeric(r.type, tok, op); return { code: `R.padd(${P(l)},${r.code})`, type: pt }; }
+      if (op === '+' && pr && !pl) { this.numeric(l.type, tok, op); return { code: `R.padd(${P(r)},${l.code})`, type: pt }; }
+      if (op === '-' && pl && !pr) { this.numeric(r.type, tok, op); return { code: `R.padd(${P(l)},-(${r.code}))`, type: pt }; }
+      if (op === '-' && pl && pr) return { code: `R.pdiff(${P(l)},${P(r)})`, type: T('int') };
+      this.err(`invalid operands to binary '${op}' (have '${typeName(l.type)}' and '${typeName(r.type)}')`, tok);
+    }
     const strL = l.type.b === 'String' && !l.type.dims, strR = r.type.b === 'String' && !r.type.dims;
     if (strL || strR) {
       if (op === '+') return { code: `(${this.conv(l.code, l.type, T('String'), tok)}+${this.conv(r.code, r.type, T('String'), tok)})`, type: T('String') };
@@ -843,16 +1036,38 @@ class Gen {
     return { code: wrap(code, rt.b), type: rt };
   }
 
-  lvalue(e: Expr): { code: string; type: Type } {
+  /** Assignable JS expression for a C lvalue. Pointer targets may need a temp (`pre`). */
+  lvalue(e: Expr): LValue {
     if (e.k === 'id') {
       const v = this.lookup(e.name);
       if (!v) {
-        if (CONSTANTS[e.name]) this.err(`lvalue required as left operand of assignment`, e.tok);
+        if (CONSTANTS[e.name] || this.board.constants[e.name] !== undefined) this.err(`lvalue required as left operand of assignment`, e.tok);
         this.err(`'${e.name}' was not declared in this scope`, e.tok);
       }
-      return { code: v.js, type: v.type };
+      return { code: this.varCode(v), type: v.type };
+    }
+    const viaPtr = (p: { code: string }, off: string | null, type: Type): LValue => {
+      let base = p.code, pre: string | undefined;
+      if (!SIMPLE.test(base)) {
+        const t = this.newTemp();
+        pre = `${t}=${base}`;
+        base = t;
+      }
+      const i = off === null ? `${base}.i` : `${base}.i+(${off})`;
+      return { code: `R.nn(${base}).a[${i}]`, type, pre };
+    };
+    if (e.k === 'un' && e.op === '*') {
+      const p = this.expr(e.e);
+      if (isPtr(p.type)) return viaPtr(p, null, elemOf(p.type));
+      if (p.type.dims) return { code: `${p.code}[0]`, type: elemOf(p.type) };
+      this.err(`invalid type argument of unary '*' (have '${typeName(p.type)}')`, e.tok);
     }
     if (e.k === 'index') {
+      const o = this.expr(e.obj);
+      if (isPtr(o.type)) {
+        const idx = this.expr(e.idx);
+        return viaPtr(o, idx.code, elemOf(o.type));
+      }
       const r = this.expr(e);
       if (r.code.startsWith('R.charAt(')) this.err('modifying String characters with [] is not supported; use setCharAt()', e.tok);
       return r;
@@ -873,9 +1088,13 @@ class Gen {
     if (user && !this.lookup(name)) {
       if (e.args.length !== user.params.length) this.err(`wrong number of arguments to function '${name}' (expected ${user.params.length})`, e.tok);
       const argCodes = e.args.map((a, i) => {
-        const x = this.expr(a);
         const pt = user.params[i].type;
-        if (pt.dims && !x.type.dims) this.err(`argument ${i + 1} of '${name}' must be an array`, a.tok);
+        if (pt.ref && !pt.dims && pt.b !== 'obj') {
+          const ptr = this.addrOf(a);
+          return ptr.code;
+        }
+        const x = this.expr(a);
+        if (pt.dims && !x.type.dims && !isPtr(x.type)) this.err(`argument ${i + 1} of '${name}' must be an array`, a.tok);
         return this.conv(x.code, x.type, pt, a.tok);
       });
       return { code: `(yield* ${user.js}(${argCodes.join(',')}))`, type: user.ret };
@@ -892,10 +1111,15 @@ class Gen {
       return m(this, args, tok);
     }
     if (obj.k === 'id' && !this.lookup(obj.name) && UNSUPPORTED_TYPES[obj.name]) this.err(UNSUPPORTED_TYPES[obj.name], tok);
-    if (obj.k === 'id' && !this.lookup(obj.name) && (obj.name === 'Wire' || obj.name === 'SPI' || obj.name === 'EEPROM')) {
+    if (obj.k === 'id' && !this.lookup(obj.name) && obj.name === 'Wire') return this.libCall('Wire', 'R.wire', name, args, tok);
+    if (obj.k === 'id' && !this.lookup(obj.name) && (obj.name === 'SPI' || obj.name === 'EEPROM')) {
       this.err(`The ${obj.name} library is on the roadmap and not supported yet.`, tok);
     }
+    if (obj.k === 'id' && !this.lookup(obj.name) && ['WiFi', 'SerialBT', 'WebServer', 'HTTPClient', 'BLEDevice', 'esp_now'].includes(obj.name)) {
+      this.err(`${obj.name}: wireless networking isn't simulated yet (Phase 3). GPIO, ADC, PWM, DAC, I2C, Servo and LCD all work on the ESP32.`, tok);
+    }
     const o = this.expr(obj);
+    if (o.type.b === 'obj' && !o.type.dims) return this.libCall(o.type.cls!, o.code, name, args, tok);
     if (o.type.b === 'String' && !o.type.dims) {
       const a = this.args(args);
       const s = o.code;
@@ -934,9 +1158,27 @@ class Gen {
     this.err(`request for member '${name}' in '${this.describe(obj)}', which is of non-class type`, tok);
   }
 
+  /** Method call on a library object (Servo, LiquidCrystal, Wire …). */
+  libCall(cls: string, target: string, name: string, args: Expr[], tok: Token): { code: string; type: Type } {
+    const m = LIBS[cls].methods[name];
+    if (!m) this.err(`'${cls}' has no member named '${name}'`, tok);
+    const [min, max, ret] = m;
+    if (args.length < min) this.err(`too few arguments to '${cls}::${name}'`, tok);
+    if (args.length > max) this.err(`too many arguments to '${cls}::${name}'`, tok);
+    const a = this.args(args);
+    if (name === 'print' || name === 'println') {
+      // format like Serial.print, then hand the text to the library
+      const text = a.length ? `R.fmt(${a[0].code},${JSON.stringify(a[0].type.b)}${a[1] ? ',' + a[1].code : ''})` : '""';
+      return { code: `${target}.${name}(${text})`, type: T(ret) };
+    }
+    if (name === 'write' && a[0] && a[0].type.b === 'String' && !a[0].type.dims) return { code: `${target}.writeStr(${a[0].code})`, type: T(ret) };
+    const codes = a.map((x) => (isPtr(x.type) ? `R.toArr(${x.code})` : x.code));
+    return { code: `${target}.${name}(${codes.join(',')})`, type: T(ret) };
+  }
+
   initList(e: Expr & { k: 'init' }, type: Type): string {
     const dims = type.dims ?? [];
-    const inner: Type = dims.length > 1 ? { b: type.b, dims: dims.slice(1) } : { b: type.b };
+    const inner: Type = elemOf(type);
     const items = e.items.map((it) => {
       if (it.k === 'init') return this.initList(it, inner);
       const x = this.expr(it);
@@ -953,19 +1195,31 @@ class Gen {
 
   zeroArray(t: Type): string {
     const dims = t.dims ?? [];
-    if (!dims.length) return zeroOf(t.b);
+    if (!dims.length) return t.b === 'obj' ? `R.lib.create(${JSON.stringify(t.cls)},[])` : isPtr(t) ? 'null' : zeroOf(t.b);
     if (dims[0] == null) return '[]';
-    const inner: Type = { b: t.b, dims: dims.slice(1) };
+    const inner: Type = { ...t, dims: dims.slice(1) };
     return `Array.from({length:${dims[0]}},()=>${this.zeroArray(inner)})`;
   }
 
   // ---- statements
   decl(s: Stmt & { k: 'decl' }, out: string[], global: boolean) {
     for (const d of s.decls) {
-      if (d.type.b === 'void') this.err(`variable '${d.name}' declared void`, d.tok);
+      if (d.type.b === 'void' && !d.type.ptr) this.err(`variable '${d.name}' declared void`, d.tok);
       let type = d.type;
       let init: string;
-      if (d.init?.k === 'init' || (d.init?.k === 'str' && type.dims)) {
+      let ref = false;
+      if (type.ref && !type.dims && type.b !== 'obj') {
+        // int &r = x;  → r holds a pointer to x
+        if (!d.init) this.err(`'${d.name}' declared as reference but not initialized`, d.tok);
+        const { ref: _r, ...rest } = type;
+        void _r;
+        type = rest;
+        init = this.addrOf(d.init).code;
+        ref = true;
+      } else if (type.b === 'obj' && !type.dims) {
+        if (d.init && d.init.k !== 'new') this.err(`${type.cls} objects are created as '${type.cls} ${d.name}(...);'`, d.tok);
+        init = this.newObj(type.cls!, d.init?.k === 'new' ? d.init.args : [], d.tok);
+      } else if (d.init?.k === 'init' || (d.init?.k === 'str' && type.dims)) {
         if (!type.dims) {
           if (d.init.k === 'init' && d.init.items.length === 1) {
             const x = this.expr(d.init.items[0]);
@@ -994,27 +1248,30 @@ class Gen {
         }
       } else if (type.dims) {
         if (type.dims.some((x) => x == null)) this.err(`array size missing in '${d.name}'`, d.tok);
-        if ((type.b === 'char' || type.b === 'uchar') && type.dims.length === 1) {
-          init = this.zeroArray(type);
-        } else init = this.zeroArray(type);
-      } else init = zeroOf(type.b);
+        init = this.zeroArray(type);
+      } else init = isPtr(type) ? 'null' : zeroOf(type.b);
 
+      const boxed = !ref && !type.dims && type.b !== 'obj' && this.boxedNames.has(d.name);
+      if (boxed) init = `[${init}]`;
+      let v: VarInfo;
       if (s.isStatic && !global && this.currentFunc) {
         const js = `$$s${this.staticCounter++}_${d.name}`;
         this.statics.push(`let ${js}=${init};`);
-        this.declare(d.name, type, d.tok, js);
+        v = this.declare(d.name, type, d.tok, js);
       } else if (global) {
-        const v = this.declare(d.name, type, d.tok);
+        v = this.declare(d.name, type, d.tok);
         out.push(`${v.js}=${init};`);
       } else {
-        const v = this.declare(d.name, type, d.tok);
+        v = this.declare(d.name, type, d.tok);
         out.push(`let ${v.js}=${init};`);
       }
+      v.boxed = boxed;
+      v.ref = ref;
     }
   }
 
   tick(cost: number) {
-    return `if((R.t+=${cost})>=R.until)yield 0;`;
+    return `if((R.t+=${+(cost * this.board.statementCost).toFixed(4)})>=R.until)yield 0;`;
   }
 
   stmt(s: Stmt, out: string[]) {
@@ -1131,10 +1388,9 @@ function zeroOf(b: Base): string {
 
 const CONSTANTS: Record<string, [number, Base]> = {
   HIGH: [1, 'int'], LOW: [0, 'int'], INPUT: [0, 'int'], OUTPUT: [1, 'int'], INPUT_PULLUP: [2, 'int'],
-  LED_BUILTIN: [13, 'int'], A0: [14, 'int'], A1: [15, 'int'], A2: [16, 'int'], A3: [17, 'int'], A4: [18, 'int'], A5: [19, 'int'],
   DEC: [10, 'int'], HEX: [16, 'int'], OCT: [8, 'int'], BIN: [2, 'int'], PI: [Math.PI, 'float'], HALF_PI: [Math.PI / 2, 'float'],
   TWO_PI: [Math.PI * 2, 'float'], DEG_TO_RAD: [Math.PI / 180, 'float'], RAD_TO_DEG: [180 / Math.PI, 'float'], EULER: [Math.E, 'float'],
-  NULL: [0, 'int'], nullptr: [0, 'int'], CHANGE: [1, 'int'], RISING: [3, 'int'], FALLING: [2, 'int'],
+  ADC_11db: [3, 'int'], ADC_0db: [0, 'int'], NULL: [0, 'int'], nullptr: [0, 'int'], NOT_AN_INTERRUPT: [-1, 'int'], CHANGE: [1, 'int'], RISING: [3, 'int'], FALLING: [2, 'int'],
   LSBFIRST: [0, 'int'], MSBFIRST: [1, 'int'], DEFAULT: [1, 'int'], EXTERNAL: [0, 'int'], INTERNAL: [3, 'int'],
 };
 
@@ -1183,6 +1439,13 @@ function bitMacro(op: 'set' | 'clear' | 'write'): BuiltinGen {
   };
 }
 
+function esp32Only(g: BuiltinGen): BuiltinGen {
+  return (c, args, tok) => {
+    if (c.board.id !== 'esp32') c.err(`this function is only available on ESP32 boards (you're programming an ${c.board.name})`, tok);
+    return g(c, args, tok);
+  };
+}
+
 const BUILTINS: Record<string, BuiltinGen> = {
   pinMode: simple('pinMode', 'R.pinMode', 'void', 2),
   digitalWrite: simple('digitalWrite', 'R.digitalWrite', 'void', 2),
@@ -1208,13 +1471,29 @@ const BUILTINS: Record<string, BuiltinGen> = {
   tone: simple('tone', 'R.tone', 'void', 2, 3),
   noTone: simple('noTone', 'R.noTone', 'void', 1),
   shiftOut: simple('shiftOut', 'R.shiftOut', 'void', 4),
-  interrupts: simple('interrupts', 'R.noop', 'void', 0),
-  noInterrupts: simple('noInterrupts', 'R.noop', 'void', 0),
-  attachInterrupt: (c, _a, tok) => c.err('attachInterrupt is on the roadmap and not supported yet; poll the pin in loop() instead', tok),
-  digitalPinToInterrupt: simple('digitalPinToInterrupt', 'R.ident', 'int', 1),
+  interrupts: simple('interrupts', 'R.interrupts', 'void', 0),
+  noInterrupts: simple('noInterrupts', 'R.noInterrupts', 'void', 0),
+  sei: simple('sei', 'R.interrupts', 'void', 0),
+  cli: simple('cli', 'R.noInterrupts', 'void', 0),
+  attachInterrupt: (c, args, tok) => {
+    argCheck(c, 'attachInterrupt', args, 3, 3, tok);
+    const [n, fn, mode] = c.args(args);
+    if (fn.type.b !== 'func') c.err('the second argument of attachInterrupt must be the name of a function, e.g. attachInterrupt(0, onPress, FALLING)', args[1].tok);
+    return { code: `R.attachInterrupt(${n.code},${fn.code},${mode.code})`, type: T('void') };
+  },
+  detachInterrupt: simple('detachInterrupt', 'R.detachInterrupt', 'void', 1),
+  digitalPinToInterrupt: simple('digitalPinToInterrupt', 'R.pinToInterrupt', 'int', 1),
   map: simple('map', 'R.map', 'long', 5),
   random: simple('random', 'R.random', 'long', 1, 2),
-  randomSeed: simple('randomSeed', 'R.noop', 'void', 1),
+  randomSeed: simple('randomSeed', 'R.randomSeed', 'void', 1),
+  ledcSetup: esp32Only(simple('ledcSetup', 'R.ledcSetup', 'float', 3)),
+  ledcAttachPin: esp32Only(simple('ledcAttachPin', 'R.ledcAttachPin', 'void', 2)),
+  ledcAttach: esp32Only(simple('ledcAttach', 'R.ledcAttach', 'bool', 3)),
+  ledcDetachPin: esp32Only(simple('ledcDetachPin', 'R.ledcDetachPin', 'void', 1)),
+  ledcDetach: esp32Only(simple('ledcDetach', 'R.ledcDetachPin', 'void', 1)),
+  ledcWrite: esp32Only(simple('ledcWrite', 'R.ledcWrite', 'void', 2)),
+  dacWrite: esp32Only(simple('dacWrite', 'R.dacWrite', 'void', 2)),
+  analogSetAttenuation: esp32Only(simple('analogSetAttenuation', 'R.noop', 'void', 1)),
   constrain: generic('constrain', (a) => `Math.min(Math.max(${a[0]},${a[1]}),${a[2]})`, 3),
   min: generic('min', (a) => `Math.min(${a[0]},${a[1]})`, 2),
   max: generic('max', (a) => `Math.max(${a[0]},${a[1]})`, 2),
@@ -1302,6 +1581,61 @@ const SERIAL: Record<string, BuiltinGen> = {
   setTimeout: simple('setTimeout', 'R.noop', 'void', 1),
 };
 
+/** Names used with unary `&` or passed to reference parameters: those variables get boxed. */
+function findAddressTaken(roots: unknown[], funcs: FuncDef[]): Set<string> {
+  const refParams = new Map(funcs.map((f) => [f.name, f.params.map((p) => !!p.type.ref && !p.type.dims && p.type.b !== 'obj')]));
+  const out = new Set<string>();
+  const walk = (n: any) => {
+    if (!n || typeof n !== 'object') return;
+    if (Array.isArray(n)) {
+      n.forEach(walk);
+      return;
+    }
+    if (n.k === 'un' && n.op === '&' && n.e?.k === 'id') out.add(n.e.name);
+    if (n.k === 'call' && n.callee?.k === 'id') {
+      const refs = refParams.get(n.callee.name);
+      n.args.forEach((a: any, i: number) => refs?.[i] && a.k === 'id' && out.add(a.name));
+    }
+    if (n.k === 'decl') for (const d of n.decls) if (d.type?.ref && d.init?.k === 'id') out.add(d.init.name);
+    for (const key in n) if (key !== 'tok' && key !== 'type' && key !== 't') walk(n[key]);
+  };
+  walk(roots);
+  return out;
+}
+
+// ---------------------------------------------------------------- libraries
+
+type MethodSpec = [min: number, max: number, ret: Base];
+const LCD_METHODS: Record<string, MethodSpec> = {
+  begin: [0, 3, 'void'], clear: [0, 0, 'void'], home: [0, 0, 'void'], setCursor: [2, 2, 'void'],
+  print: [1, 2, 'uint'], println: [0, 2, 'uint'], write: [1, 1, 'uint'],
+  cursor: [0, 0, 'void'], noCursor: [0, 0, 'void'], blink: [0, 0, 'void'], noBlink: [0, 0, 'void'],
+  display: [0, 0, 'void'], noDisplay: [0, 0, 'void'], scrollDisplayLeft: [0, 0, 'void'], scrollDisplayRight: [0, 0, 'void'],
+  autoscroll: [0, 0, 'void'], noAutoscroll: [0, 0, 'void'], leftToRight: [0, 0, 'void'], rightToLeft: [0, 0, 'void'],
+  createChar: [2, 2, 'void'], command: [1, 1, 'void'],
+};
+const LIBS: Record<string, { ctor: [number, number]; methods: Record<string, MethodSpec> }> = {
+  Servo: {
+    ctor: [0, 0],
+    methods: {
+      attach: [1, 3, 'uchar'], write: [1, 1, 'void'], writeMicroseconds: [1, 1, 'void'], read: [0, 0, 'int'],
+      readMicroseconds: [0, 0, 'int'], attached: [0, 0, 'bool'], detach: [0, 0, 'void'],
+    },
+  },
+  LiquidCrystal: { ctor: [6, 11], methods: LCD_METHODS },
+  LiquidCrystal_I2C: {
+    ctor: [3, 3],
+    methods: { ...LCD_METHODS, init: [0, 0, 'void'], backlight: [0, 0, 'void'], noBacklight: [0, 0, 'void'], setBacklight: [1, 1, 'void'] },
+  },
+  Wire: {
+    ctor: [0, 0],
+    methods: {
+      begin: [0, 1, 'void'], end: [0, 0, 'void'], setClock: [1, 1, 'void'], beginTransmission: [1, 1, 'void'],
+      write: [1, 2, 'uint'], endTransmission: [0, 1, 'uchar'], requestFrom: [2, 3, 'uchar'], available: [0, 0, 'int'], read: [0, 0, 'int'],
+    },
+  },
+};
+
 // ---------------------------------------------------------------- entry point
 
 export interface CompiledProgram {
@@ -1310,11 +1644,13 @@ export interface CompiledProgram {
   js: string;
 }
 
-export function compileSketch(src: string): CompiledProgram {
+export function compileSketch(src: string, board: BoardSpec = UNO): CompiledProgram {
+  INT32 = board.int32;
   const toks = tokenize(src);
   const parser = new Parser(toks);
   const { globals, funcs } = parser.parseProgram();
   const g = new Gen();
+  g.board = board;
   g.scopes.push(new Map());
 
   for (const f of funcs) {
@@ -1328,8 +1664,11 @@ export function compileSketch(src: string): CompiledProgram {
   if (!setup) throw new CompileError("undefined reference to 'setup' — every sketch needs a setup() function", 1, 1);
   if (!loop) throw new CompileError("undefined reference to 'loop' — every sketch needs a loop() function", 1, 1);
 
+  g.boxedNames = findAddressTaken([...globals, ...funcs.map((f) => f.body)], funcs);
   const globalInit: string[] = [];
+  g.temps = [];
   for (const s of globals) g.decl(s as Stmt & { k: 'decl' }, globalInit, true);
+  const globalTemps = g.temps;
   const globalNames = [...g.scopes[0].values()].map((v) => v.js);
 
   const fnCode: string[] = [];
@@ -1337,12 +1676,26 @@ export function compileSketch(src: string): CompiledProgram {
     const info = g.funcs.get(f.name)!;
     g.currentFunc = info;
     g.scopes.push(new Map());
-    const params = f.params.map((p) => g.declare(p.name, p.type, f.tok).js);
+    g.temps = [];
+    const prologue: string[] = [];
+    const params = f.params.map((p) => {
+      const isRef = !!p.type.ref && !p.type.dims && p.type.b !== 'obj';
+      const { ref: _r, ...pt } = p.type;
+      void _r;
+      const v = g.declare(p.name, pt, f.tok);
+      if (isRef) v.ref = true;
+      else if (!pt.dims && pt.b !== 'obj' && g.boxedNames.has(p.name)) {
+        v.boxed = true;
+        prologue.push(`${v.js}=[${v.js}];`);
+      }
+      return v.js;
+    });
     const body: string[] = [];
     for (const st of (f.body as Stmt & { k: 'block' }).body) g.stmt(st, body);
     g.scopes.pop();
     g.currentFunc = null;
-    fnCode.push(`function* ${info.js}(${params.join(',')}){R.t+=1;\n${body.join('\n')}\n}`);
+    const temps = g.temps.length ? `let ${g.temps.join(',')};` : '';
+    fnCode.push(`function* ${info.js}(${params.join(',')}){R.t+=${board.statementCost};${temps}${prologue.join('')}\n${body.join('\n')}\n}`);
   }
 
   const js = [
@@ -1351,9 +1704,10 @@ export function compileSketch(src: string): CompiledProgram {
     ...g.statics,
     ...fnCode,
     `function* __main(){`,
+    globalTemps.length ? `let ${globalTemps.join(',')};` : '',
     globalInit.join('\n'),
     `yield* $f_setup();`,
-    `for(;;){yield* $f_loop();if((R.t+=1)>=R.until)yield 0;}`,
+    `for(;;){yield* $f_loop();if((R.t+=${board.statementCost})>=R.until)yield 0;}`,
     `}`,
     'return __main();',
   ].join('\n');

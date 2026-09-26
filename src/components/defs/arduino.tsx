@@ -1,7 +1,7 @@
 import type { ComponentDef, PinDef } from '../types';
-import { Avg, type SimWarning } from '../../sim/builder';
-import type { Source } from '../../sim/solver';
-import { Label, SLine, SText, formatSI } from '../util';
+import { Label, SLine, SText } from '../util';
+import { UNO } from '../../mcu/boards';
+import { buildBoard } from './board';
 
 export const BLINK_SKETCH = `// Blink: toggles the on-board LED (pin 13) once per second.
 // Wire an LED + 220 Ω resistor from pin 13 to GND to see it on the breadboard too.
@@ -40,12 +40,6 @@ const PINS: PinDef[] = [
   ...BOTTOM.map(([id, x]) => ({ id, x, y: BOT_Y, kind: 'socket' as const, label: PIN_LABELS[id] ?? (id.startsWith('A') ? `Analog pin ${id}` : id) })),
 ];
 
-/** Runtime pin index for a header pin id, or -1. */
-export function unoPinIndex(id: string): number {
-  if (/^D\d+$/.test(id)) return Number(id.slice(1));
-  if (/^A\d$/.test(id)) return 14 + Number(id.slice(1));
-  return -1;
-}
 
 function Header({ pins, y }: { pins: [string, number, string][]; y: number }) {
   // group contiguous runs into black header strips
@@ -87,7 +81,7 @@ export const arduinoUno: ComponentDef = {
   pins: () => PINS,
   internalConnections: () => [['GND1', 'GND2', 'GND3'], ['A4', 'SDA'], ['A5', 'SCL']],
   defaultProps: { code: BLINK_SKETCH },
-  mcu: { defaultCode: BLINK_SKETCH },
+  mcu: { defaultCode: BLINK_SKETCH, board: UNO },
   thumbScale: 1,
   summary: () => 'ATmega328P · 16 MHz',
   render: ({ sim }) => {
@@ -174,67 +168,9 @@ export const arduinoUno: ComponentDef = {
       ))}
     </g>
   ),
-  build: (b) => {
-    const mcu = b.mcu;
-    b.markGround('GND1');
-    const five = b.source('5V', 'GND1', 5, 0.05);
-    const three = b.source('3V3', 'GND1', 3.3, 0.5);
-    const drivers: { pin: number; id: string; src: Source; cur: Avg }[] = [];
-    for (const [id] of [...TOP, ...BOTTOM]) {
-      const idx = unoPinIndex(id);
-      if (idx < 0 || !b.connected(id)) continue;
-      drivers.push({ pin: idx, id, src: b.source(id, 'GND1', 0, 1e8), cur: new Avg() });
-    }
-    const fiveCur = new Avg();
-    const threeCur = new Avg();
-    let warn: SimWarning[] = [];
-    return {
-      beforeStep(t, h) {
-        if (!mcu) return;
-        for (const d of drivers) {
-          const dr = mcu.drive(d.pin, t, h);
-          d.src.volts = dr.volts;
-          d.src.r = dr.r;
-        }
-      },
-      afterStep(v, h) {
-        const g = b.volt('GND1');
-        for (const d of drivers) {
-          const out = -d.src.currents(v)[0];
-          d.cur.add(out, h);
-          if (mcu) mcu.pins[d.pin].volts = b.volt(d.id) - g;
-        }
-        fiveCur.add(-five.currents(v)[0], h);
-        threeCur.add(-three.currents(v)[0], h);
-      },
-      maxStep: () => (mcu?.needsFineSteps ? 2e-4 : 1e-3),
-      frame() {
-        warn = [];
-        const pinCurrents: Record<string, number> = {};
-        for (const d of drivers) {
-          const i = d.cur.take();
-          pinCurrents[d.id] = i;
-          if (Math.abs(i) > 0.04) {
-            warn.push({ level: 'error', message: `Pin ${d.id} overloaded: ${formatSI(Math.abs(i), 'A')} (max 40 mA). Add a resistor or drive the load through a transistor.` });
-          }
-        }
-        const i5 = fiveCur.take();
-        const i3 = threeCur.take();
-        if (i5 > 0.9) warn.push({ level: 'error', message: `Short circuit on 5V: ${formatSI(i5, 'A')} drawn from the supply.` });
-        else if (i5 > 0.45) warn.push({ level: 'warn', message: `5V pin supplying ${formatSI(i5, 'A')} — close to the USB limit (500 mA).` });
-        if (i3 > 0.15) warn.push({ level: 'error', message: `3.3V pin overloaded: ${formatSI(i3, 'A')} (max 150 mA).` });
-        if (mcu?.error) warn.push({ level: 'error', message: `${mcu.error.kind === 'compile' ? 'Compile error' : 'Runtime error'}: ${mcu.error.message}` });
-        const p13 = mcu?.pins[13];
-        const l = p13 ? p13.mode === 'output' && (p13.pwm !== null ? p13.pwm > 0.1 : p13.value === 1) : false;
-        return {
-          l,
-          tx: mcu ? mcu.t - mcu.lastSerialAt < 60000 : false,
-          error: mcu?.error ? mcu.error.message : undefined,
-          pinCurrents,
-          time: mcu ? mcu.t / 1e6 : 0,
-        };
-      },
-      warnings: () => warn,
-    };
-  },
+  build: (b) =>
+    buildBoard(b, UNO, [...TOP, ...BOTTOM].map(([id]) => id), 'GND1', [
+      { pin: '5V', volts: 5, r: 0.05, warn: 0.45, short: 0.9 },
+      { pin: '3V3', volts: 3.3, r: 0.5, warn: 0.1, short: 0.15 },
+    ]),
 };

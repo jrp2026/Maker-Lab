@@ -1,5 +1,5 @@
-import type { ComponentInstance, Point } from './types';
-import type { ComponentDef, PinDef } from '../components/types';
+import type { ComponentInstance, Point, Props } from './types';
+import { boundsOf, type ComponentDef, type PinDef } from '../components/types';
 
 export const GRID = 10;
 
@@ -8,13 +8,13 @@ export function snap(v: number, g = GRID): number {
 }
 
 /** Rotation pivot in local coordinates, snapped to the pin grid so rotated pins stay on grid. */
-export function pivotOf(def: ComponentDef): Point {
-  const b = def.bounds;
+export function pivotOf(def: ComponentDef, props?: Props): Point {
+  const b = props ? boundsOf(def, props) : def.bounds;
   return { x: snap(b.x + b.w / 2), y: snap(b.y + b.h / 2) };
 }
 
 export function localToWorld(comp: ComponentInstance, def: ComponentDef, p: Point): Point {
-  const pv = pivotOf(def);
+  const pv = pivotOf(def, comp.props);
   let x = p.x - pv.x;
   const y = p.y - pv.y;
   if (comp.flip) x = -x;
@@ -28,7 +28,7 @@ export function localToWorld(comp: ComponentInstance, def: ComponentDef, p: Poin
 }
 
 export function worldToLocal(comp: ComponentInstance, def: ComponentDef, p: Point): Point {
-  const pv = pivotOf(def);
+  const pv = pivotOf(def, comp.props);
   const x = p.x - comp.x - pv.x;
   const y = p.y - comp.y - pv.y;
   let rx = x, ry = y;
@@ -43,7 +43,7 @@ export function worldToLocal(comp: ComponentInstance, def: ComponentDef, p: Poin
 
 /** SVG transform string mapping local coordinates to world. */
 export function transformOf(comp: ComponentInstance, def: ComponentDef): string {
-  const pv = pivotOf(def);
+  const pv = pivotOf(def, comp.props);
   const parts = [`translate(${comp.x + pv.x} ${comp.y + pv.y})`];
   if (comp.rot) parts.push(`rotate(${comp.rot * 90})`);
   if (comp.flip) parts.push('scale(-1 1)');
@@ -75,7 +75,7 @@ export function worldPins(comp: ComponentInstance, def: ComponentDef): WorldPin[
 }
 
 export function worldBounds(comp: ComponentInstance, def: ComponentDef) {
-  const b = def.bounds;
+  const b = boundsOf(def, comp.props);
   const corners = [
     localToWorld(comp, def, { x: b.x, y: b.y }),
     localToWorld(comp, def, { x: b.x + b.w, y: b.y }),

@@ -1,6 +1,7 @@
 import { memo, useMemo, useState } from 'react';
 import { CATALOG } from '../components/catalog';
 import { DEFS, getDef } from '../components/registry';
+import { boundsOf } from '../components/types';
 import { addComponent, showToast } from '../model/store';
 import { getCanvasSize, useViewport } from './viewport';
 import type { ComponentInstance } from '../model/types';
@@ -8,7 +9,7 @@ import type { ComponentInstance } from '../model/types';
 const Thumb = memo(function Thumb({ type }: { type: string }) {
   const def = getDef(type);
   if (!def) return null;
-  const b = def.bounds;
+  const b = boundsOf(def, def.defaultProps);
   const pad = 4;
   const comp: ComponentInstance = { id: 'thumb', type, x: 0, y: 0, rot: 0, flip: false, props: def.defaultProps };
   return (
@@ -24,7 +25,8 @@ function placeAtCenter(type: string) {
   const v = useViewport.getState();
   const { w, h } = getCanvasSize();
   const cx = (w / 2 - v.x) / v.s, cy = (h / 2 - v.y) / v.s;
-  addComponent(type, cx - (def.bounds.x + def.bounds.w / 2), cy - (def.bounds.y + def.bounds.h / 2));
+  const b = boundsOf(def, def.defaultProps);
+  addComponent(type, cx - (b.x + b.w / 2), cy - (b.y + b.h / 2));
 }
 
 export function LibraryPanel() {

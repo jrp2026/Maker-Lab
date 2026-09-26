@@ -89,7 +89,8 @@ export const CATALOG: CatalogCategory[] = [
     entries: [
       { name: 'DC motor', type: 'dc-motor' },
       { name: 'Piezo buzzer', type: 'piezo' },
-      ...P(2, 'Servo motor (standard / continuous / high-torque)', 'Stepper motor (NEMA 17/23)', 'Speaker', 'Gear motor', 'N20 gear motor', 'Solenoid', 'Electret microphone'),
+      { name: 'Servo motor (standard / continuous / high-torque)', type: 'servo' },
+      ...P(2, 'Stepper motor (NEMA 17/23)', 'Speaker', 'Gear motor', 'N20 gear motor', 'Solenoid', 'Electret microphone'),
       ...P(3, 'Brushless DC (BLDC) motor', 'Coreless motor', 'Planetary gear motor', 'Linear actuator'),
     ],
   },
@@ -115,7 +116,8 @@ export const CATALOG: CatalogCategory[] = [
     id: 'mcu', name: 'Microcontrollers & boards', icon: '⌗',
     entries: [
       { name: 'Arduino Uno R3', type: 'arduino-uno' },
-      ...P(2, 'Arduino Nano', 'ESP32'),
+      { name: 'ESP32 DevKit V1', type: 'esp32-devkit' },
+      ...P(2, 'Arduino Nano'),
       ...P(3, 'Arduino Mega', 'Arduino Micro', 'ESP8266', 'Raspberry Pi Pico', 'Raspberry Pi Pico W', 'STM32 development board', 'Teensy', 'ATtiny', 'ATmega328P', 'ATmega2560', 'RP2040', 'PIC microcontroller', 'AVR microcontroller', 'ARM Cortex-M microcontroller', 'Generic microcontroller', 'Microcontroller programmer/debugger'),
     ],
   },
@@ -137,7 +139,12 @@ export const CATALOG: CatalogCategory[] = [
   },
   {
     id: 'displays', name: 'Displays', icon: '▣',
-    entries: [...P(2, 'Seven-segment display', 'OLED display', 'LCD display'), ...P(3, 'Matrix LED display', 'Touchscreen module')],
+    entries: [
+      { name: 'LCD display 16×2 / 20×4 (parallel)', type: 'lcd' },
+      { name: 'LCD display with I2C backpack', type: 'lcd-i2c' },
+      ...P(2, 'Seven-segment display', 'OLED display'),
+      ...P(3, 'Matrix LED display', 'Touchscreen module'),
+    ],
   },
   {
     id: 'wireless', name: 'Communication & wireless', icon: '((·))',

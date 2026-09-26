@@ -1,4 +1,9 @@
 import { compileSketch, CompileError } from './compiler';
+import { UNO, type BoardSpec } from './boards';
+import { createLib, WireLib, type McuEnv } from './libs';
+
+export type { BoardSpec };
+export const UNO_SPEC = UNO;
 
 export type PinMode = 'input' | 'output' | 'pullup';
 
@@ -9,35 +14,15 @@ export interface PinState {
   pwm: number | null;
   pwmFreq: number;
   tone: { freq: number; until: number } | null;
+  /** servo pulse width in µs (50 Hz) */
+  servo: number | null;
+  /** DAC output voltage (ESP32 GPIO25/26) */
+  dac: number | null;
   /** measured pin voltage relative to board GND (latest solve) */
   volts: number;
   /** last digital level seen by digitalRead (hysteresis) */
   level: 0 | 1;
 }
-
-export interface BoardSpec {
-  name: string;
-  pinCount: number;
-  analogBase: number; // pin number of A0
-  analogCount: number;
-  pwmPins: number[];
-  vcc: number;
-  pinResistance: number;
-  pullup: number;
-  maxPinCurrent: number;
-}
-
-export const UNO_SPEC: BoardSpec = {
-  name: 'Arduino Uno R3',
-  pinCount: 20,
-  analogBase: 14,
-  analogCount: 6,
-  pwmPins: [3, 5, 6, 9, 10, 11],
-  vcc: 5,
-  pinResistance: 25,
-  pullup: 35000,
-  maxPinCurrent: 0.04,
-};
 
 export interface McuError {
   kind: 'compile' | 'runtime';
@@ -46,10 +31,14 @@ export interface McuError {
   col?: number;
 }
 
+type Isr = { fn: () => Generator<number, void, unknown>; mode: number; last: 0 | 1 };
+
 function highFraction(t0: number, h: number, period: number, duty: number): number {
   const F = (x: number) => Math.floor(x / period) * duty * period + Math.min(x - Math.floor(x / period) * period, duty * period);
   return h > 0 ? (F(t0 + h) - F(t0)) / h : duty;
 }
+
+const NO_ENV: McuEnv = { lcdFor: () => null, i2c: () => null };
 
 /** Arduino API + scheduler for a compiled sketch. Times are in microseconds. */
 export class McuRuntime {
@@ -62,16 +51,29 @@ export class McuRuntime {
   lastSerialAt = -1e9;
   error: McuError | null = null;
   done = false;
+  env: McuEnv = NO_ENV;
+  /** problems reported by libraries (e.g. "no LCD at 0x27") */
+  libWarnings = new Set<string>();
+  lib = { create: (cls: string, args: unknown[]) => createLib(this, cls, args) };
+  wire = new WireLib(this);
   private gen: Generator<number, void, unknown> | null = null;
   private seed = 12345;
+  private isrs = new Map<number, Isr>();
+  private pendingIsrs: Isr['fn'][] = [];
+  private intEnabled = true;
+  inIsr = false;
+  private ledc = new Map<number, { freq: number; bits: number; pins: number[] }>();
+  private ledcPin = new Map<number, { freq: number; bits: number }>();
 
-  constructor(public spec: BoardSpec = UNO_SPEC) {
+  constructor(public spec: BoardSpec = UNO) {
     this.pins = Array.from({ length: spec.pinCount }, () => ({
       mode: 'input' as PinMode,
       value: 0 as 0 | 1,
       pwm: null,
       pwmFreq: 490,
       tone: null,
+      servo: null,
+      dac: null,
       volts: 0,
       level: 0 as 0 | 1,
     }));
@@ -79,15 +81,12 @@ export class McuRuntime {
 
   load(code: string): McuError | null {
     try {
-      const prog = compileSketch(code);
+      const prog = compileSketch(code, this.spec);
       this.gen = prog.create(this);
       return null;
     } catch (e) {
-      if (e instanceof CompileError) {
-        this.error = { kind: 'compile', message: e.message, line: e.line, col: e.col };
-      } else {
-        this.error = { kind: 'compile', message: String((e as Error).message ?? e) };
-      }
+      if (e instanceof CompileError) this.error = { kind: 'compile', message: e.message, line: e.line, col: e.col };
+      else this.error = { kind: 'compile', message: String((e as Error).message ?? e) };
       return this.error;
     }
   }
@@ -101,14 +100,15 @@ export class McuRuntime {
     this.until = us;
     let guard = 0;
     try {
+      this.runIsrs();
       while (this.t < us && !this.done) {
         const r = this.gen.next();
         if (r.done) this.done = true;
+        this.runIsrs();
         if (++guard > 1e6) throw new Error('scheduler stalled');
       }
     } catch (e) {
-      const msg = e instanceof RangeError ? 'Stack overflow (runaway recursion?)' : String((e as Error).message ?? e);
-      this.error = { kind: 'runtime', message: msg };
+      this.error = { kind: 'runtime', message: friendlyError(e) };
     }
     if (this.t < us) this.t = us;
   }
@@ -118,11 +118,13 @@ export class McuRuntime {
     const p = this.pins[pin];
     const s = this.spec;
     if (p.mode === 'output') {
+      if (p.dac !== null) return { volts: p.dac, r: 200 };
       const tUs = t0 * 1e6;
       if (p.tone) {
         if (p.tone.until > 0 && tUs >= p.tone.until) p.tone = null;
         else return { volts: s.vcc * highFraction(t0, h, 1 / p.tone.freq, 0.5), r: s.pinResistance };
       }
+      if (p.servo !== null) return { volts: s.vcc * highFraction(t0, h, 0.02, p.servo / 20000), r: s.pinResistance };
       if (p.pwm !== null) return { volts: s.vcc * highFraction(t0, h, 1 / p.pwmFreq, p.pwm), r: s.pinResistance };
       return { volts: p.value ? s.vcc : 0, r: s.pinResistance };
     }
@@ -133,80 +135,236 @@ export class McuRuntime {
   /** Signal frequency on a pin (tone or PWM), 0 if DC. */
   pinFrequency(pin: number): number {
     const p = this.pins[pin];
-    if (p.mode !== 'output') return 0;
+    if (!p || p.mode !== 'output') return 0;
     if (p.tone) return p.tone.freq;
+    if (p.servo !== null) return 50;
     if (p.pwm !== null) return p.pwmFreq;
     return 0;
   }
 
-  /** Does this pin need small solver steps (PWM switching)? */
+  /** Does any pin need small solver steps (PWM switching)? */
   get needsFineSteps(): boolean {
-    return this.pins.some((p) => p.mode === 'output' && p.pwm !== null);
+    return this.pins.some((p) => p.mode === 'output' && p.pwm !== null && p.pwmFreq < 2000);
+  }
+
+  // ------------------------------------------------------------ interrupts
+  private levelOf(pin: number): 0 | 1 {
+    const p = this.pins[pin];
+    if (p.mode === 'output') return p.dac !== null ? (p.dac > this.spec.vcc / 2 ? 1 : 0) : p.value;
+    const v = p.volts;
+    if (v > 0.6 * this.spec.vcc) p.level = 1;
+    else if (v < 0.3 * this.spec.vcc) p.level = 0;
+    return p.level;
+  }
+
+  /** Called after each circuit solve: queue handlers for edges on interrupt pins. */
+  sampleInterrupts() {
+    for (const [pin, isr] of this.isrs) {
+      const lv = this.levelOf(pin);
+      const m = isr.mode;
+      if ((m === 1 && lv !== isr.last) || (m === 3 && isr.last === 0 && lv === 1) || (m === 2 && isr.last === 1 && lv === 0) || (m === 0 && lv === 0)) {
+        if (this.pendingIsrs.length < 16) this.pendingIsrs.push(isr.fn);
+      }
+      isr.last = lv;
+    }
+  }
+
+  private runIsrs() {
+    if (!this.intEnabled || this.inIsr || !this.pendingIsrs.length) return;
+    while (this.pendingIsrs.length) {
+      const fn = this.pendingIsrs.shift()!;
+      this.inIsr = true;
+      try {
+        const g = fn();
+        let n = 0;
+        while (!g.next().done) if (++n > 200000) throw new Error('interrupt handler never returned');
+        this.t += 3;
+      } finally {
+        this.inIsr = false;
+      }
+    }
+  }
+
+  attachInterrupt(n: number, fn: Isr['fn'], mode: number) {
+    let pin: number;
+    if (this.spec.interruptPins === 'all') pin = n;
+    else {
+      pin = this.spec.interruptPins[n];
+      if (pin === undefined) throw new Error(`interrupt ${n} does not exist on ${this.spec.name} (use digitalPinToInterrupt(2) or (3))`);
+    }
+    this.pinIndex(pin);
+    this.isrs.set(pin, { fn, mode, last: this.levelOf(pin) });
+  }
+  detachInterrupt(n: number) {
+    const pin = this.spec.interruptPins === 'all' ? n : this.spec.interruptPins[n];
+    this.isrs.delete(pin);
+  }
+  pinToInterrupt(p: number) {
+    if (this.spec.interruptPins === 'all') return this.spec.pins.includes(p) ? p : -1;
+    return this.spec.interruptPins.indexOf(p);
+  }
+  interrupts() {
+    this.intEnabled = true;
+  }
+  noInterrupts() {
+    this.intEnabled = false;
+  }
+
+  // ------------------------------------------------------------ pointers
+  ptr(a: unknown[], i: number) {
+    return { a, i: Math.trunc(i) };
+  }
+  padd(p: { a: unknown[]; i: number } | null, k: number) {
+    if (!p) throw new Error('pointer arithmetic on a null pointer');
+    return { a: p.a, i: p.i + Math.trunc(k) };
+  }
+  pdiff(p: { a: unknown[]; i: number }, q: { a: unknown[]; i: number }) {
+    if (!p || !q) throw new Error('null pointer in subtraction');
+    return p.i - q.i;
+  }
+  peq(p: any, q: any) {
+    const n = (x: any) => (x === 0 || x === undefined ? null : x);
+    p = n(p);
+    q = n(q);
+    if (p === q) return true;
+    return !!p && !!q && p.a === q.a && p.i === q.i;
+  }
+  pidx(p: { i: number } | null) {
+    return p ? p.i : 0;
+  }
+  nn<T>(p: T | null): T {
+    if (!p) throw new Error('null pointer dereference');
+    return p;
+  }
+  deref(p: { a: unknown[]; i: number } | null) {
+    if (!p) throw new Error('null pointer dereference');
+    const v = p.a[p.i];
+    if (v === undefined) throw new Error(`pointer reads outside its array (index ${p.i} of ${p.a.length})`);
+    return v;
+  }
+  nullPtr(x: number) {
+    if (x === 0) return null;
+    throw new Error('invalid conversion from integer to pointer');
+  }
+  toArr(p: { a: unknown[]; i: number } | null) {
+    if (!p) throw new Error('null pointer passed where an array is expected');
+    return p.i === 0 ? p.a : p.a.slice(p.i);
   }
 
   // ------------------------------------------------------------ Arduino API
-  private pinIndex(p: number): number {
+  pinIndex(p: number): number {
     p = Math.trunc(p);
-    if (p < 0 || p >= this.spec.pinCount) throw new Error(`pin ${p} does not exist on ${this.spec.name}`);
+    if (p < 0 || p >= this.spec.pinCount || !this.spec.pins.includes(p)) throw new Error(`pin ${p} does not exist on ${this.spec.name}`);
     return p;
   }
   noop() {}
   ident(x: number) {
     return x;
   }
+  warnLib(msg: string) {
+    this.libWarnings.add(msg);
+  }
   pinMode(p: number, m: number) {
-    const pin = this.pins[this.pinIndex(p)];
-    pin.mode = m === 1 ? 'output' : m === 2 ? 'pullup' : 'input';
+    const idx = this.pinIndex(p);
+    const pin = this.pins[idx];
+    let mode: PinMode = m === 1 ? 'output' : m === 2 ? 'pullup' : 'input';
+    if (mode === 'output' && this.spec.inputOnly.includes(idx)) throw new Error(`GPIO${idx} is input-only on the ESP32`);
+    if (mode === 'pullup' && this.spec.inputOnly.includes(idx)) mode = 'input'; // no internal pull-ups on GPIO34–39
+    pin.mode = mode;
     if (pin.mode !== 'output') {
       pin.pwm = null;
       pin.tone = null;
+      pin.servo = null;
+      pin.dac = null;
     }
   }
   digitalWrite(p: number, v: number) {
     const pin = this.pins[this.pinIndex(p)];
     pin.pwm = null;
+    pin.servo = null;
+    pin.dac = null;
     if (pin.mode === 'output') pin.value = v ? 1 : 0;
     else pin.mode = v ? 'pullup' : 'input'; // writing an input toggles the pull-up, like the real AVR
   }
   digitalRead(p: number): number {
-    const pin = this.pins[this.pinIndex(p)];
-    if (pin.mode === 'output') return pin.value;
-    const v = pin.volts;
-    if (v > 0.6 * this.spec.vcc) pin.level = 1;
-    else if (v < 0.3 * this.spec.vcc) pin.level = 0;
-    return pin.level;
+    return this.levelOf(this.pinIndex(p));
   }
   analogRead(p: number): number {
     p = Math.trunc(p);
-    if (p < this.spec.analogCount) p += this.spec.analogBase;
-    if (p < this.spec.analogBase || p >= this.spec.analogBase + this.spec.analogCount) throw new Error(`analogRead: pin ${p} is not an analog input`);
-    this.t += 100; // ADC conversion time
+    const base = this.spec.analogChannelBase;
+    if (base !== null && p < this.spec.adcPins.length) p += base;
+    if (!this.spec.adcPins.includes(p)) throw new Error(`analogRead: pin ${p} is not an analog input on ${this.spec.name}`);
+    this.t += this.spec.adcBits > 10 ? 10 : 100; // conversion time
+    const full = 1 << this.spec.adcBits;
     const v = this.pins[p].volts;
-    return Math.max(0, Math.min(1023, Math.floor((v / this.spec.vcc) * 1024)));
+    return Math.max(0, Math.min(full - 1, Math.floor((v / this.spec.vcc) * full)));
   }
   analogWrite(p: number, v: number) {
     const idx = this.pinIndex(p);
+    this.setDuty(idx, Math.max(0, Math.min(255, Math.trunc(v))) / 255, this.spec.pwmFrequency(idx));
+  }
+  private setDuty(idx: number, duty: number, freq: number) {
     const pin = this.pins[idx];
+    if (this.spec.inputOnly.includes(idx)) throw new Error(`GPIO${idx} is input-only on the ESP32`);
     pin.mode = 'output';
     pin.tone = null;
-    v = Math.max(0, Math.min(255, Math.trunc(v)));
-    if (!this.spec.pwmPins.includes(idx)) {
+    pin.servo = null;
+    pin.dac = null;
+    const pwmCapable = this.spec.pwmPins === 'all' || this.spec.pwmPins.includes(idx);
+    if (!pwmCapable) {
       pin.pwm = null;
-      pin.value = v >= 128 ? 1 : 0;
+      pin.value = duty >= 0.5 ? 1 : 0;
       return;
     }
-    if (v === 0 || v === 255) {
+    if (duty <= 0 || duty >= 1) {
       pin.pwm = null;
-      pin.value = v ? 1 : 0;
+      pin.value = duty >= 1 ? 1 : 0;
     } else {
-      pin.pwm = v / 255;
-      pin.pwmFreq = idx === 5 || idx === 6 ? 980 : 490;
+      pin.pwm = duty;
+      pin.pwmFreq = freq;
     }
+  }
+  // ESP32 LEDC (core 2.x: channels; core 3.x: pins)
+  ledcSetup(ch: number, freq: number, bits: number) {
+    this.ledc.set(ch, { freq, bits, pins: this.ledc.get(ch)?.pins ?? [] });
+    return freq;
+  }
+  ledcAttachPin(pin: number, ch: number) {
+    const c = this.ledc.get(ch) ?? { freq: 5000, bits: 8, pins: [] };
+    c.pins.push(this.pinIndex(pin));
+    this.ledc.set(ch, c);
+  }
+  ledcAttach(pin: number, freq: number, bits: number) {
+    this.ledcPin.set(this.pinIndex(pin), { freq, bits });
+    return true;
+  }
+  ledcDetachPin(pin: number) {
+    this.ledcPin.delete(pin);
+    for (const c of this.ledc.values()) c.pins = c.pins.filter((x) => x !== pin);
+  }
+  ledcWrite(chOrPin: number, duty: number) {
+    const byPin = this.ledcPin.get(chOrPin);
+    if (byPin) return this.setDuty(chOrPin, duty / ((1 << byPin.bits) - 1), byPin.freq);
+    const c = this.ledc.get(chOrPin);
+    if (!c) throw new Error(`ledcWrite: channel/pin ${chOrPin} was not set up with ledcSetup()/ledcAttach()`);
+    for (const pin of c.pins) this.setDuty(pin, duty / ((1 << c.bits) - 1), c.freq);
+  }
+  dacWrite(p: number, v: number) {
+    const idx = this.pinIndex(p);
+    if (!this.spec.dacPins.includes(idx)) throw new Error(`dacWrite: GPIO${idx} has no DAC (use 25 or 26)`);
+    const pin = this.pins[idx];
+    pin.mode = 'output';
+    pin.pwm = null;
+    pin.tone = null;
+    pin.servo = null;
+    pin.dac = (Math.max(0, Math.min(255, Math.trunc(v))) / 255) * this.spec.vcc;
   }
   tone(p: number, freq: number, duration?: number) {
     const pin = this.pins[this.pinIndex(p)];
     pin.mode = 'output';
     pin.pwm = null;
+    pin.servo = null;
+    pin.dac = null;
     pin.tone = { freq: Math.max(31, freq), until: duration ? this.t + duration * 1000 : 0 };
   }
   noTone(p: number) {
@@ -232,6 +390,10 @@ export class McuRuntime {
     yield* this.delayUs(ms * 1000);
   }
   *delayUs(us: number) {
+    if (this.inIsr) {
+      this.t += Math.max(0, us);
+      return;
+    }
     const end = this.t + Math.max(0, us);
     while (end > this.until) {
       this.t = this.until;
@@ -265,6 +427,9 @@ export class McuRuntime {
     const r = this.seed / 4294967296;
     if (b === undefined) return a <= 0 ? 0 : Math.floor(r * a);
     return b <= a ? a : a + Math.floor(r * (b - a));
+  }
+  randomSeed(s: number) {
+    this.seed = s >>> 0 || 12345;
   }
   round(x: number) {
     return (x >= 0 ? Math.floor(x + 0.5) : Math.ceil(x - 0.5)) | 0;
@@ -335,7 +500,7 @@ export class McuRuntime {
     if (this.serialOut.length > 20000) this.serialOut = this.serialOut.slice(-15000);
     this.lastSerialAt = this.t;
     for (const l of this.serialListeners) l(text);
-    this.t += text.length * 87; // ~9600 baud
+    this.t += text.length * (this.spec.id === 'esp32' ? 10 : 87); // 115200 vs 9600 baud
     return text.length;
   }
   serialAvailable() {
@@ -381,4 +546,11 @@ export class McuRuntime {
     this.serialIn = this.serialIn.slice(m.index + m[0].length);
     return parseFloat(m[0]);
   }
+}
+
+function friendlyError(e: unknown): string {
+  if (e instanceof RangeError) return 'Stack overflow (runaway recursion?)';
+  const msg = String((e as Error)?.message ?? e);
+  if (/Cannot (read|set) properties of (null|undefined)/.test(msg)) return 'null pointer dereference or array index out of bounds';
+  return msg;
 }

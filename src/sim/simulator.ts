@@ -2,9 +2,17 @@ import type { CircuitDoc } from '../model/types';
 import { getDef } from '../components/registry';
 import { buildNetlist, type Netlist } from './netlist';
 import { Circuit } from './solver';
-import { NodeAllocator, SimBuilder, type PrimRecord, type SimComponent, type SimWarning } from './builder';
+import { NodeAllocator, SimBuilder, type BuildEnv, type I2CRegistration, type LcdRegistration, type PrimRecord, type SimComponent, type SimWarning } from './builder';
 import { McuRuntime, type McuError } from '../mcu/runtime';
-import { unoPinIndex } from '../components/defs/arduino';
+import type { McuEnv } from '../mcu/libs';
+import type { BoardSpec } from '../mcu/boards';
+
+export interface SignalInfo {
+  freq: number;
+  /** servo pulse width (µs) when the driving pin runs the Servo library */
+  servoUs: number | null;
+  vcc: number;
+}
 
 export interface SimSnapshot {
   time: number;
@@ -36,6 +44,8 @@ export class Simulator {
   inputs = new Map<string, Record<string, any>>();
   mcus = new Map<string, McuRuntime>();
   slow = false;
+  private lcds: LcdRegistration[] = [];
+  private i2cDevs: I2CRegistration[] = [];
 
   constructor(private doc: CircuitDoc) {}
 
@@ -46,7 +56,8 @@ export class Simulator {
     for (const c of this.doc.components) {
       const def = getDef(c.type);
       if (!def?.mcu) continue;
-      const rt = new McuRuntime();
+      const rt = new McuRuntime(def.mcu.board);
+      rt.env = this.envFor(c.id, def.mcu.board);
       const err = rt.load(String(c.props.code ?? ''));
       if (err) errors.set(c.id, err);
       this.mcus.set(c.id, rt);
@@ -77,7 +88,9 @@ export class Simulator {
     this.records = [];
     this.comps.clear();
     const grounds: number[] = [];
-    const env = { grounds, signalFrequency: (k: string) => this.signalFrequency(k) };
+    this.lcds = [];
+    this.i2cDevs = [];
+    const env: BuildEnv = { grounds, signalFrequency: (k: string) => this.signalInfo(k)?.freq ?? 0, signalInfo: (k: string) => this.signalInfo(k), lcds: this.lcds, i2c: this.i2cDevs };
     const builders: SimBuilder[] = [];
     for (const c of doc.components) {
       const def = getDef(c.type);
@@ -100,12 +113,12 @@ export class Simulator {
     this.frameStart = this.time;
     this.staticWarnings = this.staticChecks();
     // settle the initial operating point so the first frame isn't a transient from 0 V
-    if (this.time === 0) this.stepOnce(1e-6);
+    if (this.time === 0) this.stepOnce(1e-6, false);
   }
 
-  private stepOnce(h: number) {
+  private stepOnce(h: number, runMcus = true) {
     const t = this.time;
-    for (const m of this.mcus.values()) m.runUntil((t + h) * 1e6);
+    if (runMcus) for (const m of this.mcus.values()) m.runUntil((t + h) * 1e6);
     for (const c of this.comps.values()) c.beforeStep?.(t, h);
     this.circuit.step(h);
     const v = this.circuit.v;
@@ -206,8 +219,36 @@ export class Simulator {
     return flows;
   }
 
-  /** Walk from a pin through nearby parts to find a tone()/PWM pin driving it. */
-  private signalFrequency(pinKey: string): number {
+  /** Board spec of an MCU component, if it is one. */
+  private boardOf(compId: string): BoardSpec | undefined {
+    const c = this.doc.components.find((x) => x.id === compId);
+    return c ? getDef(c.type)?.mcu?.board : undefined;
+  }
+
+  /** Library hooks for one board: find LCDs / I2C devices wired to its pins. */
+  private envFor(mcuId: string, board: BoardSpec): McuEnv {
+    const netOfPin = (n: number) => this.netlist?.netOf.get(`${mcuId}:${board.pinId(n)}`);
+    const netOf = (comp: string, pin: string) => this.netlist?.netOf.get(`${comp}:${pin}`);
+    return {
+      lcdFor: (rs, en, data) => {
+        const rsNet = netOfPin(rs), enNet = netOfPin(en);
+        if (rsNet === undefined || enNet === undefined) return null;
+        const reg = this.lcds.find((l) => netOf(l.compId, l.rs) === rsNet && netOf(l.compId, l.en) === enNet);
+        if (!reg) return null;
+        const d4 = data.slice(-4);
+        reg.dataMismatch = d4.some((p, i) => netOfPin(p) !== netOf(reg.compId, reg.data4[i]));
+        return reg.ctrl;
+      },
+      i2c: (addr) => {
+        const sda = netOfPin(board.i2c.sda), scl = netOfPin(board.i2c.scl);
+        const reg = this.i2cDevs.find((d) => d.address === addr && netOf(d.compId, d.sda) === sda && netOf(d.compId, d.scl) === scl && d.powered());
+        return reg ? reg.device : null;
+      },
+    };
+  }
+
+  /** Walk from a pin through nearby parts to find a tone()/PWM/servo pin driving it. */
+  private signalInfo(pinKey: string): SignalInfo | null {
     const nl = this.netlist;
     const byComp = new Map<string, string[]>();
     for (const key of nl.netOf.keys()) {
@@ -217,7 +258,9 @@ export class Simulator {
     }
     const compOf = (k: string) => k.slice(0, k.indexOf(':'));
     const startComp = compOf(pinKey);
-    let frontier = [nl.netOf.get(pinKey)!];
+    const startNet = nl.netOf.get(pinKey);
+    if (startNet === undefined) return null;
+    let frontier = [startNet];
     const seenNets = new Set(frontier);
     const seenComps = new Set([startComp]);
     for (let depth = 0; depth < 3 && frontier.length; depth++) {
@@ -227,10 +270,10 @@ export class Simulator {
           const cid = compOf(k);
           const mcu = this.mcus.get(cid);
           if (mcu) {
-            const idx = unoPinIndex(k.slice(cid.length + 1));
+            const idx = mcu.spec.pinIndex(k.slice(cid.length + 1));
             if (idx >= 0) {
               const f = mcu.pinFrequency(idx);
-              if (f) return f;
+              if (f) return { freq: f, servoUs: mcu.pins[idx].servo, vcc: mcu.spec.vcc };
             }
             continue;
           }
@@ -249,7 +292,7 @@ export class Simulator {
       }
       frontier = next;
     }
-    return 0;
+    return null;
   }
 
   /** Topology checks that don't need a solve: e.g. circuits hanging off a board with no ground return. */
@@ -265,11 +308,14 @@ export class Simulator {
       pinsOfComp.get(id)!.push(k);
     }
     for (const [mcuId] of this.mcus) {
+      const board = this.boardOf(mcuId);
+      if (!board) continue;
+      const isIo = (p: string) => board.pinIndex(p) >= 0 || p === '5V' || p === '3V3' || p === 'VIN';
       const gndNet = nl.netOf.get(`${mcuId}:GND1`);
       const flagged = new Set<number>();
       for (const k of pinsOfComp.get(mcuId) ?? []) {
         const pin = k.slice(mcuId.length + 1);
-        if (unoPinIndex(pin) < 0 && pin !== '5V' && pin !== '3V3') continue;
+        if (!isIo(pin)) continue;
         const startNet = nl.netOf.get(k)!;
         const hasOthers = nl.nets[startNet].some((x) => compOf(x) !== mcuId && (getDef(compById.get(compOf(x))?.type ?? '')?.layer ?? 1) !== 0);
         if (!hasOthers || flagged.has(startNet)) continue;
@@ -288,7 +334,7 @@ export class Simulator {
             const cid = compOf(pk);
             if (cid === mcuId) {
               const p = pk.slice(mcuId.length + 1);
-              if (p !== pin && (unoPinIndex(p) >= 0 || p === '5V' || p === '3V3')) hasSource = true; // another pin can sink current
+              if (p !== pin && isIo(p)) hasSource = true; // another pin can sink current
               continue;
             }
             const c = compById.get(cid);

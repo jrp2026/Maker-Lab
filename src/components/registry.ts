@@ -7,6 +7,9 @@ import { battery } from './defs/power';
 import { dcMotor, piezo } from './defs/output';
 import { multimeter, oscilloscope } from './defs/instruments';
 import { arduinoUno } from './defs/arduino';
+import { esp32 } from './defs/esp32';
+import { servo } from './defs/servo';
+import { lcdI2C, lcdParallel } from './defs/lcd';
 
 export const DEFS: ComponentDef[] = [
   breadboardSmall, breadboardFull,
@@ -15,9 +18,10 @@ export const DEFS: ComponentDef[] = [
   npn, pnp,
   pushbutton, slideSwitch,
   battery,
-  dcMotor, piezo,
+  dcMotor, piezo, servo,
+  lcdParallel, lcdI2C,
   multimeter, oscilloscope,
-  arduinoUno,
+  arduinoUno, esp32,
 ];
 
 const byType = new Map(DEFS.map((d) => [d.type, d]));

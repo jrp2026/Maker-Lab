@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import type { ComponentInstance, Point, Wire } from '../model/types';
 import { getDef } from '../components/registry';
+import { boundsOf } from '../components/types';
 import { transformOf, worldBounds, localToWorld } from '../model/geometry';
 import { useSimView } from '../sim/controller';
 import type { ViewMode } from '../model/store';
@@ -11,7 +12,7 @@ export const ComponentView = memo(function ComponentView({ comp, view, selected,
   if (!def) return null;
   if (view === 'schematic' && def.layer === 0) return null;
   const body = view === 'schematic' ? def.schematic({ comp, props: comp.props, sim }) : def.render({ comp, props: comp.props, sim });
-  const b = def.bounds;
+  const b = boundsOf(def, comp.props);
   const interactive = running && def.interactive;
   return (
     <g

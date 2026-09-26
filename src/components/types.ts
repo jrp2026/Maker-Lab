@@ -1,12 +1,20 @@
 import type { ReactNode } from 'react';
 import type { ComponentInstance, Props, PropValue } from '../model/types';
 import type { SimBuilder, SimComponent } from '../sim/builder';
+import type { BoardSpec } from '../mcu/boards';
 
 /**
  * lead     — a component leg; plugs into a socket it sits on top of.
  * socket   — breadboard hole / female header; accepts leads.
  * terminal — screw/clip terminal; only wires attach.
  */
+export interface Bounds {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 export type PinKind = 'lead' | 'socket' | 'terminal';
 
 export interface PinDef {
@@ -49,7 +57,9 @@ export interface ComponentDef {
   description: string;
   keywords?: string[];
   /** Local bounding box (used for selection & hit testing). */
-  bounds: { x: number; y: number; w: number; h: number };
+  bounds: Bounds;
+  /** Optional prop-dependent bounds (e.g. 16x2 vs 20x4 LCD). */
+  boundsFor?: (props: Props) => Bounds;
   pins: (props: Props) => PinDef[];
   /** Groups of pins that are permanently connected inside the part. */
   internalConnections?: (props: Props) => string[][];
@@ -65,7 +75,11 @@ export interface ComponentDef {
   /** Is the part interactive during simulation (click / press)? */
   interactive?: 'press' | 'toggle' | 'drag';
   /** Microcontroller boards have code. */
-  mcu?: { defaultCode: string };
+  mcu?: { defaultCode: string; board: BoardSpec };
   /** Thumbnail scale override for the library panel. */
   thumbScale?: number;
+}
+
+export function boundsOf(def: ComponentDef, props: Props): Bounds {
+  return def.boundsFor ? def.boundsFor(props) : def.bounds;
 }

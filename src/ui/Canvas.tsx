@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CircuitDoc, ComponentInstance, PinRef, Point } from '../model/types';
 import { getDef } from '../components/registry';
+import { boundsOf } from '../components/types';
 import { snap, worldBounds, worldPins, type WorldPin } from '../model/geometry';
 import {
   addComponent, addWire, beginGesture, endGesture, moveComponents, select, setProp, updateWire, useEditor,
@@ -346,7 +347,7 @@ export function Canvas() {
     const def = getDef(type);
     if (!def) return;
     const w = toWorld(e.clientX, e.clientY);
-    const b = def.bounds;
+    const b = boundsOf(def, def.defaultProps);
     addComponent(type, w.x - (b.x + b.w / 2), w.y - (b.y + b.h / 2));
   };
 
