@@ -66,6 +66,7 @@ export function Toolbar() {
         <div className="logo" aria-hidden>
           <svg viewBox="0 0 32 32" width="26" height="26"><rect width="32" height="32" rx="8" fill="#00a39a" /><path d="M6 16h6l2-6 4 12 2-6h6" stroke="#fff" strokeWidth="2.6" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>
         </div>
+        <span className="brand-name">MakerLab</span>
         <input className="doc-name" value={doc.name} onChange={(e) => updateDoc((d) => ({ ...d, name: e.target.value }))} aria-label="Project name" spellCheck={false} />
       </div>
 

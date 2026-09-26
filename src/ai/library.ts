@@ -3,8 +3,9 @@ import type { CustomPartSpec } from './spec';
 import { validateSpec } from './spec';
 import { defFromSpec } from './customPart';
 import { registerDef } from '../components/registry';
+import { storageKey } from '../model/storageKey';
 
-const KEY = 'circuitlab:aiParts';
+const KEY = storageKey('aiParts');
 
 interface AiLib {
   /** parts saved in this browser's "My AI parts" */

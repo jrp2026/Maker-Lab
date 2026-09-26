@@ -315,3 +315,5 @@ kbd { background: #f1f4f7; border: 1px solid var(--line); border-bottom-width: 2
 
 .send-row { display: flex; gap: 6px; }
 .send-row input { flex: 1; min-width: 0; }
+
+.brand-name { font-weight: 800; font-size: 15px; letter-spacing: -0.01em; color: var(--text, #1d2c3a); white-space: nowrap; }

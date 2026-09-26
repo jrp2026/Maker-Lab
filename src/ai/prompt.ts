@@ -52,7 +52,7 @@ export const SYSTEM_PROMPT = `You design electronic parts for a browser circuit 
 COORDINATES: 1 unit = 1/100 inch; the breadboard hole pitch is 10. Pins MUST sit on multiples of 10 and at distinct positions. For breadboard parts put the pins in a row at y = 0 with 10 spacing (x = 0, 10, 20 …) and draw the body above them (negative y); use "kind": "lead". Big modules may use "terminal" pins (wires only). Keep the drawing within about ±200 units.
 
 JSON FIELDS
-- name, description (1–3 sentences incl. pinout), category: one of passive | diodes | transistors | switches | power | output | instruments
+- name, description (1–3 sentences incl. pinout), category: one of passive | diodes | transistors | switches | power | output | instruments | drivers | ics | logic | memory | sensors | displays | comms
 - pins: [{ id (1–10 chars, letters/digits/_+-), x, y, label, kind: "lead" | "terminal" }]
 - props (optional, ≤ 8 editable settings): [{ key (identifier), label, type: "number" | "slider" | "select", default, unit?, min?, max?, step?, options?: [{value,label}] }]. Sliders are adjustable live while simulating (great for sensor inputs like light or temperature).
 - shapes: the realistic top-down drawing, Tinkercad style (flat, friendly colours). Shape types:
@@ -65,12 +65,19 @@ JSON FIELDS
   npn / pnp {id,c,b,e,beta?}
   vsource {id,p,n,value = voltage formula (p minus n),r = series ohms}
   isource {id,p,n,value = current formula; pushes that current out of p into the circuit and back into n}
+  nmos / pmos {id,d,g,s,vth?,k?}   opamp {id,p,n,out,vcc,vee,gain?,railToRail?}   comparator {id,p,n,out,vee} (open collector)
+  inductor {id,a,b,value (henries)}   transformer {id,p1,p2,s1,s2,l1,ratio,k?}
 - indicators (optional): [{ shape, color, level: formula 0..1 }] — glows (LEDs, lamps, status lights).
 - readouts (optional): [{ label?, value: formula, unit?, x, y, size? }] — numbers shown on the part while simulating.
 - warnings (optional): [{ when: formula, level: "warn"|"error", message }] — shown when the formula is non-zero (abuse, wrong polarity, overload).
 - interactive (optional): "press" if the user holds the part (buttons); then the name pressed (0/1) is usable in formulas.
+- toggle (optional): a 0/1 prop flipped by clicking the part while simulating; drag (optional): a slider prop changed by dragging it.
+- states (optional): [{ name, init, next: formula }] — memory updated after every time step, in order (latches, counters, timers, motor speed). Their names are usable in formulas.
+- animations (optional): [{ shape, rotate?: degrees formula, cx?, cy?, dx?: formula, dy?: formula }] — moving parts (shafts, needles, plungers).
+- sound (optional): formula giving a tone frequency in Hz (0 = silent).
 
-FORMULAS: + - * / ^ %, comparisons, && || !, c ? a : b, functions min max abs clamp exp log sqrt pow sin cos floor ceil sign,
+FORMULAS: + - * / ^ %, comparisons, && || !, c ? a : b, functions min max abs clamp exp log sqrt pow sin cos floor ceil sign round atan2 tanh mod bit band bor bxor shl shr hi,
+dt = time step (s), edges(PIN) = rising edges seen on a pin so far (clock inputs), freq(PIN) = frequency of a tone/PWM reaching a pin, servo(PIN) = servo pulse width in µs,
 v(A) or v(A,B) = voltage at pin/node A (relative to B), i(X) = current through element X from its first terminal (a/p/c) to its second,
 t = time in seconds, and the prop keys. Behaviour elements are re-evaluated continuously, so regulators, sensors, comparators, relays and logic can be modelled with vsource/isource/rvar formulas. Keep models small (≤ 15 elements) and physically sensible; add a small resistor in series or to ground where a node could float. Real datasheet numbers please.
 

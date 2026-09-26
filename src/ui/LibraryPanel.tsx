@@ -159,7 +159,7 @@ export function LibraryPanel() {
     <aside className="library">
       <div className="panel-head">
         <h3>Components</h3>
-        <span className="muted small">{DEFS.length} ready · {CATALOG.reduce((n, c) => n + c.entries.filter((e) => !e.type).length, 0)} planned</span>
+        <span className="muted small">{DEFS.length} parts</span>
       </div>
       <button className="ai-cta" onClick={() => setAiOpen(true)}>
         <span>✨</span>
@@ -201,7 +201,7 @@ export function LibraryPanel() {
                   {sec.name} <span>{sec.entries.length}</span>
                 </h4>
                 <div className="lib-grid">
-                  {sec.entries.map((e) => <LibItem key={e.type} e={e} />)}
+                  {sec.entries.map((e) => <LibItem key={`${e.type}-${e.name}`} e={e} />)}
                 </div>
               </section>
             ))}
@@ -210,7 +210,7 @@ export function LibraryPanel() {
         ) : (
           <>
             <div className="lib-grid">
-              {available.map((e) => <LibItem key={e.type} e={e} />)}
+              {available.map((e) => <LibItem key={`${e.type}-${e.name}`} e={e} />)}
             </div>
             <PlannedList items={planned} open={showPlanned} onToggle={() => setShowPlanned(!showPlanned)} />
           </>

@@ -1,9 +1,10 @@
 import type { CircuitDoc } from './types';
 import { getDef } from '../components/registry';
 import { adoptDocParts } from '../ai/library';
+import { storageKey } from './storageKey';
 
-const AUTOSAVE_KEY = 'circuitlab:autosave';
-const PROJECTS_KEY = 'circuitlab:projects';
+const AUTOSAVE_KEY = storageKey('autosave');
+const PROJECTS_KEY = storageKey('projects');
 
 function safeGet(key: string): string | null {
   try {

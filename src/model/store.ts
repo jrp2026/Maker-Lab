@@ -123,7 +123,13 @@ export function addComponent(type: string, x: number, y: number, props?: Record<
   const spec = useAiParts.getState().known[type];
   updateDoc((d) => ({
     ...d,
-    components: def.layer === 0 ? [comp, ...d.components] : [...d.components, comp],
+    components: (() => {
+      // keep drawing order by layer: boards (0), sockets (0.5), then parts
+      const layer = def.layer ?? 1;
+      if (layer >= 1) return [...d.components, comp];
+      const at = d.components.findIndex((c) => (getDef(c.type)?.layer ?? 1) > layer);
+      return at < 0 ? [...d.components, comp] : [...d.components.slice(0, at), comp, ...d.components.slice(at)];
+    })(),
     // AI parts carry their definition inside the document
     ...(spec && !(d.customParts ?? []).some((p) => p.type === type) ? { customParts: [...(d.customParts ?? []), spec] } : {}),
   }));

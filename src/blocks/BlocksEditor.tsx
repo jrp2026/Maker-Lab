@@ -11,8 +11,8 @@ interface Props {
   onChange: (json: string, code: string) => void;
 }
 
-const theme = Blockly.Theme.defineTheme('circuitlab', {
-  name: 'circuitlab',
+const theme = Blockly.Theme.defineTheme('makerlab', {
+  name: 'makerlab',
   base: Blockly.Themes.Classic,
   componentStyles: {
     workspaceBackgroundColour: '#f7f9fb',

@@ -4,6 +4,7 @@ import { localToWorld } from '../model/geometry';
 import { EXAMPLE_7805 } from '../ai/prompt';
 import { validateSpec } from '../ai/spec';
 import { registerSpec } from '../ai/library';
+import { DEVICE_EXAMPLES } from './devices';
 
 // ------------------------------------------------------------------ placement helpers
 
@@ -615,4 +616,5 @@ export const EXAMPLES: Example[] = [
       };
     },
   },
+  ...DEVICE_EXAMPLES,
 ];

@@ -1,5 +1,6 @@
 import type { ComponentDef } from './types';
 import { breadboardFull, breadboardSmall } from './defs/breadboard';
+import { icSocket, perfboard, stripboard } from './defs/proto';
 import { ceramicCapacitor, electrolyticCapacitor, photoresistor, potentiometer, resistor } from './defs/passive';
 import { diode, led, rgbLed } from './defs/diodes';
 import { npn, pnp, pushbutton, slideSwitch } from './defs/discrete';
@@ -14,7 +15,7 @@ import { lcdI2C, lcdParallel } from './defs/lcd';
 import { buildSpecParts } from '../parts';
 
 export const DEFS: ComponentDef[] = [
-  breadboardSmall, breadboardFull,
+  breadboardSmall, breadboardFull, perfboard, stripboard, icSocket,
   resistor, potentiometer, photoresistor, ceramicCapacitor, electrolyticCapacitor,
   led, rgbLed, diode,
   npn, pnp,

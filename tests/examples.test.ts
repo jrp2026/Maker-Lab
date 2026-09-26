@@ -45,3 +45,49 @@ describe('examples', () => {
     }
   });
 });
+
+describe('device examples do what they say', () => {
+  const run = (id: string, seconds: number, each?: (sim: Simulator, snap: ReturnType<Simulator['snapshot']>) => void) => {
+    const sim = new Simulator(EXAMPLES.find((e) => e.id === id)!.build());
+    sim.start();
+    let snap = sim.snapshot();
+    for (let i = 0; i < seconds / 0.02; i++) {
+      sim.advance(0.02);
+      snap = sim.snapshot();
+      each?.(sim, snap);
+    }
+    return { sim, snap };
+  };
+  const comp = (snap: ReturnType<Simulator['snapshot']>, type: string, sim: Simulator) => {
+    const id = (sim as any).doc.components.find((c: any) => c.type === type).id;
+    return snap.comps[id]!;
+  };
+
+  it('OLED shows pixels, NeoPixels light up, the LCD shows the weather', () => {
+    let r = run('oled', 1);
+    expect([...(comp(r.snap, 'oled-128x64', r.sim).oled as { gram: Uint8Array }).gram].some((x) => x)).toBe(true);
+    r = run('neopixel', 0.5);
+    expect((comp(r.snap, 'neopixel-ring', r.sim).colors as number[]).filter((c) => c > 0).length).toBe(16);
+    r = run('weather', 1.5);
+    const rows = comp(r.snap, 'lcd-i2c', r.sim).rows as number[][];
+    expect(String.fromCharCode(...rows[0])).toMatch(/Temp: 24\.0/);
+  });
+
+  it('the 555 blinks, the stepper turns, the chaser moves, the radio link works', () => {
+    const led = new Set<boolean>();
+    let r = run('555', 2, (sim, s) => {
+      const id = (sim as any).doc.components.find((c: any) => c.type === 'led').id;
+      led.add(Number(s.comps[id]?.brightness ?? s.comps[id]?.level ?? 0) > 0.2);
+    });
+    expect(led).toEqual(new Set([true, false]));
+    r = run('stepper', 0.5);
+    expect(Math.abs(((r.sim as any).persist.get([...(r.sim as any).doc.components].find((c: any) => c.type === 'stepper-nema17').id).vars.steps))).toBeGreaterThan(50);
+    r = run('shift595', 0.3);
+    const latch = comp(r.snap, '74hc595', r.sim).latch as number;
+    expect([1, 2, 4, 8, 16, 32, 64, 128]).toContain(latch);
+    r = run('radio', 0.1);
+    r.sim.input((r.sim as any).doc.components.find((c: any) => c.type === 'pushbutton').id).pressed = true;
+    for (let i = 0; i < 10; i++) r.sim.advance(0.02);
+    expect(r.sim.mcus.get('rx')!.pins[5].value).toBe(1);
+  });
+});

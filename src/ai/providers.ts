@@ -3,6 +3,7 @@
  * from the browser to the provider (or to a local Ollama / LM Studio server);
  * API keys are kept in this browser's localStorage only.
  */
+import { storageKey } from '../model/storageKey';
 
 export type ProviderId = 'anthropic' | 'openai' | 'gemini' | 'ollama' | 'lmstudio';
 
@@ -63,7 +64,7 @@ export interface AiSettings {
   baseUrls: Partial<Record<ProviderId, string>>;
 }
 
-const KEY = 'circuitlab:ai';
+const KEY = storageKey('ai');
 
 export function loadSettings(): AiSettings {
   try {

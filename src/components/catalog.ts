@@ -1,7 +1,10 @@
 /**
- * The full component roadmap, grouped as in the product brief. Entries with a `type`
- * are implemented and placeable; the rest are listed (searchable) with their planned phase.
+ * The component library, grouped as in the product brief. Every entry is a placeable part;
+ * the same part can appear in more than one category (e.g. the MPU6050 is both an
+ * accelerometer and a gyroscope).
  */
+import { getDef } from './registry';
+
 export interface CatalogEntry {
   name: string;
   type?: string;
@@ -15,139 +18,102 @@ export interface CatalogCategory {
   entries: CatalogEntry[];
 }
 
-const P = (phase: 2 | 3, ...names: string[]): CatalogEntry[] => names.map((name) => ({ name, phase }));
+/** entry for a part type, named after the part unless a name is given */
+const T = (type: string, name?: string): CatalogEntry => ({ type, name: name ?? getDef(type)?.name ?? type });
+const all = (...types: string[]) => types.map((t) => T(t));
 
 export const CATALOG: CatalogCategory[] = [
   {
     id: 'basic', name: 'Starters', icon: '★',
-    entries: [
-      { name: 'Breadboard (half)', type: 'breadboard' },
-      { name: 'Arduino Uno R3', type: 'arduino-uno' },
-      { name: 'Resistor', type: 'resistor' },
-      { name: 'LED', type: 'led' },
-      { name: 'Push button', type: 'pushbutton' },
-      { name: 'Battery', type: 'battery' },
-      { name: 'Multimeter', type: 'multimeter' },
-    ],
+    entries: all('breadboard', 'arduino-uno', 'resistor', 'led', 'pushbutton', 'battery', 'multimeter'),
   },
   {
     id: 'surfaces', name: 'Prototyping surfaces', icon: '▦',
-    entries: [
-      { name: 'Breadboard (half)', type: 'breadboard' },
-      { name: 'Breadboard (full)', type: 'breadboard-full' },
-      ...P(3, 'Perfboard', 'Prototype PCB', 'IC socket'),
-    ],
+    entries: all('breadboard', 'breadboard-full', 'perfboard', 'stripboard', 'ic-socket'),
   },
   {
     id: 'passive', name: 'Passive components', icon: 'Ω',
     entries: [
-      { name: 'Resistor', type: 'resistor' },
-      { name: 'Potentiometer', type: 'potentiometer' },
-      { name: 'Photoresistor (LDR)', type: 'photoresistor' },
-      { name: 'Ceramic capacitor', type: 'capacitor' },
-      { name: 'Electrolytic capacitor', type: 'electrolytic' },
-      ...P(2, 'Trimmer potentiometer', 'Variable resistor', 'Thermistor', 'Supercapacitor', 'Inductor', 'Ferrite bead', 'Transformer', 'Crystal oscillator', 'Ceramic resonator'),
-      ...P(3, 'Digital potentiometer'),
+      ...all('resistor', 'potentiometer', 'trimmer', 'rheostat', 'photoresistor', 'thermistor', 'capacitor', 'electrolytic', 'supercap', 'inductor', 'ferrite', 'transformer', 'crystal', 'resonator', 'digipot'),
     ],
   },
   {
     id: 'diodes', name: 'Diodes & optoelectronics', icon: '▷|',
-    entries: [
-      { name: 'LED', type: 'led' },
-      { name: 'RGB LED', type: 'rgb-led' },
-      { name: 'Diode', type: 'diode' },
-      ...P(2, 'Zener diode', 'Schottky diode', 'Schottky power diode', 'TVS protection diode', 'Infrared LED', 'Photodiode', 'Laser diode', 'NeoPixel / WS2812 LED strip'),
-    ],
+    entries: all('led', 'rgb-led', 'diode', 'zener', 'schottky', 'schottky-power', 'tvs', 'ir-led', 'photodiode', 'laser', 'neopixel-stick', 'neopixel-ring', 'neopixel-strip'),
   },
   {
     id: 'transistors', name: 'Transistors & switching', icon: '⊳',
-    entries: [
-      { name: 'NPN transistor', type: 'npn' },
-      { name: 'PNP transistor', type: 'pnp' },
-      ...P(2, 'MOSFET', 'Logic-level MOSFET module', 'Darlington transistor', 'Optocoupler'),
-      ...P(3, 'JFET', 'IGBT', 'TRIAC', 'SCR (thyristor)'),
-    ],
+    entries: all('npn', 'pnp', 'nmos', 'pmos', 'mosfet-module', 'darlington', 'optocoupler', 'jfet', 'igbt', 'triac', 'scr'),
   },
   {
     id: 'switches', name: 'Switches & inputs', icon: '⏻',
-    entries: [
-      { name: 'Push button', type: 'pushbutton' },
-      { name: 'Slide switch', type: 'slide-switch' },
-      ...P(2, 'Toggle switch', 'DIP switch', 'Keypad matrix', 'Joystick module', 'Rotary switch'),
-    ],
+    entries: all('pushbutton', 'slide-switch', 'toggle-switch', 'dip-switch', 'keypad', 'joystick', 'rotary-switch', 'rotary-encoder'),
   },
   {
     id: 'power', name: 'Power & connectors', icon: '⚡',
-    entries: [
-      { name: 'Battery', type: 'battery' },
-      ...P(2, 'Battery holder', 'Battery connector', 'LiPo battery', '18650 battery', 'DC barrel jack', 'USB connector', 'Voltage regulator IC', 'Bridge rectifier', 'Buck converter', 'Boost converter'),
-      ...P(3, 'Terminal block', 'Pin header', 'Buck-boost converter', 'USB-C power module', 'Li-ion battery protection board', 'Battery management system (BMS)', 'Li-ion charging module', 'Solar charging controller', 'Power distribution board', 'Fuse holder', 'Resettable fuse (polyfuse)'),
-    ],
+    entries: all(
+      'battery', 'battery-holder', 'battery-snap', 'lipo', 'battery-18650', 'barrel-jack', 'usb-breakout', 'usbc-power', 'ac-source',
+      'reg-78xx', 'lm317', 'ams1117', 'bridge-rectifier', 'buck-converter', 'boost-converter', 'buck-boost',
+      'liion-protect', 'bms-3s', 'tp4056', 'solar-panel', 'solar-controller', 'power-distribution', 'fuse', 'polyfuse', 'terminal-block', 'pin-header',
+    ),
   },
   {
     id: 'output', name: 'Motors, audio & actuators', icon: '⟳',
-    entries: [
-      { name: 'DC motor', type: 'dc-motor' },
-      { name: 'Piezo buzzer', type: 'piezo' },
-      { name: 'Servo motor (standard / continuous / high-torque)', type: 'servo' },
-      ...P(2, 'Stepper motor (NEMA 17/23)', 'Speaker', 'Gear motor', 'N20 gear motor', 'Solenoid', 'Electret microphone'),
-      ...P(3, 'Brushless DC (BLDC) motor', 'Coreless motor', 'Planetary gear motor', 'Linear actuator'),
-    ],
+    entries: all('dc-motor', 'gear-motor', 'n20-motor', 'planetary-motor', 'coreless-motor', 'bldc-motor', 'servo', 'stepper-nema17', 'stepper-28byj48', 'linear-actuator', 'solenoid', 'piezo', 'speaker', 'mic-module'),
   },
   {
     id: 'drivers', name: 'Motor & driver modules', icon: '⇉',
-    entries: [
-      ...P(2, 'L298N', 'L293D', 'Servo driver board'),
-      ...P(3, 'TB6612FNG', 'DRV8833', 'DRV8825', 'A4988', 'TMC2208', 'TMC2209', 'BTS7960', 'VNH2SP30', 'ESC (electronic speed controller)', 'BLDC motor controller', 'PCA9685 PWM driver', 'H-bridge module', 'Dual H-bridge module', 'MOSFET motor switch module', 'Solenoid driver module'),
-    ],
+    entries: all(
+      'l298n', 'l293d', 'tb6612fng', 'drv8833', 'hbridge', 'dual-hbridge', 'bts7960', 'vnh2sp30', 'mosfet-switch', 'solenoid-driver',
+      'a4988', 'drv8825', 'tmc2208', 'tmc2209', 'uln2003', 'esc', 'bldc-controller', 'pca9685',
+    ),
   },
   {
     id: 'relays', name: 'Relays', icon: '⎍',
-    entries: P(2, 'Relay', 'Solid-state relay', 'Relay driver module'),
+    entries: all('relay', 'ssr', 'relay-module'),
   },
   {
     id: 'instruments', name: 'Instruments', icon: '◔',
-    entries: [
-      { name: 'Multimeter', type: 'multimeter' },
-      { name: 'Oscilloscope', type: 'oscilloscope' },
-    ],
+    entries: all('multimeter', 'oscilloscope', 'spi-monitor', 'usb-ttl'),
   },
   {
     id: 'mcu', name: 'Microcontrollers & boards', icon: '⌗',
     entries: [
-      { name: 'Arduino Uno R3', type: 'arduino-uno' },
-      { name: 'ESP32 DevKit V1', type: 'esp32-devkit' },
-      ...P(2, 'Arduino Nano'),
-      ...P(3, 'Arduino Mega', 'Arduino Micro', 'ESP8266', 'Raspberry Pi Pico', 'Raspberry Pi Pico W', 'STM32 development board', 'Teensy', 'ATtiny', 'ATmega328P', 'ATmega2560', 'RP2040', 'PIC microcontroller', 'AVR microcontroller', 'ARM Cortex-M microcontroller', 'Generic microcontroller', 'Microcontroller programmer/debugger'),
+      ...all('arduino-uno', 'arduino-nano', 'arduino-mega', 'arduino-micro', 'esp32-devkit', 'esp8266-nodemcu', 'pico', 'pico-w', 'stm32-bluepill', 'teensy40'),
+      T('attiny85'), T('atmega328p'), T('arduino-mega', 'ATmega2560 (Arduino Mega)'), T('pico', 'RP2040 (Raspberry Pi Pico)'), T('pic16f877a', 'PIC microcontroller (PIC16F877A)'),
+      T('atmega328p', 'AVR microcontroller (ATmega328P)'), T('stm32-bluepill', 'ARM Cortex-M microcontroller (STM32F103)'), T('generic-mcu'), T('isp-programmer'),
     ],
   },
   {
     id: 'ics', name: 'Analog & timer ICs', icon: '▭',
-    entries: P(2, '555 timer IC', 'Operational amplifier (op-amp)', 'Comparator IC'),
+    entries: all('ne555', 'lm358', 'ua741', 'lm393'),
   },
   {
     id: 'logic', name: 'Digital logic & conversion ICs', icon: '&',
-    entries: P(3, 'Logic gate IC', 'Shift register IC', 'Counter IC', 'Multiplexer IC', 'Demultiplexer IC', 'ADC IC', 'DAC IC', 'I2C GPIO expander', 'Digital isolator'),
+    entries: all('74hc00', '74hc08', '74hc32', '74hc86', '74hc04', '74hc595', 'cd4017', '74hc4051', '74hc138', 'ads1115', 'mcp4725', 'pcf8574', 'adum1201'),
   },
   {
     id: 'memory', name: 'Memory & timekeeping', icon: '▤',
-    entries: P(3, 'EEPROM', 'Flash memory IC', 'Real-time clock (RTC) IC', 'RTC module', 'MicroSD card module', 'SD card reader'),
+    entries: all('24lc256', 'w25q32', 'ds1307', 'ds3231', 'microsd-module', 'sd-module'),
   },
   {
     id: 'sensors', name: 'Sensors', icon: '◉',
-    entries: P(2, 'Temperature sensor', 'Humidity sensor', 'Pressure sensor', 'Light sensor', 'Proximity sensor', 'Ultrasonic sensor', 'PIR motion sensor', 'Hall-effect sensor', 'Accelerometer', 'Gyroscope', 'Magnetometer', 'Gas sensor', 'Sound sensor', 'Vibration sensor', 'Tilt switch', 'Reed switch', 'Current sensor module (INA219, INA226, ACS712)', 'Voltage sensor module', 'Rotary encoder', 'Quadrature encoder', 'Wheel/motor encoder'),
-  },
-  {
-    id: 'displays', name: 'Displays', icon: '▣',
     entries: [
-      { name: 'LCD display 16×2 / 20×4 (parallel)', type: 'lcd' },
-      { name: 'LCD display with I2C backpack', type: 'lcd-i2c' },
-      ...P(2, 'Seven-segment display', 'OLED display'),
-      ...P(3, 'Matrix LED display', 'Touchscreen module'),
+      T('tmp36'), T('dht', 'Temperature & humidity (DHT11 / DHT22)'), T('bmp280'), T('ldr-module'), T('ir-obstacle'), T('hc-sr04'), T('pir'), T('hall-a3144'),
+      T('mpu6050', 'Accelerometer & gyroscope (MPU6050)'), T('adxl335'), T('qmc5883l'), T('mq2'), T('sound-sensor'), T('vibration-sensor'), T('tilt-switch'), T('reed-switch'),
+      T('ina219'), T('acs712'), T('voltage-sensor'), T('rotary-encoder'), T('quadrature-encoder'), T('speed-sensor'), T('touch-panel'),
     ],
   },
   {
+    id: 'displays', name: 'Displays', icon: '▣',
+    entries: all('lcd', 'lcd-i2c', 'oled-128x64', 'oled-128x32', 'seven-seg-cc', 'seven-seg-ca', 'led-matrix', 'max7219-matrix', 'touch-panel'),
+  },
+  {
     id: 'wireless', name: 'Communication & wireless', icon: '((·))',
-    entries: P(3, 'Wi-Fi module', 'Bluetooth module', 'GPS module', 'NRF24L01', 'GSM/LTE module', 'RFID reader module', 'NFC module', 'CAN bus transceiver', 'RS-485 transceiver', 'SPI interface module', 'UART interface module', 'USB-to-serial converter', 'USB-to-TTL adapter', 'Logic-level converter', 'RF antenna'),
+    entries: [
+      T('esp01', 'Wi-Fi module (ESP-01)'), T('hc05', 'Bluetooth module (HC-05)'), T('gps-neo6m'), T('nrf24l01'), T('sim800l', 'GSM/LTE module (SIM800L)'), T('rc522'), T('pn532'),
+      T('mcp2515', 'CAN bus transceiver (MCP2515)'), T('max485'), T('spi-monitor', 'SPI interface module (monitor)'), T('usb-ttl', 'UART interface module (USB-TTL)'), T('usb-serial'),
+      T('logic-level-converter'), T('rf-antenna'),
+    ],
   },
 ];
