@@ -34,38 +34,38 @@ export const CATALOG: CatalogCategory[] = [
   {
     id: 'passive', name: 'Passive components', icon: 'Ω',
     entries: [
-      ...all('resistor', 'potentiometer', 'trimmer', 'rheostat', 'photoresistor', 'thermistor', 'capacitor', 'electrolytic', 'supercap', 'inductor', 'ferrite', 'transformer', 'crystal', 'resonator', 'digipot', 'varistor', 'power-resistor', 'slide-pot'),
+      ...all('resistor', 'potentiometer', 'trimmer', 'rheostat', 'photoresistor', 'thermistor', 'capacitor', 'electrolytic', 'supercap', 'inductor', 'ferrite', 'transformer', 'crystal', 'resonator', 'digipot', 'varistor', 'power-resistor', 'slide-pot', 'dual-pot'),
     ],
   },
   {
     id: 'diodes', name: 'Diodes & optoelectronics', icon: '▷|',
-    entries: all('led', 'rgb-led', 'diode', 'zener', 'schottky', 'schottky-power', 'tvs', 'ir-led', 'photodiode', 'phototransistor', 'bicolor-led', 'rgb-led-module', 'led-bargraph', 'laser', 'neopixel-stick', 'neopixel-ring', 'neopixel-strip'),
+    entries: all('led', 'rgb-led', 'diode', 'zener', 'schottky', 'schottky-power', 'tvs', 'ir-led', 'photodiode', 'phototransistor', 'bicolor-led', 'rgb-led-module', 'led-bargraph', 'led-10mm', 'flashing-led', 'led-strip-12v', 'germanium-diode', 'laser', 'neopixel-stick', 'neopixel-ring', 'neopixel-strip'),
   },
   {
     id: 'transistors', name: 'Transistors & switching', icon: '⊳',
-    entries: all('npn', 'pnp', 'nmos', 'pmos', 'mosfet-module', 'darlington', 'optocoupler', 'jfet', 'igbt', 'triac', 'scr'),
+    entries: all('npn', 'pnp', 'nmos', 'pmos', '2n7000', 'mosfet-module', 'darlington', 'optocoupler', 'jfet', 'igbt', 'triac', 'scr'),
   },
   {
     id: 'switches', name: 'Switches & inputs', icon: '⏻',
-    entries: all('pushbutton', 'slide-switch', 'toggle-switch', 'dip-switch', 'keypad', 'joystick', 'rotary-switch', 'rotary-encoder', 'limit-switch', 'touch-sensor', 'rocker-switch', 'slide-pot', 'keypad-1x4'),
+    entries: all('pushbutton', 'slide-switch', 'toggle-switch', 'dip-switch', 'keypad', 'joystick', 'rotary-switch', 'rotary-encoder', 'limit-switch', 'touch-sensor', 'rocker-switch', 'slide-pot', 'keypad-1x4', 'arcade-button', 'key-switch', 'slide-switch-3', 'door-sensor', 'e-stop', 'touch-4key'),
   },
   {
     id: 'power', name: 'Power & connectors', icon: '⚡',
     entries: all(
       'battery', 'battery-holder', 'battery-snap', 'lipo', 'battery-18650', 'barrel-jack', 'usb-breakout', 'usbc-power', 'ac-source',
-      'coin-cell', 'reg-78xx', 'reg-79xx', 'lm317', 'ams1117', 'reg-3v3-module', 'tl431', 'bridge-rectifier', 'buck-converter', 'boost-converter', 'buck-boost',
+      'coin-cell', 'lifepo4', 'power-bank', 'lab-psu', 'reg-78xx', 'reg-79xx', 'lm317', 'ams1117', 'reg-3v3-module', 'ht7333', 'tl431', 'b0505s', 'icl7660', 'bridge-rectifier', 'buck-converter', 'boost-converter', 'buck-boost',
       'liion-protect', 'bms-3s', 'tp4056', 'solar-panel', 'solar-controller', 'power-distribution', 'fuse', 'polyfuse', 'terminal-block', 'pin-header',
     ),
   },
   {
     id: 'output', name: 'Motors, audio & actuators', icon: '⟳',
-    entries: all('dc-motor', 'gear-motor', 'n20-motor', 'planetary-motor', 'coreless-motor', 'bldc-motor', 'servo', 'stepper-nema17', 'stepper-28byj48', 'linear-actuator', 'solenoid', 'electromagnet', 'vibration-motor', 'dc-fan', 'water-pump', 'piezo', 'active-buzzer', 'speaker', 'mic-module', 'lm386', 'light-bulb', 'traffic-light'),
+    entries: all('dc-motor', 'gear-motor', 'n20-motor', 'planetary-motor', 'coreless-motor', 'bldc-motor', 'servo', 'stepper-nema17', 'stepper-28byj48', 'linear-actuator', 'solenoid', 'electromagnet', 'vibration-motor', 'dc-fan', 'water-pump', 'piezo', 'active-buzzer', 'speaker', 'mic-module', 'lm386', 'light-bulb', 'traffic-light', 'neon-lamp', 'panel-led', 'siren', 'peltier', 'heater-pad', 'solenoid-valve'),
   },
   {
     id: 'drivers', name: 'Motor & driver modules', icon: '⇉',
     entries: all(
       'l298n', 'l293d', 'tb6612fng', 'drv8833', 'hbridge', 'dual-hbridge', 'bts7960', 'vnh2sp30', 'mosfet-switch', 'solenoid-driver',
-      'a4988', 'drv8825', 'tmc2208', 'tmc2209', 'uln2003', 'esc', 'bldc-controller', 'pca9685',
+      'a4988', 'drv8825', 'tmc2208', 'tmc2209', 'uln2003', 'uln2803', 'esc', 'bldc-controller', 'pca9685',
     ),
   },
   {
@@ -74,7 +74,7 @@ export const CATALOG: CatalogCategory[] = [
   },
   {
     id: 'instruments', name: 'Instruments', icon: '◔',
-    entries: all('multimeter', 'oscilloscope', 'panel-voltmeter', 'spi-monitor', 'usb-ttl'),
+    entries: all('multimeter', 'oscilloscope', 'panel-voltmeter', 'analog-voltmeter', 'analog-ammeter', 'spi-monitor', 'usb-ttl'),
   },
   {
     id: 'mcu', name: 'Microcontrollers & boards', icon: '⌗',
@@ -86,11 +86,11 @@ export const CATALOG: CatalogCategory[] = [
   },
   {
     id: 'ics', name: 'Analog & timer ICs', icon: '▭',
-    entries: all('ne555', 'lm358', 'lm324', 'ua741', 'tl072', 'lm386', 'lm393', 'lm339', 'tl431', 'cd4066'),
+    entries: all('ne555', 'lm358', 'lm324', 'ua741', 'tl072', 'lm386', 'lm393', 'lm339', 'lm311', 'mcp6002', 'tl431', 'cd4066', 'icl7660', 'uln2803'),
   },
   {
     id: 'logic', name: 'Digital logic & conversion ICs', icon: '&',
-    entries: all('74hc00', '74hc08', '74hc32', '74hc86', '74hc02', '74hc04', '74hc14', '74hc74', '74hc125', 'cd4011', 'cd4066', '74hc595', 'cd4017', '74hc4051', '74hc138', 'ads1115', 'mcp4725', 'pcf8574', 'adum1201'),
+    entries: all('74hc00', '74hc08', '74hc32', '74hc86', '74hc02', '74hc04', '74hc10', '74hc11', '74hc14', '74hc20', '74hc27', '74hc74', '74hc125', '74hc157', '74hc245', '74hc283', '74hc393', 'cd4511', 'cd4011', 'cd4066', '74hc595', 'cd4017', '74hc4051', '74hc138', 'ads1115', 'mcp4725', 'pcf8574', 'adum1201'),
   },
   {
     id: 'memory', name: 'Memory & timekeeping', icon: '▤',
@@ -104,6 +104,7 @@ export const CATALOG: CatalogCategory[] = [
       T('ina219'), T('acs712'), T('voltage-sensor'), T('rotary-encoder'), T('quadrature-encoder'), T('speed-sensor'), T('touch-panel'),
       T('hall-49e'), T('hall-module'), T('phototransistor'), T('fsr'), T('flex-sensor'), T('soil-moisture'), T('rain-sensor'), T('water-level'), T('water-flow'), T('flame-sensor'),
       T('line-tracker'), T('mq135'), T('mq3'), T('pulse-sensor'), T('uv-sensor'), T('ntc-module'), T('knock-sensor'), T('touch-sensor'),
+      T('temt6000'), T('rcwl-0516'), T('sharp-ir'), T('capacitive-soil'), T('load-cell'), T('sct013'), T('mq7'), T('mq4'), T('anemometer'), T('laser-receiver'), T('photo-interrupter'), T('mpx5010'), T('touch-4key'),
     ],
   },
   {

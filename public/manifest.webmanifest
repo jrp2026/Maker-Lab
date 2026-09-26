@@ -1,7 +1,7 @@
 {
   "name": "MakerLab — electronics & Arduino simulator",
   "short_name": "MakerLab",
-  "description": "Build circuits from 247 realistic parts, write an Arduino sketch and simulate it — in the browser, even offline.",
+  "description": "Build circuits from 297 realistic parts, write an Arduino sketch and simulate it — in the browser, even offline.",
   "id": "./",
   "start_url": "./",
   "scope": "./",

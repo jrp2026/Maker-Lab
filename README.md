@@ -1,7 +1,7 @@
 <h1 align="center">MakerLab</h1>
 
 <p align="center">
-  <b>A browser electronics &amp; Arduino simulator</b> — build circuits from 247 realistic parts, write a sketch, press Run.
+  <b>A browser electronics &amp; Arduino simulator</b> — build circuits from 297 realistic parts, write a sketch, press Run.
 </p>
 
 <p align="center">
@@ -28,10 +28,10 @@ installs as an app that keeps working offline.
 
 ## Parts
 
-All 247 parts, as they look on the breadboard:
+All 297 parts, as they look on the breadboard:
 
 <p align="center">
-  <img src="docs/parts.png" alt="A grid of all 247 MakerLab parts: breadboards, Arduino and other boards, passives, LEDs, transistors, switches, power parts, motors, drivers, ICs, sensors, displays and communication modules" width="100%">
+  <img src="docs/parts.png" alt="A grid of all 297 MakerLab parts: breadboards, Arduino and other boards, passives, LEDs, transistors, switches, power parts, motors, drivers, ICs, sensors, displays and communication modules" width="100%">
 </p>
 
 ## Development
@@ -60,32 +60,39 @@ npm run build      # static site in dist/
   end to reconnect.
 - **Editing** – rotate `R`, flip `F`, delete `Del`, undo/redo `Ctrl+Z` / `Ctrl+Shift+Z`,
   copy/paste/duplicate `Ctrl+C/V/D`, shift-click or shift-drag to multi-select.
-- **Parts (247)** – the whole component library from the brief, every entry placeable:
+- **Parts (297)** – the whole component library from the brief, every entry placeable:
   - *surfaces*: half/full breadboard, perfboard, stripboard, DIP IC sockets
   - *passives*: resistors, pots, trimmers, rheostat, slide pot, LDR, NTC thermistor, ceramic/electrolytic/super
-    capacitors, inductor, ferrite, transformer, crystal, resonator, X9C103 digital pot, varistor, 5 W power resistor
+    capacitors, inductor, ferrite, transformer, crystal, resonator, X9C103 digital pot, varistor, 5 W power resistor,
+    dual-gang pot
   - *diodes & opto*: LED, RGB, diode, zener, Schottky, TVS, IR LED, photodiode, phototransistor, bi-colour LED,
-    RGB module, 10-segment bar graph, laser, NeoPixel stick/ring/strip
-  - *transistors*: NPN/PNP, N/P MOSFETs, MOSFET module, Darlington, optocoupler, JFET, IGBT, TRIAC, SCR
+    RGB module, 10-segment bar graph, 10 mm and self-flashing LEDs, 12 V LED strip, germanium diode, laser, NeoPixel stick/ring/strip
+  - *transistors*: NPN/PNP, N/P MOSFETs, 2N7000, MOSFET module, Darlington, optocoupler, JFET, IGBT, TRIAC, SCR
   - *switches & inputs*: button, slide/toggle/DIP/rotary switches, rocker switch, limit switch,
-    TTP223 touch pad, 4×4 and 1×4 keypads, joystick, rotary encoder
+    TTP223 / TTP224 touch pads, 4×4 and 1×4 keypads, joystick, rotary encoder, arcade button,
+    keyboard switch, 3-position slide switch, door sensor, emergency stop
   - *power*: batteries & holders, LiPo/18650 (state of charge), barrel jack, USB/USB-C, AC source,
-    CR2032 coin cell, 78xx/79xx/LM317/AMS1117 regulators, 3.3 V module, TL431 reference, bridge rectifier, buck/boost/buck-boost converters, TP4056 charger,
+    CR2032 coin cell, LiFePO4 cell, USB power bank, bench supply with current limit,
+    78xx/79xx/LM317/AMS1117/HT7333 regulators, 3.3 V module, TL431 reference, B0505S isolated DC-DC,
+    ICL7660 inverter, bridge rectifier, buck/boost/buck-boost converters, TP4056 charger,
     protection board, 3S BMS, solar panel & charge controller, fuses, polyfuse, terminal blocks, headers
   - *motors & audio*: DC, TT/N20/planetary/coreless gear motors, BLDC, servo, NEMA 17 and 28BYJ-48
     steppers, linear actuator, solenoid, electromagnet, vibration motor, 5 V fan,
-    water pump, piezo, active buzzer, speaker, microphone, light bulb, traffic-light module
+    water pump, piezo, active buzzer, speaker, microphone, light bulb, traffic-light module, neon and
+    panel indicator lamps, siren, Peltier module, heating pad, solenoid water valve
   - *drivers*: L298N, L293D, TB6612FNG, DRV8833, L9110S, MX1508, BTS7960, VNH2SP30, IRF520 and TIP120
-    modules, A4988/DRV8825/TMC2208/TMC2209 step-dir drivers, ULN2003, ESC, BLDC controller, PCA9685
-  - *ICs*: 555, LM358, LM324, µA741, TL072, LM386, LM393, LM339, 74HC00/02/04/08/14/32/74/86/125,
-    CD4011, CD4066, 74HC595, CD4017, 74HC4051, 74HC138,
+    modules, A4988/DRV8825/TMC2208/TMC2209 step-dir drivers, ULN2003/ULN2803, ESC, BLDC controller, PCA9685
+  - *ICs*: 555, LM358, LM324, µA741, TL072, MCP6002, LM386, LM393, LM339, LM311,
+    74HC00/02/04/08/10/11/14/20/27/32/74/86/125/157/245/283/393, CD4011, CD4066, CD4511, 74HC595, CD4017, 74HC4051, 74HC138,
     ADS1115 ADC, MCP4725 DAC, PCF8574 expander, ADuM1201 isolator
   - *memory & time*: 24LC256 EEPROM, W25Q32 flash, DS1307/DS3231 RTCs, SD / microSD modules
   - *sensors*: TMP36/LM35, DHT11/22, BMP280, LDR, IR obstacle, HC-SR04, PIR, Hall, MPU6050,
     ADXL335, QMC5883L, MQ-2, sound, vibration, tilt, reed, INA219, ACS712, voltage divider,
     rotary/quadrature/wheel encoders, resistive touch panel, SS49E linear Hall, KY-003, FSR, flex,
     soil moisture, rain, water level, YF-S201 flow, flame, TCRT5000 line tracker, MQ-135, MQ-3,
-    pulse, GUVA UV, KY-013 NTC, piezo knock
+    pulse, GUVA UV, KY-013 NTC, piezo knock, TEMT6000, RCWL-0516 radar, Sharp IR distance,
+    capacitive soil, load cell, SCT-013 current clamp, MQ-7, MQ-4, anemometer, laser receiver,
+    photo interrupter, MPX5010 pressure
   - *displays*: 16×2/20×4 LCD (parallel & I2C), SSD1306 OLED 128×64/128×32, seven-segment (1 and 4 digits), 8×8 matrix,
     MAX7219 matrix module
   - *communication*: HC-05 Bluetooth, ESP-01 (AT Wi-Fi), NEO-6M GPS, nRF24L01, SIM800L GSM, RC522 RFID,

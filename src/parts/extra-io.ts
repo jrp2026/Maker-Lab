@@ -546,7 +546,7 @@ const lineTracker = comparatorModule({
   ],
 });
 
-const mq = (type: string, title: string, name: string, description: string, keywords: string[], prop: Raw, ao: string) => comparatorModule({
+export const mq = (type: string, title: string, name: string, description: string, keywords: string[], prop: Raw, ao: string) => comparatorModule({
   type, name, title, description, keywords,
   props: [prop, { key: 'thr', label: 'Threshold pot', type: 'slider', default: 1.5, min: 0.2, max: 4.5, step: 0.05, unit: 'V' }],
   drag: prop.key, ao,
