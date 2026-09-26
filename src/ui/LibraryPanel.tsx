@@ -116,7 +116,7 @@ function allSections(aiEntries: Entry[]) {
 
 export function LibraryPanel() {
   const [q, setQ] = useState('');
-  const [cat, setCat] = useState('basic');
+  const [cat, setCat] = useState('all');
   const [showPlanned, setShowPlanned] = useState(true);
   const [showAllPlanned, setShowAllPlanned] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
