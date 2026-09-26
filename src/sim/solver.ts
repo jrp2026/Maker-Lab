@@ -166,6 +166,8 @@ export function diodeIV(vd: number, p: DiodeParams): [number, number] {
 export class Diode extends Prim {
   nonlinear = true;
   vd = 0;
+  /** A destroyed junction: behaves as an open circuit. */
+  open = false;
   private vcrit: number;
   constructor(a: number, k: number, public p: DiodeParams) {
     super([a, k]);
@@ -174,6 +176,10 @@ export class Diode extends Prim {
   }
   stamp(c: StampCtx) {
     const [a, k] = this.nodes;
+    if (this.open) {
+      addG(c, a, k, GMIN_JUNCTION);
+      return;
+    }
     let vd = nv(c.v, a) - nv(c.v, k);
     const nvt = this.p.n * VT;
     vd = limitJunction(vd, this.vd, nvt, this.vcrit);
@@ -188,11 +194,13 @@ export class Diode extends Prim {
     addI(c, a, k, i - g * vd);
   }
   converged(v: Float64Array) {
+    if (this.open) return true;
     const vd = nv(v, this.nodes[0]) - nv(v, this.nodes[1]);
     return Math.abs(vd - this.vd) < 1e-6 + 1e-3 * Math.abs(vd);
   }
   currents(v: Float64Array) {
     const vd = nv(v, this.nodes[0]) - nv(v, this.nodes[1]);
+    if (this.open) return [vd * GMIN_JUNCTION, -vd * GMIN_JUNCTION];
     const [i] = diodeIV(vd, this.p);
     return [i, -i];
   }

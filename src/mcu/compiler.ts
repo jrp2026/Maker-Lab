@@ -611,9 +611,6 @@ const SIZE: Record<Base, number> = { void: 0, bool: 1, char: 1, uchar: 1, int: 2
 function isNumeric(t: Type) {
   return !t.dims && RANK[t.b] !== undefined;
 }
-function isIntegral(t: Type) {
-  return isNumeric(t) && t.b !== 'float';
-}
 
 function arith(a: Type, b: Type): Type {
   const r = Math.max(RANK[a.b] ?? 1, RANK[b.b] ?? 1);
@@ -1068,7 +1065,7 @@ class Gen {
         const init: string[] = [];
         if (s.init) {
           if (s.init.k === 'decl') this.decl(s.init, init, false);
-          else init.push(`${this.expr(s.init.e).code};`);
+          else if (s.init.k === 'expr') init.push(`${this.expr(s.init.e).code};`);
         }
         const c = s.c ? this.expr(s.c).code : 'true';
         const step = s.step ? this.expr(s.step).code : '';

@@ -18,7 +18,27 @@ export const SchematicNets = memo(function SchematicNets({ doc, netlist }: { doc
   const segs: string[] = [];
   const dots: Point[] = [];
   for (const net of netlist.nets) {
-    const pts = net.map((k) => pos.get(k)).filter((p): p is Point => !!p);
+    // A part's internally joined pins (e.g. the Uno's three GNDs) collapse to the one
+    // nearest the other parts on the net, so no loops are drawn through the symbol.
+    const byComp = new Map<string, Point[]>();
+    for (const k of net) {
+      const p = pos.get(k);
+      if (!p) continue;
+      const c = k.slice(0, k.indexOf(':'));
+      if (!byComp.has(c)) byComp.set(c, []);
+      byComp.get(c)!.push(p);
+    }
+    const pts: Point[] = [];
+    for (const [c, list] of byComp) {
+      if (list.length === 1) {
+        pts.push(list[0]);
+        continue;
+      }
+      const others = [...byComp].filter(([o]) => o !== c).flatMap(([, l]) => l);
+      if (!others.length) continue;
+      const cx = others.reduce((a, p) => a + p.x, 0) / others.length, cy = others.reduce((a, p) => a + p.y, 0) / others.length;
+      pts.push(list.reduce((best, p) => (Math.hypot(p.x - cx, p.y - cy) < Math.hypot(best.x - cx, best.y - cy) ? p : best)));
+    }
     // de-duplicate identical positions
     const uniq: Point[] = [];
     for (const p of pts) if (!uniq.some((q) => q.x === p.x && q.y === p.y)) uniq.push(p);

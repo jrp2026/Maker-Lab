@@ -277,8 +277,8 @@ export const EXAMPLES: Example[] = [
           wire(['bb', holeId(9, 'b')], ['bb', railId('tn', 10)], BLACK),
           wire([mm.id, '+'], ['bb', holeId(8, 'a')], RED, [{ x: 180, y: 48 }, { x: hole(8, 'a').x, y: 48 }]),
           wire([mm.id, 'COM'], ['bb', holeId(9, 'a')], BLACK, [{ x: 150, y: 44 }, { x: hole(9, 'a').x, y: 44 }]),
-          wire([scope.id, '+'], [r.id, '2'], GREEN, [{ x: 460, y: 60 }, { x: 460, y: 116 }, { x: hole(8, 'b').x + 4, y: 116 }, { x: hole(8, 'b').x + 4, y: 70 }]),
-          wire([scope.id, '-'], [cap.id, '-'], BLACK, [{ x: 450, y: 90 }, { x: 450, y: 110 }, { x: hole(9, 'e').x, y: 110 }]),
+          wire([scope.id, '+'], [r.id, '2'], GREEN, [{ x: 530, y: 60 }, { x: 530, y: 250 }, { x: hole(8, 'b').x + 4, y: 250 }, { x: hole(8, 'b').x + 4, y: 70 }]),
+          wire([scope.id, '-'], [cap.id, '-'], BLACK, [{ x: 520, y: 90 }, { x: 520, y: 242 }, { x: hole(9, 'e').x, y: 242 }]),
         ],
       };
     },

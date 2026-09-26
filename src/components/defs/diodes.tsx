@@ -95,7 +95,7 @@ function stepChannel(ch: LedChannel, v: Float64Array, h: number, burnt: boolean)
 }
 
 function killChannel(ch: LedChannel) {
-  ch.d.p = { is: 1e-30, n: 2 };
+  ch.d.open = true;
 }
 
 export const led: ComponentDef = {

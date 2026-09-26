@@ -75,6 +75,8 @@ describe('simulator', () => {
     expect(sim.start().size).toBe(0);
     const snap = run(sim, 0.8);
     expect(snap.comps['l']!.burnt).toBe(true);
+    // a burnt LED is an open circuit: no current keeps flowing out of the pin
+    expect(Math.abs(snap.comps['uno']!.pinCurrents.D13)).toBeLessThan(1e-6);
     const msgs = snap.warnings.map((w) => w.message).join('\n');
     expect(msgs).toMatch(/Burned out/);
   });
