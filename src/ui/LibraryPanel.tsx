@@ -31,10 +31,94 @@ function placeAtCenter(type: string) {
   addComponent(type, cx - (b.x + b.w / 2), cy - (b.y + b.h / 2));
 }
 
+type Entry = { name: string; type?: string; phase?: number; category: string; saved?: boolean };
+
+function LibItem({ e }: { e: Entry }) {
+  const def = getDef(e.type!);
+  if (!def) return null;
+  return (
+    <button
+      className="lib-item"
+      draggable
+      title={`${def.description}\n\nDrag onto the canvas, or click to add.`}
+      onDragStart={(ev) => {
+        ev.dataTransfer.setData('text/x-component', e.type!);
+        ev.dataTransfer.effectAllowed = 'copy';
+      }}
+      onClick={() => placeAtCenter(e.type!)}
+    >
+      <div className="thumb"><Thumb type={e.type!} /></div>
+      <span>{e.name}</span>
+      {e.saved && (
+        <em
+          className="lib-del"
+          title="Remove from My AI parts"
+          onClick={(ev) => {
+            ev.stopPropagation();
+            forgetPart(e.type!);
+          }}
+        >
+          ✕
+        </em>
+      )}
+    </button>
+  );
+}
+
+function PlannedList({ items, open, onToggle }: { items: Entry[]; open: boolean; onToggle: () => void }) {
+  if (!items.length) return null;
+  return (
+    <div className="planned">
+      <button className="planned-toggle" onClick={onToggle}>
+        {open ? '▾' : '▸'} On the roadmap ({items.length})
+      </button>
+      {open && (
+        <ul>
+          {items.map((e) => (
+            <li key={e.name} onClick={() => showToast(`${e.name} is planned for Phase ${e.phase}.`)}>
+              <span>{e.name}</span>
+              <em className={`phase p${e.phase}`}>Phase {e.phase}</em>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/** Every ready part grouped by category (no duplicates), plus the whole roadmap. */
+function allSections(aiEntries: Entry[]) {
+  const seen = new Set<string>();
+  const sections: { name: string; entries: Entry[] }[] = [];
+  const planned: Entry[] = [];
+  const seenPlanned = new Set<string>();
+  for (const c of CATALOG) {
+    if (c.id === 'basic') continue;
+    const entries: Entry[] = [];
+    for (const e of c.entries) {
+      if (e.type) {
+        if (seen.has(e.type)) continue;
+        seen.add(e.type);
+        entries.push({ ...e, category: c.name });
+      } else if (!seenPlanned.has(e.name)) {
+        seenPlanned.add(e.name);
+        planned.push({ ...e, category: c.name });
+      }
+    }
+    if (entries.length) sections.push({ name: c.name, entries });
+  }
+  // parts that exist but aren't listed in the catalog still show up
+  const rest = DEFS.filter((d) => !seen.has(d.type)).map((d) => ({ name: d.name, type: d.type, category: 'Other' }));
+  if (rest.length) sections.push({ name: 'Other', entries: rest });
+  if (aiEntries.length) sections.push({ name: '✨ AI parts', entries: aiEntries });
+  return { sections, planned, count: sections.reduce((n, s) => n + s.entries.length, 0) };
+}
+
 export function LibraryPanel() {
   const [q, setQ] = useState('');
   const [cat, setCat] = useState('basic');
   const [showPlanned, setShowPlanned] = useState(true);
+  const [showAllPlanned, setShowAllPlanned] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
   const saved = useAiParts((s) => s.saved);
   const known = useAiParts((s) => s.known);
@@ -63,9 +147,11 @@ export function LibraryPanel() {
     return out.sort((a, b) => Number(!a.type) - Number(!b.type));
   }, [q, aiEntries]);
 
+  const all = useMemo(() => allSections(aiEntries), [aiEntries]);
+  const showAll = !results && cat === 'all';
   const current = CATALOG.find((c) => c.id === cat);
-  const entries: { name: string; type?: string; phase?: number; category: string; saved?: boolean }[] =
-    results ?? (cat === 'ai' ? aiEntries : current!.entries.map((e) => ({ ...e, category: current!.name })));
+  const entries: Entry[] =
+    results ?? (cat === 'ai' ? aiEntries : cat === 'all' ? [] : current!.entries.map((e) => ({ ...e, category: current!.name })));
   const available = entries.filter((e) => e.type);
   const planned = entries.filter((e) => !e.type);
 
@@ -90,6 +176,7 @@ export function LibraryPanel() {
       </div>
       {!results && (
         <select className="cat-select" value={cat} onChange={(e) => setCat(e.target.value)}>
+          <option value="all">All components ({all.count})</option>
           <option value="ai">✨ AI parts ({aiEntries.length})</option>
           {CATALOG.map((c) => {
             const ready = c.entries.filter((e) => e.type).length;
@@ -106,55 +193,27 @@ export function LibraryPanel() {
         {!results && cat === 'ai' && !aiEntries.length && (
           <p className="muted small pad">No AI parts yet. Click <b>Make a part with AI</b> above — e.g. “7805 voltage regulator”.</p>
         )}
-        <div className="lib-grid">
-          {available.map((e) => {
-            const def = getDef(e.type!)!;
-            return (
-              <button
-                key={e.type}
-                className="lib-item"
-                draggable
-                title={`${def.description}\n\nDrag onto the canvas, or click to add.`}
-                onDragStart={(ev) => {
-                  ev.dataTransfer.setData('text/x-component', e.type!);
-                  ev.dataTransfer.effectAllowed = 'copy';
-                }}
-                onClick={() => placeAtCenter(e.type!)}
-              >
-                <div className="thumb"><Thumb type={e.type!} /></div>
-                <span>{e.name}</span>
-                {'saved' in e && e.saved && (
-                  <em
-                    className="lib-del"
-                    title="Remove from My AI parts"
-                    onClick={(ev) => {
-                      ev.stopPropagation();
-                      forgetPart(e.type!);
-                    }}
-                  >
-                    ✕
-                  </em>
-                )}
-              </button>
-            );
-          })}
-        </div>
-        {planned.length > 0 && (
-          <div className="planned">
-            <button className="planned-toggle" onClick={() => setShowPlanned(!showPlanned)}>
-              {showPlanned ? '▾' : '▸'} On the roadmap ({planned.length})
-            </button>
-            {showPlanned && (
-              <ul>
-                {planned.map((e) => (
-                  <li key={e.name} onClick={() => showToast(`${e.name} is planned for Phase ${e.phase}.`)}>
-                    <span>{e.name}</span>
-                    <em className={`phase p${e.phase}`}>Phase {e.phase}</em>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+        {showAll ? (
+          <>
+            {all.sections.map((sec) => (
+              <section key={sec.name} className="lib-section">
+                <h4>
+                  {sec.name} <span>{sec.entries.length}</span>
+                </h4>
+                <div className="lib-grid">
+                  {sec.entries.map((e) => <LibItem key={e.type} e={e} />)}
+                </div>
+              </section>
+            ))}
+            <PlannedList items={all.planned} open={showAllPlanned} onToggle={() => setShowAllPlanned(!showAllPlanned)} />
+          </>
+        ) : (
+          <>
+            <div className="lib-grid">
+              {available.map((e) => <LibItem key={e.type} e={e} />)}
+            </div>
+            <PlannedList items={planned} open={showPlanned} onToggle={() => setShowPlanned(!showPlanned)} />
+          </>
         )}
       </div>
     </aside>
