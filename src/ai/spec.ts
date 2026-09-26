@@ -202,7 +202,7 @@ function slug(s: string) {
  * Validate & normalise untrusted JSON into a part spec. Throws SpecError listing every
  * problem (the list is fed back to the model for a repair round).
  */
-export function validateSpec(raw: any, opts: { keepType?: boolean; builtin?: boolean } = {}): CustomPartSpec {
+export function validateSpec(raw: any, opts: { keepType?: boolean; builtin?: boolean; extraNames?: string[] } = {}): CustomPartSpec {
   const big = !!opts.builtin;
   const problems: string[] = [];
   if (!raw || typeof raw !== 'object') throw new SpecError(['the answer is not a JSON object']);
@@ -269,7 +269,7 @@ export function validateSpec(raw: any, opts: { keepType?: boolean; builtin?: boo
     }
     states.push({ name, init: typeof st.init === 'number' ? st.init : String(st.init ?? '0'), next: String(st.next ?? name) });
   }
-  const varKeys = new Set([...propKeys, ...states.map((x) => x.name)]);
+  const varKeys = new Set([...propKeys, ...states.map((x) => x.name), ...(opts.extraNames ?? [])]);
 
   // model
   const nodes: string[] = [];

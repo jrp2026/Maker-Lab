@@ -31,6 +31,14 @@ export interface BoardSpec {
   /** pin number → header pin id */
   pinId: (n: number) => string;
   pwmFrequency: (pin: number) => number;
+  /** predefined preprocessor macros (#if defined(ESP32) …) */
+  macros: Record<string, number>;
+  /** hardware SPI pins */
+  spi: { mosi: number; miso: number; sck: number; ss: number };
+  /** hardware serial ports: index 0 = Serial (USB), 1 = Serial1 … (null = not present) */
+  uarts: ({ rx: number; tx: number } | null)[];
+  /** EEPROM size in bytes (ESP32: emulated in flash) */
+  eepromSize: number;
 }
 
 const range = (a: number, b: number) => Array.from({ length: b - a + 1 }, (_, i) => a + i);
@@ -58,6 +66,10 @@ export const UNO: BoardSpec = {
   pinIndex: (id) => (/^D\d+$/.test(id) ? Number(id.slice(1)) : /^A\d$/.test(id) ? 14 + Number(id.slice(1)) : -1),
   pinId: (n) => (n < 14 ? `D${n}` : `A${n - 14}`),
   pwmFrequency: (pin) => (pin === 5 || pin === 6 ? 980 : 490),
+  macros: { ARDUINO: 10819, ARDUINO_AVR_UNO: 1, ARDUINO_ARCH_AVR: 1, __AVR__: 1, __AVR_ATmega328P__: 1, F_CPU: 16000000 },
+  spi: { mosi: 11, miso: 12, sck: 13, ss: 10 },
+  uarts: [{ rx: 0, tx: 1 }],
+  eepromSize: 1024,
 };
 
 // DOIT ESP32 DevKit V1 (30 pins)
@@ -97,6 +109,10 @@ export const ESP32: BoardSpec = {
   },
   pinId: (n) => Object.entries(ESP32_NAMES).find(([, v]) => v === n)?.[0] ?? `D${n}`,
   pwmFrequency: () => 1000,
+  macros: { ARDUINO: 10819, ESP32: 1, ARDUINO_ARCH_ESP32: 1, ESP_PLATFORM: 1, ARDUINO_ESP32_DEV: 1, F_CPU: 240000000 },
+  spi: { mosi: 23, miso: 19, sck: 18, ss: 5 },
+  uarts: [{ rx: 3, tx: 1 }, { rx: 9, tx: 10 }, { rx: 16, tx: 17 }],
+  eepromSize: 4096,
 };
 
 export const BOARDS = { uno: UNO, esp32: ESP32 };

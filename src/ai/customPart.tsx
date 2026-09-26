@@ -3,7 +3,8 @@ import type { ComponentDef, PinDef, PropField } from '../components/types';
 import type { CustomPartSpec, PartShape } from './spec';
 import { compileExpr, type Compiled, type ExprScope } from './expr';
 import { BehaviouralCurrent, BehaviouralResistor, BehaviouralSource, Bjt, Capacitor, Comparator, Diode, Inductor, Mosfet, OpAmp, Resistor, Source, Transformer, type Prim } from '../sim/solver';
-import type { SimWarning } from '../sim/builder';
+import type { SimBuilder, SimWarning } from '../sim/builder';
+import type { ComponentInstance } from '../model/types';
 import { PinTip, SLine, SText, clamp01, formatSI, ledParams } from '../components/util';
 
 function Shape({ s, glow }: { s: PartShape; glow?: string }): ReactNode {
@@ -69,7 +70,28 @@ const DIODES = {
 };
 
 /** Build a ComponentDef from a validated spec. */
-export function defFromSpec(spec: CustomPartSpec): ComponentDef {
+/**
+ * TypeScript behaviour attached to a built-in spec part: devices that libraries talk to
+ * (register them in `setup`), values the spec's formulas can use (`vars`), and an overlay
+ * drawn over the part (display contents, terminal text).
+ */
+export interface PartExt {
+  /** names usable in the spec's formulas, supplied by the hooks' values() */
+  vars?: string[];
+  setup?(b: SimBuilder, comp: ComponentInstance): ExtHooks;
+  overlay?(a: { props: Record<string, any>; sim?: Record<string, any> }): ReactNode;
+  /** extra inspector fields (e.g. a send box) */
+  fields?: PropField[];
+  defaultProps?: Record<string, any>;
+}
+export interface ExtHooks {
+  values?(): Record<string, number>;
+  afterStep?(t: number, h: number): void;
+  frame?(): Record<string, any> | undefined;
+  warnings?(): SimWarning[];
+}
+
+export function defFromSpec(spec: CustomPartSpec, ext?: PartExt): ComponentDef {
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (const s of spec.shapes) {
     const b = shapeBox(s);
@@ -88,7 +110,8 @@ export function defFromSpec(spec: CustomPartSpec): ComponentDef {
         ? { key: p.key, label: p.label, kind: 'select', options: p.options ?? [], live: true }
         : { key: p.key, label: p.label, kind: 'number', unit: p.unit, min: p.min, max: p.max, si: true, live: true },
   );
-  const defaultProps = Object.fromEntries(spec.props.map((p) => [p.key, p.default]));
+  if (ext?.fields) fields.push(...ext.fields);
+  const defaultProps = { ...Object.fromEntries(spec.props.map((p) => [p.key, p.default])), ...(ext?.defaultProps ?? {}) };
   const ai = spec.origin !== 'builtin';
 
   const autoSymbol = () => {
@@ -118,7 +141,7 @@ export function defFromSpec(spec: CustomPartSpec): ComponentDef {
     toggleKey: spec.toggle,
     dragKey: spec.drag,
     summary: () => (ai ? '✨ AI-generated part' : spec.summary ?? ''),
-    render: ({ sim }) => (
+    render: ({ sim, comp }) => (
       <g>
         {spec.shapes.map((s, i) => <Shape key={i} s={s} />)}
         {(spec.animations ?? []).map((a, i) => {
@@ -146,11 +169,14 @@ export function defFromSpec(spec: CustomPartSpec): ComponentDef {
               {`${r.label ? `${r.label} ` : ''}${formatSI(Number(sim.readouts?.[i] ?? 0), r.unit ?? '', 3)}`}
             </text>
           ))}
+        {ext?.overlay?.({ props: comp.props, sim })}
         {spec.pins.map((p) => <PinTip key={p.id} x={p.x} y={p.y} />)}
       </g>
     ),
     schematic: () => (spec.symbol ? <g>{spec.symbol.map((s, i) => <Shape key={i} s={{ ...s, fill: s.fill === 'none' || s.type === 'text' ? s.fill : s.fill ? '#fff' : undefined, stroke: s.type === 'text' ? undefined : '#1f3a5f' }} />)}</g> : autoSymbol()),
     build: (b, comp) => {
+      const hooks: ExtHooks = ext?.setup?.(b, comp) ?? {};
+      let extVals: Record<string, number> = hooks.values?.() ?? {};
       const pinIds = new Set(spec.pins.map((p) => p.id));
       const internal = new Map((spec.model.nodes ?? []).map((n) => [n, b.internal()]));
       const term = (name: string): string | number => (pinIds.has(name) ? name : internal.get(name)!);
@@ -189,6 +215,7 @@ export function defFromSpec(spec: CustomPartSpec): ComponentDef {
           return c.n;
         },
         prop: (k) => {
+          if (k in extVals) return extVals[k];
           if (k === 'pressed') return b.input.pressed ? 1 : 0;
           if (k in stateVals) return stateVals[k];
           return Number(comp.props[k] ?? defaultProps[k] ?? 0);
@@ -199,7 +226,7 @@ export function defFromSpec(spec: CustomPartSpec): ComponentDef {
       const names = {
         nodes: new Set(nodeIdx.keys()),
         elements: new Set(spec.model.elements.map((e) => e.id)),
-        props: new Set([...Object.keys(defaultProps), ...stateNames, 'pressed']),
+        props: new Set([...Object.keys(defaultProps), ...stateNames, 'pressed', ...(ext?.vars ?? [])]),
         pins: pinIds,
       };
       const compile = (src: string | number): Compiled => compileExpr(src, names);
@@ -299,6 +326,7 @@ export function defFromSpec(spec: CustomPartSpec): ComponentDef {
         beforeStep(t, h) {
           now = t;
           stepH = h;
+          if (hooks.values) extVals = hooks.values();
         },
         maxStep: spec.maxStep ? () => spec.maxStep! : undefined,
         afterStep(v, h) {
@@ -319,6 +347,7 @@ export function defFromSpec(spec: CustomPartSpec): ComponentDef {
             levelAvg[i].sum += clamp01(fn(scope)) * h;
             levelAvg[i].t += h;
           });
+          hooks.afterStep?.(now, h);
         },
         frame() {
           cur = b.v;
@@ -335,9 +364,10 @@ export function defFromSpec(spec: CustomPartSpec): ComponentDef {
             anims: anims.map((a) => [a.rotate?.(scope) ?? 0, a.dx?.(scope) ?? 0, a.dy?.(scope) ?? 0]),
             freq: sound ? sound(scope) : undefined,
             vars: stateNames.length ? { ...stateVals } : undefined,
+            ...(hooks.frame?.() ?? {}),
           };
         },
-        warnings: () => warn,
+        warnings: () => (hooks.warnings ? [...warn, ...hooks.warnings()] : warn),
       };
     },
   };

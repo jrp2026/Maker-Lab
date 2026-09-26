@@ -5,6 +5,11 @@
  */
 import type { HD44780 } from '../sim/hd44780';
 import type { McuRuntime } from './runtime';
+import { UartPort } from './stdlib';
+import { LedControlLib, NeoPixelLib, SSD1306Lib } from './devlibs/display';
+import { AccelStepperLib, KeypadLib, NewPingLib, PwmServoLib, StepperLib } from './devlibs/motion';
+import { Ads1115Lib, Bmp280Lib, DateTimeLib, DhtLib, DS1307Lib, DS3231Lib, Ina219Lib, Mcp4725Lib, Mpu6050Lib, Pcf8574Lib, Qmc5883Lib, RtcMillisLib } from './devlibs/sensors';
+import { McpCanLib, Mfrc522Lib, Pn532Lib, Rf24Lib, TinyGpsLib } from './devlibs/comm';
 
 export interface I2CDevice {
   write(bytes: number[]): void;
@@ -17,6 +22,14 @@ export interface McuEnv {
   lcdFor(rs: number, en: number, data: number[]): HD44780 | null;
   /** powered I2C device at `addr` on this board's SDA/SCL bus */
   i2c(addr: number): I2CDevice | null;
+  /** exchange one byte with the SPI devices whose chip-select is currently LOW (0xFF if none) */
+  spi(out: number): number;
+  /** high-level API of a powered device of this kind wired to the board pin (DHT data, NeoPixel DIN, RC522 SS …) */
+  device(kind: string, pin: number): any;
+  /** text written on a UART TX pin reaches the devices / boards listening on that net */
+  uartSend(txPin: number, data: string): void;
+  /** a device's pulse on this pin (HC-SR04 echo) in µs, or null when nothing drives one */
+  pulse(pin: number, state: number): number | null;
 }
 
 const hex = (a: number) => `0x${a.toString(16).toUpperCase().padStart(2, '0')}`;
@@ -241,10 +254,20 @@ export class WireLib {
   private txAddr = -1;
   private tx: number[] = [];
   private rx: number[] = [];
+  private clock = 100000;
   constructor(private R: McuRuntime) {}
   begin() {}
   end() {}
-  setClock() {}
+  setPins() {
+    return true;
+  }
+  setClock(hz: number) {
+    this.clock = Math.max(10000, Math.min(1000000, Number(hz) || 100000));
+  }
+  /** µs per byte on the wire (9 clocks) */
+  private get byteTime() {
+    return 9e6 / this.clock;
+  }
   beginTransmission(addr: number) {
     this.txAddr = addr & 0x7f;
     this.tx = [];
@@ -269,14 +292,14 @@ export class WireLib {
   }
   /** Send bytes to a device; false when nothing acknowledges the address. */
   transmitRaw(addr: number, bytes: number[]): boolean {
-    this.R.t += 90 * (bytes.length + 1); // ~100 kHz
+    this.R.t += this.byteTime * (bytes.length + 1);
     const dev = this.R.env.i2c(addr & 0x7f);
     if (!dev) return false;
     dev.write(bytes);
     return true;
   }
   requestFrom(addr: number, n: number) {
-    this.R.t += 90 * (n + 1);
+    this.R.t += this.byteTime * (n + 1);
     const dev = this.R.env.i2c(addr & 0x7f);
     this.rx = dev ? dev.read(n).slice(0, n) : [];
     return this.rx.length;
@@ -290,13 +313,72 @@ export class WireLib {
 }
 
 export function createLib(R: McuRuntime, cls: string, args: unknown[]): unknown {
+  const n = (i: number, d = 0) => (args[i] === undefined ? d : Number(args[i]));
   switch (cls) {
     case 'Servo':
       return new ServoLib(R);
     case 'LiquidCrystal':
       return new LiquidCrystalLib(R, args as number[]);
     case 'LiquidCrystal_I2C':
-      return new LiquidCrystalI2CLib(R, Number(args[0]), Number(args[1]), Number(args[2]));
+      return new LiquidCrystalI2CLib(R, n(0), n(1), n(2));
+    case 'SoftwareSerial': {
+      const p = new UartPort(R, R.pinIndex(n(0)), R.pinIndex(n(1)));
+      R.softPorts.push(p);
+      return p;
+    }
+    case 'SPISettings':
+    case 'File':
+      return {};
+    case 'Adafruit_NeoPixel':
+      return new NeoPixelLib(R, n(0), args.length > 1 ? n(1) : -1, n(2, 0x52));
+    case 'Adafruit_SSD1306':
+      return new SSD1306Lib(R, n(0, 128), n(1, 64), ...args.slice(2));
+    case 'LedControl':
+      return new LedControlLib(R, n(0), n(1), n(2), n(3, 1));
+    case 'Adafruit_PWMServoDriver':
+      return new PwmServoLib(R, n(0, 0x40));
+    case 'Stepper':
+      return new StepperLib(R, n(0), ...(args.slice(1) as number[]).map(Number));
+    case 'AccelStepper':
+      return new AccelStepperLib(R, n(0, 4), n(1, 2), n(2, 3), n(3, 4), n(4, 5), n(5, 1));
+    case 'Keypad':
+      return new KeypadLib(R, args[0], args[1] as number[], args[2] as number[], n(3), n(4));
+    case 'NewPing':
+      return new NewPingLib(R, n(0), n(1), n(2, 500));
+    case 'DHT':
+      return new DhtLib(R, n(0), n(1));
+    case 'Adafruit_BMP280':
+      return new Bmp280Lib(R);
+    case 'Adafruit_MPU6050':
+      return new Mpu6050Lib(R);
+    case 'QMC5883LCompass':
+      return new Qmc5883Lib(R);
+    case 'Adafruit_INA219':
+      return new Ina219Lib(R, n(0, 0x40));
+    case 'Adafruit_ADS1115':
+      return new Ads1115Lib(R);
+    case 'Adafruit_MCP4725':
+      return new Mcp4725Lib(R);
+    case 'PCF8574':
+      return new Pcf8574Lib(R, n(0, 0x20));
+    case 'RTC_DS3231':
+      return new DS3231Lib(R);
+    case 'RTC_DS1307':
+      return new DS1307Lib(R);
+    case 'RTC_Millis':
+      return new RtcMillisLib(R);
+    case 'DateTime':
+      return new DateTimeLib(R, ...args);
+    case 'MFRC522':
+      return new Mfrc522Lib(R, n(0, 10), n(1, 9));
+    case 'Adafruit_PN532':
+      return new Pn532Lib(R, n(0, 2));
+    case 'RF24':
+      return new Rf24Lib(R, n(0), n(1));
+    case 'MCP_CAN':
+      return new McpCanLib(R, n(0));
+    case 'TinyGPSPlus':
+      return new TinyGpsLib(R);
   }
-  throw new Error(`unknown library class ${cls}`);
+  throw new Error(`the ${cls} library can't be created here`);
 }

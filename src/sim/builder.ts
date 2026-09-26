@@ -71,6 +71,30 @@ export interface I2CRegistration {
   powered: () => boolean;
 }
 
+/**
+ * A part that talks to microcontroller libraries (DHT, NeoPixel, SD card, RFID, radio …).
+ * `pins` maps roles to the part's pin names; the simulator finds boards wired to them.
+ */
+export interface DeviceRegistration {
+  compId: string;
+  /** what libraries look for: 'dht', 'neopixel', 'sd', 'rfid', 'nrf24', 'can', 'spi', 'uart', 'pulse' … */
+  kind: string;
+  pins: Record<string, string>;
+  /** role used by R.env.device(kind, boardPin) to match the board pin (e.g. 'cs', 'data') */
+  key?: string;
+  powered(): boolean;
+  /** high-level API handed to the library */
+  api?: any;
+  /** board digitalWrite()s on a role's net (value, time in µs) — shift registers, LED drivers, trigger pins */
+  watch?: Record<string, (value: 0 | 1, us: number) => void>;
+  /** SPI byte exchange while pins.cs is LOW (pins.sck must be on the board's SCK) */
+  transfer?(b: number): number;
+  /** text a board wrote on the net of pins.rx */
+  receive?(text: string): void;
+  /** pulse length (µs) this device produces on pins.out for pulseIn(), or null */
+  pulse?(state: number, us: number): number | null;
+}
+
 export interface BuildEnv {
   grounds: number[];
   signalFrequency(pinKey: string): number;
@@ -79,6 +103,17 @@ export interface BuildEnv {
   pinEdges(pinKey: string): number | null;
   lcds: LcdRegistration[];
   i2c: I2CRegistration[];
+  devices: DeviceRegistration[];
+  /** a device sends text out of one of its pins (UART TX) */
+  deviceSend(pinKey: string, text: string): void;
+  /** logic level on a pin's net: a board output pin if one drives it, otherwise the voltage */
+  levelAt(pinKey: string): 0 | 1;
+  /** current microcontroller time (µs), for devices that timestamp events */
+  now(): number;
+  /** net index of a pin key (undefined when unconnected) */
+  netOf(pinKey: string): number | undefined;
+  /** is this net driven by a board output pin? */
+  boardDriven(pinKey: string): boolean;
 }
 
 export class SimBuilder {
@@ -111,6 +146,48 @@ export class SimBuilder {
 
   registerI2C(r: Omit<I2CRegistration, 'compId'>) {
     this.env.i2c.push({ ...r, compId: this.compId });
+  }
+
+  registerDevice(r: Omit<DeviceRegistration, 'compId'>): DeviceRegistration {
+    const reg = { ...r, compId: this.compId };
+    this.env.devices.push(reg);
+    return reg;
+  }
+
+  /** send text out of one of this part's pins (towards a board's RX) */
+  uartSend(pin: string, text: string) {
+    this.env.deviceSend(`${this.compId}:${pin}`, text);
+  }
+
+  /** logic level on one of this part's pins */
+  levelAt(pin: string): 0 | 1 {
+    return this.env.levelAt(`${this.compId}:${pin}`);
+  }
+
+  /** microcontroller time in µs */
+  now(): number {
+    return this.env.now();
+  }
+
+  /** is one of this part's pins wired to a board output pin? */
+  boardDriven(pin: string): boolean {
+    return this.env.boardDriven(`${this.compId}:${pin}`);
+  }
+
+  /** do this part's pin and another part's pin share a net? */
+  sameNet(pin: string, other: DeviceRegistration, otherPin: string): boolean {
+    const a = this.env.netOf(`${this.compId}:${pin}`);
+    return a !== undefined && a === this.env.netOf(`${other.compId}:${otherPin}`);
+  }
+
+  /** registered devices of a kind (live: all parts registered in this build) */
+  peers(kind: string): DeviceRegistration[] {
+    return this.env.devices.filter((d) => d.kind === kind);
+  }
+
+  /** the device of `kind` whose key pin is on the same net as this part's `pin` (daisy chains) */
+  deviceOn(pin: string, kind: string): DeviceRegistration | undefined {
+    return this.peers(kind).find((d) => d.compId !== this.compId && this.sameNet(pin, d, d.pins[d.key ?? Object.keys(d.pins)[0]]));
   }
 
   /** Periodic signal (tone/PWM/servo pulses) reaching this pin from a board, if any. */

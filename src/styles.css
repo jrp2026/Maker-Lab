@@ -312,3 +312,6 @@ kbd { background: #f1f4f7; border: 1px solid var(--line); border-bottom-width: 2
   backdrop-filter: blur(4px); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #5b6875; border-bottom: 1px solid var(--line);
 }
 .lib-section h4 span { color: var(--muted); font-weight: 500; margin-left: 4px; }
+
+.send-row { display: flex; gap: 6px; }
+.send-row input { flex: 1; min-width: 0; }

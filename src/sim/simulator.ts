@@ -2,7 +2,7 @@ import type { CircuitDoc } from '../model/types';
 import { getDef } from '../components/registry';
 import { buildNetlist, type Netlist } from './netlist';
 import { Circuit } from './solver';
-import { NodeAllocator, SimBuilder, type BuildEnv, type I2CRegistration, type LcdRegistration, type PrimRecord, type SimComponent, type SimWarning } from './builder';
+import { NodeAllocator, SimBuilder, type BuildEnv, type DeviceRegistration, type I2CRegistration, type LcdRegistration, type PrimRecord, type SimComponent, type SimWarning } from './builder';
 import { McuRuntime, type McuError } from '../mcu/runtime';
 import type { McuEnv } from '../mcu/libs';
 import type { BoardSpec } from '../mcu/boards';
@@ -46,6 +46,9 @@ export class Simulator {
   slow = false;
   private lcds: LcdRegistration[] = [];
   private i2cDevs: I2CRegistration[] = [];
+  private devices: DeviceRegistration[] = [];
+  /** pin-write listeners installed on each board for the current build */
+  private installedListeners = new Map<McuRuntime, (pin: number, value: 0 | 1, t: number) => void>();
 
   constructor(private doc: CircuitDoc) {}
 
@@ -91,7 +94,21 @@ export class Simulator {
     this.lcds = [];
     this.mcuPinCache.clear();
     this.i2cDevs = [];
-    const env: BuildEnv = { grounds, signalFrequency: (k: string) => this.signalInfo(k)?.freq ?? 0, signalInfo: (k: string) => this.signalInfo(k), pinEdges: (k: string) => this.pinEdges(k), lcds: this.lcds, i2c: this.i2cDevs };
+    this.devices = [];
+    const env: BuildEnv = {
+      grounds,
+      signalFrequency: (k: string) => this.signalInfo(k)?.freq ?? 0,
+      signalInfo: (k: string) => this.signalInfo(k),
+      pinEdges: (k: string) => this.pinEdges(k),
+      lcds: this.lcds,
+      i2c: this.i2cDevs,
+      devices: this.devices,
+      deviceSend: (k, text) => this.deviceSend(k, text),
+      levelAt: (k) => this.levelAt(k),
+      now: () => this.time * 1e6,
+      netOf: (k) => this.netOfKey(k),
+      boardDriven: (k) => this.boardPinsOnNet(this.netOfKey(k)).some(([m, idx]) => m.pins[idx].mode === 'output'),
+    };
     const builders: SimBuilder[] = [];
     for (const c of doc.components) {
       const def = getDef(c.type);
@@ -113,6 +130,7 @@ export class Simulator {
     this.pinCharge.clear();
     this.frameStart = this.time;
     this.staticWarnings = this.staticChecks();
+    this.installWatchers();
     // settle the initial operating point so the first frame isn't a transient from 0 V
     if (this.time === 0) this.stepOnce(1e-6, false);
   }
@@ -226,11 +244,108 @@ export class Simulator {
     return c ? getDef(c.type)?.mcu?.board : undefined;
   }
 
+  private netOfKey(key: string) {
+    return this.netlist?.netOf.get(key);
+  }
+
+  /** Board output pins on a net, as [runtime, pin index]. */
+  private boardPinsOnNet(net: number | undefined): [McuRuntime, number][] {
+    if (net === undefined) return [];
+    const out: [McuRuntime, number][] = [];
+    for (const [id, m] of this.mcus) {
+      for (const idx of m.spec.pins) if (this.netOfKey(`${id}:${m.spec.pinId(idx)}`) === net) out.push([m, idx]);
+    }
+    return out;
+  }
+
+  /** Logic level on a net: a board output pin if one drives it, otherwise the solved voltage. */
+  private levelAt(key: string): 0 | 1 {
+    const net = this.netOfKey(key);
+    for (const [m, idx] of this.boardPinsOnNet(net)) {
+      const p = m.pins[idx];
+      if (p.mode === 'output') return p.value;
+    }
+    if (net === undefined || !this.circuit) return 0;
+    const node = this.nodeOfNet(net);
+    return node !== undefined && this.circuit.v[node] > 1.5 ? 1 : 0;
+  }
+
+  /** A device sends text out of its TX pin: boards' serial ports and other devices on that net receive it. */
+  private deviceSend(key: string, text: string) {
+    const net = this.netOfKey(key);
+    if (net === undefined) return;
+    for (const [id, m] of this.mcus) {
+      for (const port of m.allPorts()) if (this.netOfKey(`${id}:${m.spec.pinId(port.rxPin)}`) === net) port.push(text);
+    }
+    for (const d of this.devices) if (d.receive && d.pins.rx && `${d.compId}:${d.pins.rx}` !== key && this.netOfKey(`${d.compId}:${d.pins.rx}`) === net && d.powered()) d.receive(text);
+  }
+
+  /** Route board digitalWrite()s to devices watching those nets (shift registers, trigger pins, CS lines). */
+  private installWatchers() {
+    for (const [m, fn] of this.installedListeners) m.pinListeners.delete(fn);
+    this.installedListeners.clear();
+    const watchers = this.devices.filter((d) => d.watch);
+    if (!watchers.length) return;
+    for (const [id, m] of this.mcus) {
+      const byPin = new Map<number, ((v: 0 | 1, t: number) => void)[]>();
+      for (const d of watchers) {
+        for (const [role, fn] of Object.entries(d.watch!)) {
+          const net = this.netOfKey(`${d.compId}:${d.pins[role]}`);
+          if (net === undefined) continue;
+          for (const idx of m.spec.pins) {
+            if (this.netOfKey(`${id}:${m.spec.pinId(idx)}`) !== net) continue;
+            if (!byPin.has(idx)) byPin.set(idx, []);
+            byPin.get(idx)!.push((v, t) => d.powered() && fn(v, t));
+          }
+        }
+      }
+      if (!byPin.size) continue;
+      const listener = (pin: number, v: 0 | 1, t: number) => byPin.get(pin)?.forEach((f) => f(v, t));
+      m.pinListeners.add(listener);
+      this.installedListeners.set(m, listener);
+    }
+  }
+
   /** Library hooks for one board: find LCDs / I2C devices wired to its pins. */
   private envFor(mcuId: string, board: BoardSpec): McuEnv {
     const netOfPin = (n: number) => this.netlist?.netOf.get(`${mcuId}:${board.pinId(n)}`);
     const netOf = (comp: string, pin: string) => this.netlist?.netOf.get(`${comp}:${pin}`);
+    /** is a device's pin held LOW by a board output (chip select)? */
+    const low = (comp: string, pin: string) => this.levelAt(`${comp}:${pin}`) === 0 && netOf(comp, pin) !== undefined;
     return {
+      spi: (out) => {
+        const sck = netOfPin(board.spi.sck);
+        let res = 0xff;
+        let first = true;
+        for (const d of this.devices) {
+          if (!d.transfer || !d.powered() || netOf(d.compId, d.pins.sck) !== sck || !low(d.compId, d.pins.cs)) continue;
+          const r = d.transfer(out);
+          if (first) res = r;
+          first = false;
+        }
+        for (const d of this.devices) if (d.kind === 'spi-spy' && netOf(d.compId, d.pins.sck) === sck && low(d.compId, d.pins.cs)) d.api.observe(out, res);
+        return res;
+      },
+      device: (kind, pin) => {
+        const net = netOfPin(pin);
+        if (net === undefined) return null;
+        const d = this.devices.find((x) => x.kind === kind && netOf(x.compId, x.pins[x.key ?? Object.keys(x.pins)[0]]) === net && x.powered());
+        return d ? d.api : null;
+      },
+      uartSend: (txPin, text) => {
+        const net = netOfPin(txPin);
+        if (net === undefined) return;
+        for (const d of this.devices) if (d.receive && d.pins.rx && netOf(d.compId, d.pins.rx) === net && d.powered()) d.receive(text);
+        for (const [id, m] of this.mcus) {
+          if (id === mcuId && txPin === m.spec.uarts[0]?.tx) continue; // USB serial does not loop back
+          for (const port of m.allPorts()) if (this.netOfKey(`${id}:${m.spec.pinId(port.rxPin)}`) === net) port.push(text);
+        }
+      },
+      pulse: (pin, state) => {
+        const net = netOfPin(pin);
+        const d = this.devices.find((x) => x.pulse && netOf(x.compId, x.pins.out) === net && x.powered());
+        return d ? d.pulse!(state, this.mcus.get(mcuId)!.t) : null;
+      },
       lcdFor: (rs, en, data) => {
         const rsNet = netOfPin(rs), enNet = netOfPin(en);
         if (rsNet === undefined || enNet === undefined) return null;
@@ -300,6 +415,17 @@ export class Simulator {
 
   /** Walk from a pin through nearby parts to find a tone()/PWM/servo pin driving it. */
   private signalInfo(pinKey: string): SignalInfo | null {
+    const net = this.netOfKey(pinKey);
+    if (net !== undefined) {
+      for (const d of this.devices) {
+        if (!d.api?.signalOn || !d.powered()) continue;
+        for (const [role, pin] of Object.entries(d.pins)) {
+          if (this.netOfKey(`${d.compId}:${pin}`) !== net) continue;
+          const info = d.api.signalOn(role) as SignalInfo | null;
+          if (info) return info;
+        }
+      }
+    }
     for (const { mcu, idx } of this.nearbyMcuPins(pinKey)) {
       const f = mcu.pinFrequency(idx);
       if (f) return { freq: f, servoUs: mcu.pins[idx].servo, vcc: mcu.spec.vcc };

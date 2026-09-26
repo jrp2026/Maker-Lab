@@ -30,7 +30,9 @@ export type PropField =
   | { key: string; label: string; kind: 'select'; options: { value: PropValue; label: string }[]; live?: boolean }
   | { key: string; label: string; kind: 'slider'; min: number; max: number; step: number; unit?: string; live?: boolean }
   | { key: string; label: string; kind: 'text' }
-  | { key: string; label: string; kind: 'bool'; live?: boolean };
+  | { key: string; label: string; kind: 'bool'; live?: boolean }
+  /** text box + button that sends a message to the running part (terminals, phones); `key` is the input queue name */
+  | { key: string; label: string; kind: 'send'; placeholder?: string; newline?: boolean };
 
 export interface RenderArgs {
   comp: ComponentInstance;

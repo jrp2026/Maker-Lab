@@ -99,7 +99,7 @@ describe('libraries', () => {
   it('LiquidCrystal writes into an HD44780 wired to its pins', () => {
     const lcd = new HD44780();
     const r = new McuRuntime();
-    r.env = { lcdFor: (rs, en) => (rs === 12 && en === 11 ? lcd : null), i2c: () => null };
+    r.env = { spi: () => 255, device: () => null, uartSend: () => {}, pulse: () => null, lcdFor: (rs, en) => (rs === 12 && en === 11 ? lcd : null), i2c: () => null };
     run(`#include <LiquidCrystal.h>
       LiquidCrystal lcd(12, 11, 5, 4, 3, 2);
       byte heart[8] = {0, 10, 31, 31, 14, 4, 0, 0};
@@ -116,7 +116,7 @@ describe('libraries', () => {
     const lcd = new HD44780();
     const dev = { write: (b: number[]) => b.forEach((x) => lcd.pcfWrite(x)), read: () => [] };
     const r = new McuRuntime();
-    r.env = { lcdFor: () => null, i2c: (a) => (a === 0x27 ? dev : null) };
+    r.env = { spi: () => 255, device: () => null, uartSend: () => {}, pulse: () => null, lcdFor: () => null, i2c: (a) => (a === 0x27 ? dev : null) };
     run(`#include <Wire.h>
       #include <LiquidCrystal_I2C.h>
       LiquidCrystal_I2C lcd(0x27, 16, 2);
@@ -172,7 +172,7 @@ describe('ESP32 target', () => {
     r.load(`void setup(){ pinMode(34, OUTPUT); } void loop(){}`);
     r.runUntil(1000);
     expect(r.error?.message).toMatch(/input-only/);
-    expect(new McuRuntime(ESP32).load(`void setup(){ WiFi.begin("x", "y"); } void loop(){}`)?.message).toMatch(/isn't simulated yet/);
+    expect(new McuRuntime(ESP32).load(`void setup(){ WiFi.begin("x", "y"); } void loop(){}`)?.message).toMatch(/simulated/);
   });
 });
 

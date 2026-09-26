@@ -54,10 +54,36 @@ function unescape(s: string, line: number, col: number): string {
   return out;
 }
 
-/** Tokenise source, running a tiny preprocessor (#include ignored, object-like #define expanded). */
-export function tokenize(src: string): Token[] {
+/** Evaluate a #if expression: defined(X), macro values, integers, ! && || == != < > <= >= + - * / ( ). */
+function evalCondition(text: string, macros: Map<string, Token[]>): boolean {
+  const expr = text
+    .replace(/defined\s*\(\s*(\w+)\s*\)/g, (_, m) => (macros.has(m) ? ' 1 ' : ' 0 '))
+    .replace(/defined\s+(\w+)/g, (_, m) => (macros.has(m) ? ' 1 ' : ' 0 '))
+    .replace(/\b[A-Za-z_]\w*\b/g, (m) => {
+      const v = macros.get(m);
+      return v && v.length === 1 && v[0].k === 'num' ? ` ${v[0].n} ` : ' 0 ';
+    })
+    .replace(/\b(\d+)[uUlL]+\b/g, '$1');
+  if (!/^[\d\s()!&|=<>+\-*/%]*$/.test(expr)) return false;
+  try {
+    return !!new Function(`return (${expr || 0});`)();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Tokenise source, running a small preprocessor: #include is ignored, object-like #define is
+ * expanded, #if/#ifdef/#ifndef/#elif/#else/#endif pick branches using `predefined` macros
+ * (ARDUINO, board identification like __AVR__ / ESP32) plus the sketch's own #defines.
+ */
+export function tokenize(src: string, predefined: Record<string, number> = {}): Token[] {
   const raw: Token[] = [];
   const macros = new Map<string, Token[]>();
+  for (const [k, v] of Object.entries(predefined)) macros.set(k, [{ k: 'num', v: String(v), n: v, line: 0, col: 0 }]);
+  /** conditional-compilation stack: is this level active, has a branch been taken */
+  const conds: { active: boolean; taken: boolean; outer: boolean }[] = [];
+  const skipping = () => conds.length > 0 && !conds[conds.length - 1].active;
   let i = 0, line = 1, col = 1;
   const n = src.length;
   let atLineStart = true;
@@ -74,7 +100,7 @@ export function tokenize(src: string): Token[] {
 
   const lexLine = (text: string, l0: number, c0: number): Token[] => {
     // tokenise a macro body using a nested call
-    const toks = tokenize(text).filter((t) => t.k !== 'eof');
+    const toks = tokenize(text, {}).filter((t) => t.k !== 'eof');
     return toks.map((t) => ({ ...t, line: l0, col: c0 }));
   };
 
@@ -114,6 +140,27 @@ export function tokenize(src: string): Token[] {
       const m = /^#\s*(\w+)\s*(.*)$/.exec(text);
       if (!m) continue;
       const [, dir, rest] = m;
+      if (dir === 'if' || dir === 'ifdef' || dir === 'ifndef') {
+        const outer = !skipping();
+        const c = dir === 'if' ? evalCondition(rest, macros) : dir === 'ifdef' ? macros.has(rest.trim()) : !macros.has(rest.trim());
+        conds.push({ active: outer && c, taken: c, outer });
+        continue;
+      }
+      if (dir === 'elif' || dir === 'else' || dir === 'endif') {
+        const top = conds[conds.length - 1];
+        if (!top) throw new CompileError(`#${dir} without #if`, l0, c0);
+        if (dir === 'endif') conds.pop();
+        else if (dir === 'else') {
+          top.active = top.outer && !top.taken;
+          top.taken = true;
+        } else {
+          const c = !top.taken && evalCondition(rest, macros);
+          top.active = top.outer && c;
+          top.taken = top.taken || c;
+        }
+        continue;
+      }
+      if (skipping()) continue;
       if (dir === 'define') {
         const dm = /^(\w+)(\(?)(.*)$/.exec(rest);
         if (!dm) throw new CompileError('malformed #define', l0, c0);
@@ -121,8 +168,15 @@ export function tokenize(src: string): Token[] {
         macros.set(dm[1], lexLine(dm[3].trim(), l0, c0));
       } else if (dir === 'undef') {
         macros.delete(rest.trim());
+      } else if (dir === 'error') {
+        throw new CompileError(`#error ${rest}`, l0, c0);
       }
       // #include, #ifdef, #pragma ... are ignored
+      continue;
+    }
+    if (skipping()) {
+      // inside an inactive #if branch: drop the rest of the line
+      while (i < n && src[i] !== '\n') adv(1);
       continue;
     }
     atLineStart = false;
@@ -197,7 +251,17 @@ export function tokenize(src: string): Token[] {
       for (const mt of macros.get(t.v)!) expand({ ...mt, line: t.line, col: t.col }, depth + 1);
     } else out.push(t);
   };
-  for (const t of raw) expand(t, 0);
+  for (let k = 0; k < raw.length; k++) {
+    const t = raw[k];
+    // Class::NAME / std::x → NAME (qualifiers are dropped; the names are global here)
+    if (t.k === 'id' && raw[k + 1]?.k === 'op' && raw[k + 1].v === '::') {
+      k++;
+      continue;
+    }
+    if (t.k === 'op' && t.v === '::') continue;
+    expand(t, 0);
+  }
+  if (conds.length) throw new CompileError('unterminated #if', line, col);
   out.push({ k: 'eof', v: '', line, col });
   return out;
 }

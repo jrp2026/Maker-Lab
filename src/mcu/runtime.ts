@@ -1,6 +1,7 @@
 import { compileSketch, CompileError } from './compiler';
 import { UNO, type BoardSpec } from './boards';
 import { createLib, WireLib, type McuEnv } from './libs';
+import { dtostrf, EepromLib, SdLib, SpiLib, sprintf, UartPort } from './stdlib';
 
 export type { BoardSpec };
 export const UNO_SPEC = UNO;
@@ -40,7 +41,7 @@ function highFraction(t0: number, h: number, period: number, duty: number): numb
   return h > 0 ? (F(t0 + h) - F(t0)) / h : duty;
 }
 
-const NO_ENV: McuEnv = { lcdFor: () => null, i2c: () => null };
+const NO_ENV: McuEnv = { lcdFor: () => null, i2c: () => null, spi: () => 0xff, device: () => null, uartSend: () => {}, pulse: () => null };
 
 /** Arduino API + scheduler for a compiled sketch. Times are in microseconds. */
 export class McuRuntime {
@@ -48,7 +49,6 @@ export class McuRuntime {
   until = 0;
   pins: PinState[];
   serialOut = '';
-  serialIn = '';
   serialListeners = new Set<(text: string) => void>();
   lastSerialAt = -1e9;
   error: McuError | null = null;
@@ -58,6 +58,12 @@ export class McuRuntime {
   libWarnings = new Set<string>();
   lib = { create: (cls: string, args: unknown[]) => createLib(this, cls, args) };
   wire = new WireLib(this);
+  spi = new SpiLib(this);
+  sd = new SdLib(this);
+  eeprom: EepromLib;
+  /** hardware serial ports (index = Serial number) and SoftwareSerial instances */
+  ports: (UartPort | undefined)[] = [];
+  softPorts: UartPort[] = [];
   /** called on every digitalWrite of an output (devices that clock data on edges listen here) */
   pinListeners = new Set<(pin: number, value: 0 | 1, t: number) => void>();
   private gen: Generator<number, void, unknown> | null = null;
@@ -70,6 +76,7 @@ export class McuRuntime {
   private ledcPin = new Map<number, { freq: number; bits: number }>();
 
   constructor(public spec: BoardSpec = UNO) {
+    this.eeprom = new EepromLib(this, spec.eepromSize);
     this.pins = Array.from({ length: spec.pinCount }, () => ({
       mode: 'input' as PinMode,
       value: 0 as 0 | 1,
@@ -153,7 +160,7 @@ export class McuRuntime {
   }
 
   // ------------------------------------------------------------ interrupts
-  private levelOf(pin: number): 0 | 1 {
+  levelOf(pin: number): 0 | 1 {
     const p = this.pins[pin];
     if (p.mode === 'output') return p.dac !== null ? (p.dac > this.spec.vcc / 2 ? 1 : 0) : p.value;
     const v = p.volts;
@@ -412,6 +419,16 @@ export class McuRuntime {
   }
   *pulseIn(p: number, state: number, timeout = 1000000) {
     const start = this.t;
+    const dev = this.env.pulse(this.pinIndex(p), state ? 1 : 0);
+    if (dev !== null) {
+      const d = Math.round(dev);
+      if (d <= 0 || d > timeout) {
+        yield* this.delayUs(Math.min(timeout, 1000000));
+        return 0;
+      }
+      yield* this.delayUs(d + 450); // trigger-to-echo latency + the pulse itself
+      return d;
+    }
     const read = () => this.digitalRead(p);
     const wait = function* (self: McuRuntime, cond: () => boolean) {
       while (!cond()) {
@@ -502,58 +519,99 @@ export class McuRuntime {
     return Number.isFinite(v) ? v : 0;
   }
 
-  // Serial
-  serialBegin() {}
+  // ------------------------------------------------------------ serial ports
+  uart(n: number): UartPort {
+    let p = this.ports[n];
+    if (!p) {
+      const pins = this.spec.uarts[n];
+      if (!pins) throw new Error(`Serial${n || ''} does not exist on ${this.spec.name}${n ? ' (use SoftwareSerial)' : ''}`);
+      p = new UartPort(this, pins.rx, pins.tx, n === 0);
+      this.ports[n] = p;
+    }
+    return p;
+  }
+  /** every port that can receive bytes */
+  allPorts(): UartPort[] {
+    return [...this.ports.filter((p): p is UartPort => !!p), ...this.softPorts];
+  }
+  /** Serial Monitor input (port 0) */
+  get serialIn() {
+    return this.uart(0).rx;
+  }
+  set serialIn(v: string) {
+    this.uart(0).rx = v;
+  }
   serialWrite(text: string) {
-    this.serialOut += text;
-    if (this.serialOut.length > 20000) this.serialOut = this.serialOut.slice(-15000);
-    this.lastSerialAt = this.t;
-    for (const l of this.serialListeners) l(text);
-    this.t += text.length * (this.spec.id === 'esp32' ? 10 : 87); // 115200 vs 9600 baud
-    return text.length;
+    return this.uart(0).print(text);
   }
-  serialAvailable() {
-    return this.serialIn.length;
+
+  // ------------------------------------------------------------ helpers used by generated code
+  /** truth value of a library object (File, Serial …) */
+  ok(o: any) {
+    return !!o && (typeof o.isOk === 'function' ? o.isOk() : true);
   }
-  serialRead() {
-    if (!this.serialIn.length) return -1;
-    const c = this.serialIn.charCodeAt(0);
-    this.serialIn = this.serialIn.slice(1);
-    return c;
+  clone<T>(x: T): T {
+    if (Array.isArray(x)) return x.map((v) => this.clone(v)) as T;
+    if (x && typeof x === 'object' && Object.getPrototypeOf(x) === Object.prototype) {
+      const o: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(x)) o[k] = this.clone(v);
+      return o as T;
+    }
+    return x;
   }
-  serialPeek() {
-    return this.serialIn.length ? this.serialIn.charCodeAt(0) : -1;
+  /** pointer to a struct field */
+  fptr(o: Record<string, unknown>, k: string) {
+    return { a: o, i: k };
   }
-  serialReadString() {
-    const s = this.serialIn;
-    this.serialIn = '';
+  sprintf(fmt: string, ...args: unknown[]) {
+    return sprintf(fmt, ...args);
+  }
+  dtostrf(v: number, w: number, p: number) {
+    return dtostrf(v, w, p);
+  }
+  itoa(v: number, base: number) {
+    return base === 10 ? String(Math.trunc(v)) : (Math.trunc(v) >>> 0).toString(base);
+  }
+  /** chars of a C string buffer up to its terminating 0 */
+  cstr(a: unknown): string {
+    if (typeof a === 'string') return a;
+    if (!Array.isArray(a)) return String(a ?? '');
+    let s = '';
+    for (const c of a) {
+      if (!c) break;
+      s += String.fromCharCode(Number(c) & 255);
+    }
     return s;
   }
-  serialReadStringUntil(c: number) {
-    const ch = String.fromCharCode(c);
-    const i = this.serialIn.indexOf(ch);
-    if (i < 0) return this.serialReadString();
-    const s = this.serialIn.slice(0, i);
-    this.serialIn = this.serialIn.slice(i + 1);
+  /** copy a string into a char buffer (with the terminating 0) */
+  setCstr(a: unknown[], s: string) {
+    if (s.length >= a.length) throw new Error(`buffer overflow: ${s.length + 1} bytes written into a char[${a.length}]`);
+    for (let i = 0; i < s.length; i++) a[i] = s.charCodeAt(i) & 255;
+    a[s.length] = 0;
     return s;
   }
-  serialParseInt() {
-    const m = /[-]?\d+/.exec(this.serialIn);
-    if (!m) {
-      this.serialIn = '';
-      return 0;
-    }
-    this.serialIn = this.serialIn.slice(m.index + m[0].length);
-    return parseInt(m[0], 10) | 0;
+  strlen(s: unknown) {
+    return typeof s === 'string' ? s.length : Array.isArray(s) ? s.indexOf(0) >= 0 ? s.indexOf(0) : s.length : 0;
   }
-  serialParseFloat() {
-    const m = /[-]?\d+(\.\d+)?/.exec(this.serialIn);
-    if (!m) {
-      this.serialIn = '';
-      return 0;
-    }
-    this.serialIn = this.serialIn.slice(m.index + m[0].length);
-    return parseFloat(m[0]);
+  strcmp(a: unknown, b: unknown) {
+    const x = String(a), y = String(b);
+    return x < y ? -1 : x > y ? 1 : 0;
+  }
+  /** __DATE__ / __TIME__ at compile (= simulation start) time */
+  buildStamp(which: string) {
+    const d = new Date();
+    const mon = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getMonth()];
+    if (which === '__DATE__') return `${mon} ${String(d.getDate()).padStart(2, ' ')} ${d.getFullYear()}`;
+    return [d.getHours(), d.getMinutes(), d.getSeconds()].map((x) => String(x).padStart(2, '0')).join(':');
+  }
+  /** wait until the circuit has been solved with the pins as they are now (for bit-banged reads) */
+  *settle() {
+    this.t = Math.max(this.t, this.until);
+    yield 0;
+  }
+  /** electrical level of a pin as seen by digitalRead (after the latest solve) */
+  readLevel(p: number) {
+    return this.levelOf(this.pinIndex(p));
   }
 }
 

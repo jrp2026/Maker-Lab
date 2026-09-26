@@ -6,10 +6,11 @@
  */
 import { CompileError, tokenize, type Token } from './lexer';
 import { UNO, type BoardSpec } from './boards';
+import { GLOBAL_OBJECTS, LIB_CONSTANTS, LIB_STRUCTS, LIBS, UNSUPPORTED_OBJECTS, VALUE_CLASSES } from './libspecs';
 
 export { CompileError };
 
-type Base = 'void' | 'bool' | 'char' | 'uchar' | 'int' | 'uint' | 'long' | 'ulong' | 'float' | 'String' | 'obj' | 'func';
+type Base = 'void' | 'bool' | 'char' | 'uchar' | 'int' | 'uint' | 'long' | 'ulong' | 'float' | 'String' | 'obj' | 'func' | 'struct';
 
 interface Type {
   b: Base;
@@ -17,13 +18,15 @@ interface Type {
   isConst?: boolean;
   /** pointer depth (int* → 1) */
   ptr?: number;
-  /** library class for b === 'obj' */
+  /** library class for b === 'obj', struct name for b === 'struct' */
   cls?: string;
   /** reference parameter / variable (int &x) */
   ref?: boolean;
 }
 
 const isPtr = (t: Type) => !!t.ptr && !t.dims;
+/** a C string buffer: char buf[32] */
+const isCharArray = (t: Type) => !!t.dims && t.dims.length === 1 && !t.ptr && (t.b === 'char' || t.b === 'uchar');
 
 /** Apply `n` levels of `*` to a declared type. `char*` is treated as a string. */
 function withPtr(t: Type, n: number): Type {
@@ -104,14 +107,18 @@ const TYPE_WORDS = new Set([
   'uint8_t', 'int8_t', 'uint16_t', 'int16_t', 'uint32_t', 'int32_t', 'uint64_t', 'int64_t', 'size_t',
 ]);
 const QUALIFIERS = new Set(['const', 'static', 'volatile', 'inline', 'constexpr', 'register', 'extern']);
-/** Arduino library classes the simulator implements. */
-const CLASS_TYPES = new Set(['Servo', 'LiquidCrystal', 'LiquidCrystal_I2C']);
+/** Arduino library classes the simulator implements (see LIBS below). */
+const isClass = (name: string) => Object.prototype.hasOwnProperty.call(LIBS, name) && !GLOBAL_OBJECTS[name];
 const UNSUPPORTED_TYPES: Record<string, string> = {
-  Adafruit_NeoPixel: 'The NeoPixel library is on the roadmap (Phase 2) and not supported yet.',
-  struct: 'struct is not supported in this simulator yet.',
-  class: 'class is not supported in this simulator yet.',
-  typedef: 'typedef is not supported in this simulator yet.',
+  class: 'Defining your own classes is not supported in this simulator yet — use a struct plus functions.',
+  union: 'union is not supported in this simulator.',
 };
+
+export interface StructField {
+  name: string;
+  type: Type;
+  init?: Expr;
+}
 
 /** Set per compile: `int` is 16-bit on AVR, 32-bit on ESP32. */
 let INT32 = false;
@@ -120,6 +127,8 @@ class Parser {
   i = 0;
   enums = new Map<string, number>();
   consts = new Map<string, number>();
+  structs = new Map<string, StructField[]>(Object.entries(BUILTIN_STRUCTS()));
+  typedefs = new Map<string, Type>();
   constructor(private toks: Token[]) {}
 
   get cur() {
@@ -159,7 +168,7 @@ class Parser {
     const t = this.toks[j];
     if (t.k !== 'id') return false;
     if (UNSUPPORTED_TYPES[t.v] && this.toks[j + 1]?.k === 'id') throw new CompileError(UNSUPPORTED_TYPES[t.v], t.line, t.col);
-    return TYPE_WORDS.has(t.v) || CLASS_TYPES.has(t.v);
+    return TYPE_WORDS.has(t.v) || isClass(t.v) || this.structs.has(t.v) || this.typedefs.has(t.v) || t.v === 'struct';
   }
 
   /** Consume `*` (and `const` after them); returns the pointer depth. */
@@ -181,10 +190,26 @@ class Parser {
       if (this.cur.v === 'const' || this.cur.v === 'constexpr') isConst = true;
       this.i++;
     }
-    if (this.cur.k === 'id' && CLASS_TYPES.has(this.cur.v)) {
+    if (this.cur.k === 'id' && isClass(this.cur.v)) {
       const cls = this.cur.v;
       this.i++;
       return { type: { b: 'obj', cls, isConst }, isStatic };
+    }
+    if (this.is('struct')) {
+      this.i++;
+      const nt = this.ident();
+      if (!this.structs.has(nt.v)) this.err(`unknown struct '${nt.v}'`, nt);
+      return { type: { b: 'struct', cls: nt.v, isConst }, isStatic };
+    }
+    if (this.cur.k === 'id' && this.structs.has(this.cur.v)) {
+      const cls = this.cur.v;
+      this.i++;
+      return { type: { b: 'struct', cls, isConst }, isStatic };
+    }
+    if (this.cur.k === 'id' && this.typedefs.has(this.cur.v)) {
+      const t = this.typedefs.get(this.cur.v)!;
+      this.i++;
+      return { type: { ...t, isConst: isConst || t.isConst }, isStatic };
     }
     let unsigned = false, signed = false, longs = 0, short = false;
     let base: string | null = null;
@@ -239,6 +264,16 @@ class Parser {
         globals.push(this.parseEnum());
         continue;
       }
+      if (this.is('typedef')) {
+        const d = this.parseTypedef();
+        if (d) globals.push(d);
+        continue;
+      }
+      if (this.is('struct') && (this.is('{', this.peek()) || this.is('{', this.peek(2)))) {
+        const d = this.parseStructDef();
+        if (d) globals.push(d);
+        continue;
+      }
       if (this.cur.k === 'id' && UNSUPPORTED_TYPES[this.cur.v]) this.err(UNSUPPORTED_TYPES[this.cur.v]);
       if (!this.isTypeStart()) {
         if (this.cur.k === 'id' && this.peek().k === 'id') this.err(`'${this.cur.v}' does not name a type`);
@@ -278,6 +313,72 @@ class Parser {
       }
     }
     return { globals, funcs };
+  }
+
+  /** `struct [Name] { fields }` → the struct's name (anonymous structs get a generated one). */
+  parseStructHead(): string {
+    this.expect('struct');
+    const name = this.cur.k === 'id' ? this.ident().v : `$anon${this.i}`;
+    this.expect('{');
+    const fields: StructField[] = [];
+    this.structs.set(name, fields); // registered first so it can point to itself
+    while (!this.is('}')) {
+      if (this.cur.k === 'eof') this.err("expected '}' at end of input");
+      const { type: bt } = this.parseType();
+      do {
+        const ft = withPtr(bt, this.stars());
+        const fn = this.ident();
+        if (this.is('(')) this.err('functions inside a struct are not supported in this simulator — write a normal function that takes the struct', fn);
+        const dims: (number | null)[] = [];
+        while (this.eat('[')) {
+          const v = constEval(this.parseCond(), this.consts);
+          if (v === undefined) this.err('array size must be a constant', fn);
+          dims.push(v);
+          this.expect(']');
+        }
+        let init: Expr | undefined;
+        if (this.eat('=')) init = this.is('{') ? this.parseInitList() : this.parseAssign();
+        if (fields.some((f) => f.name === fn.v)) this.err(`duplicate member '${fn.v}'`, fn);
+        fields.push({ name: fn.v, type: dims.length ? { ...ft, dims } : ft, init });
+      } while (this.eat(','));
+      this.expect(';');
+    }
+    this.expect('}');
+    return name;
+  }
+
+  /** `struct Name { fields } [vars];` — returns declarations of trailing variables, if any. */
+  parseStructDef(): Stmt | null {
+    const name = this.parseStructHead();
+    if (this.eat(';')) return null;
+    // struct Point { int x, y; } p1, p2;
+    const decls: Declarator[] = [];
+    do {
+      const nt = this.ident();
+      let init: Expr | undefined;
+      if (this.eat('=')) init = this.is('{') ? this.parseInitList() : this.parseAssign();
+      decls.push({ name: nt.v, type: { b: 'struct', cls: name }, init, tok: nt });
+    } while (this.eat(','));
+    this.expect(';');
+    return { k: 'decl', decls, isStatic: false };
+  }
+
+  /** `typedef struct {...} Name;` or `typedef <type> Name;` */
+  parseTypedef(): Stmt | null {
+    this.expect('typedef');
+    if (this.is('struct') && (this.is('{', this.peek()) || this.is('{', this.peek(2)))) {
+      const name = this.parseStructHead();
+      do this.structs.set(this.ident().v, this.structs.get(name)!);
+      while (this.eat(','));
+      this.expect(';');
+      return null;
+    }
+    const { type: bt } = this.parseType();
+    const t = withPtr(bt, this.stars());
+    const nt = this.ident();
+    this.expect(';');
+    this.typedefs.set(nt.v, t);
+    return null;
   }
 
   parseEnum(): Stmt {
@@ -462,6 +563,11 @@ class Parser {
         case 'goto':
           this.err('goto is not supported');
       }
+      if (t.v === 'struct' && (this.is('{', this.peek()) || this.is('{', this.peek(2)))) {
+        const d = this.parseStructDef();
+        return d ?? { k: 'empty' };
+      }
+      if (t.v === 'typedef') return this.parseTypedef() ?? { k: 'empty' };
       if (this.isTypeStart()) return this.parseDecl();
       if (UNSUPPORTED_TYPES[t.v]) this.err(UNSUPPORTED_TYPES[t.v]);
     }
@@ -617,6 +723,14 @@ class Parser {
         this.expect(')');
         return { k: 'cast', to: type, e, tok: t };
       }
+      // Class(args) builds a library object: Adafruit_NeoPixel(8, 6), DateTime(2024, 1, 1, 0, 0, 0)
+      if (isClass(t.v) && this.peek().v === '(') {
+        this.i += 2;
+        const args: Expr[] = [];
+        if (!this.is(')')) do args.push(this.parseAssign()); while (this.eat(','));
+        this.expect(')');
+        return { k: 'new', cls: t.v, args, tok: t };
+      }
       this.i++;
       // Scope resolution like Serial::foo is not supported; treat Class::X as X
       return { k: 'id', name: t.v, tok: t };
@@ -670,7 +784,7 @@ function constEval(e: Expr, consts: Map<string, number>): number | undefined {
 // ---------------------------------------------------------------- code generation
 
 const RANK: Partial<Record<Base, number>> = { bool: 1, char: 1, uchar: 1, int: 1, uint: 2, long: 3, ulong: 4, float: 5 };
-const SIZE: Record<Base, number> = { void: 0, bool: 1, char: 1, uchar: 1, int: 2, uint: 2, long: 4, ulong: 4, float: 4, String: 6, obj: 2, func: 2 };
+const SIZE: Record<Base, number> = { void: 0, bool: 1, char: 1, uchar: 1, int: 2, uint: 2, long: 4, ulong: 4, float: 4, String: 6, obj: 2, func: 2, struct: 0 };
 
 function isNumeric(t: Type) {
   return !t.dims && !t.ptr && RANK[t.b] !== undefined;
@@ -744,6 +858,59 @@ class Gen {
   board: BoardSpec = UNO;
   /** variable names whose address is taken somewhere (they get boxed) */
   boxedNames = new Set<string>();
+  structs = new Map<string, StructField[]>();
+
+  fieldsOf(cls: string, tok: Token): StructField[] {
+    const f = this.structs.get(cls);
+    if (!f) this.err(`unknown struct '${cls}'`, tok);
+    return f;
+  }
+
+  /** JS factory call producing a zeroed struct */
+  newStruct(cls: string): string {
+    return `$mk_${cls.replace(/\$/g, '_')}()`;
+  }
+
+  sizeOfType(t: Type, tok: Token): number {
+    let size: number;
+    if (t.ptr && !t.dims) size = 2;
+    else if (t.b === 'struct') size = this.fieldsOf(t.cls!, tok).reduce((n, f) => n + this.sizeOfType(f.type, tok), 0);
+    else size = SIZE[t.b];
+    for (const d of t.dims ?? []) size *= d ?? 0;
+    return size;
+  }
+
+  /** `{1, 2.5, {3, 4}}` for a struct */
+  structInit(e: Expr & { k: 'init' }, type: Type): string {
+    const fields = this.fieldsOf(type.cls!, e.tok);
+    if (e.items.length > fields.length) this.err(`too many initializers for '${type.cls}'`, e.tok);
+    const parts = fields.map((f, i) => {
+      const it = e.items[i];
+      let code: string;
+      if (!it) code = this.zeroValue(f.type, f.init);
+      else if (it.k === 'init') code = f.type.dims ? this.initList(it, f.type) : f.type.b === 'struct' ? this.structInit(it, f.type) : this.err('unexpected braces', it.tok);
+      else {
+        const x = this.expr(it);
+        code = f.type.b === 'struct' ? `R.clone(${this.conv(x.code, x.type, f.type, it.tok)})` : this.conv(x.code, x.type, f.type, it.tok);
+      }
+      return `${JSON.stringify(f.name)}:${code}`;
+    });
+    return `{${parts.join(',')}}`;
+  }
+
+  /** zero (or default-initialised) value of a declared type */
+  zeroValue(t: Type, init?: Expr): string {
+    if (init) {
+      if (init.k === 'init') return t.dims ? this.initList(init, t) : t.b === 'struct' ? this.structInit(init, t) : this.err('unexpected braces', init.tok);
+      const x = this.expr(init);
+      return this.conv(x.code, x.type, t, init.tok);
+    }
+    if (t.dims) return this.zeroArray(t);
+    if (isPtr(t)) return 'null';
+    if (t.b === 'struct') return this.newStruct(t.cls!);
+    if (t.b === 'obj') return `R.lib.create(${JSON.stringify(t.cls)},[])`;
+    return zeroOf(t.b);
+  }
 
   newTemp(): string {
     const t = `$t${this.tmp++}`;
@@ -761,10 +928,13 @@ class Gen {
   addrOf(e: Expr): { code: string; type: Type } {
     if (e.k === 'id') {
       const v = this.lookup(e.name);
+      if (!v && GLOBAL_OBJECTS[e.name]) return this.expr(e); // &Wire, &Serial
       if (!v) this.err(`'${e.name}' was not declared in this scope`, e.tok);
       if (v.type.dims) return { code: `R.ptr(${v.js},0)`, type: { ...elemOf(v.type), ptr: (elemOf(v.type).ptr ?? 0) + 1 } };
       if (v.boxed) return { code: `R.ptr(${v.js},0)`, type: { ...v.type, ptr: (v.type.ptr ?? 0) + 1, isConst: false } };
       if (v.ref) return { code: v.js, type: { ...v.type, ptr: (v.type.ptr ?? 0) + 1, isConst: false } };
+      if (v.type.b === 'obj') return { code: v.js, type: v.type };
+      if (v.type.b === 'struct') return { code: `R.ptr([${v.js}],0)`, type: { ...v.type, ptr: 1, isConst: false } };
       this.err(`cannot take the address of '${e.name}'`, e.tok);
     }
     if (e.k === 'index') {
@@ -777,6 +947,13 @@ class Gen {
       this.err('cannot take the address of this expression', e.tok);
     }
     if (e.k === 'un' && e.op === '*') return this.expr(e.e);
+    if (e.k === 'member') {
+      const m = this.member(e);
+      if (m.type.dims) return { code: `R.ptr(${m.code},0)`, type: { ...elemOf(m.type), ptr: (elemOf(m.type).ptr ?? 0) + 1 } };
+      if (m.type.b === 'obj') return m;
+      const dot = m.code.lastIndexOf('.');
+      return { code: `R.fptr(${m.code.slice(0, dot)},${JSON.stringify(e.name)})`, type: { ...m.type, ptr: (m.type.ptr ?? 0) + 1, isConst: false } };
+    }
     this.err("lvalue required as unary '&' operand", e.tok);
   }
 
@@ -803,6 +980,12 @@ class Gen {
 
   /** Convert expression code of type `from` into type `to`. */
   conv(code: string, from: Type, to: Type, tok: Token): string {
+    if ((to.b === 'struct' || from.b === 'struct') && !isPtr(to) && !isPtr(from) && !to.dims && !from.dims) {
+      if (to.b === 'struct' && from.b === 'struct' && to.cls === from.cls) return code;
+      if (to.b === 'bool' && from.b === 'struct') this.err(`could not convert a struct to 'bool'`, tok);
+      this.err(`cannot convert '${from.b === 'struct' ? from.cls : typeName(from)}' to '${to.b === 'struct' ? to.cls : typeName(to)}'`, tok);
+    }
+    if (to.b === 'bool' && from.b === 'obj' && !from.dims) return 'true';
     if (to.b === 'obj' || from.b === 'obj') {
       if (to.b === 'obj' && from.b === 'obj' && to.cls === from.cls) return code;
       this.err(`cannot convert '${typeName(from)}' to '${typeName(to)}'`, tok);
@@ -815,6 +998,7 @@ class Gen {
     }
     if (to.dims && isPtr(from)) return `R.toArr(${code})`;
     if (to.dims || from.dims) {
+      if (from.dims && !to.dims && to.b === 'String' && isCharArray(from)) return `R.cstr(${code})`;
       if (from.dims && !to.dims && to.b !== 'String') this.err(`cannot convert an array to '${typeName(to)}'`, tok);
       if (from.dims && to.b === 'String') this.err(`cannot convert an array to a string; use a String or char* literal`, tok);
       return code;
@@ -855,10 +1039,15 @@ class Gen {
         if (bc !== undefined) return { code: String(bc), type: T('int') };
         const c = CONSTANTS[e.name];
         if (c !== undefined) return { code: String(c[0]), type: T(c[1]) };
+        const lc = LIB_CONSTANTS[e.name];
+        if (lc !== undefined) return { code: String(lc), type: T('long') };
+        const go = GLOBAL_OBJECTS[e.name];
+        if (go) return { code: go[1], type: { b: 'obj', cls: go[0] } };
+        if (e.name === '__DATE__' || e.name === '__TIME__') return { code: `R.buildStamp(${JSON.stringify(e.name)})`, type: T('String') };
+        if (UNSUPPORTED_OBJECTS[e.name]) this.err(UNSUPPORTED_OBJECTS[e.name], e.tok);
         const bm = /^B([01]{1,8})$/.exec(e.name);
         if (bm) return { code: String(parseInt(bm[1], 2)), type: T('int') };
         if (BUILTINS[e.name]) this.err(`'${e.name}' is a function; did you forget the ()?`, e.tok);
-        if (e.name === 'Wire' || /^Serial\d?$/.test(e.name)) this.err(`'${e.name}' can only be used to call its methods, e.g. ${e.name}.begin()`, e.tok);
         this.err(`'${e.name}' was not declared in this scope`, e.tok);
       }
       // falls through (unreachable)
@@ -871,7 +1060,7 @@ class Gen {
         let type = a.type;
         if (isNumeric(a.type) && isNumeric(b.type)) type = arith(a.type, b.type);
         else if (a.type.b === 'String' || b.type.b === 'String') type = T('String');
-        return { code: `((${c.code})?${this.conv(a.code, a.type, type, e.tok)}:${this.conv(b.code, b.type, type, e.tok)})`, type };
+        return { code: `((${this.test(c)})?${this.conv(a.code, a.type, type, e.tok)}:${this.conv(b.code, b.type, type, e.tok)})`, type };
       }
       case 'un': {
         if (e.op === '++' || e.op === '--') {
@@ -890,7 +1079,7 @@ class Gen {
         }
         const x = this.expr(e.e);
         if (e.op === '!' && isPtr(x.type)) return { code: `(${x.code}==null)`, type: T('bool') };
-        if (e.op === '!') return { code: `(!(${x.code}))`, type: T('bool') };
+        if (e.op === '!') return { code: `(!(${this.test(x)}))`, type: T('bool') };
         this.numeric(x.type, e.tok, e.op);
         const rt = arith(x.type, T('int'));
         if (e.op === '+') return { code: x.code, type: rt };
@@ -916,12 +1105,17 @@ class Gen {
         const lv = this.lvalue(e.l);
         if (lv.type.isConst) this.err(`assignment of read-only variable`, e.tok);
         if (e.r.k === 'init') {
+          if (lv.type.b === 'struct' && !lv.type.dims) return { code: withPre(lv.pre, `(${lv.code}=${this.structInit(e.r, lv.type)})`), type: lv.type };
           if (!lv.type.dims) this.err('initializer list can only be assigned to arrays', e.tok);
           return { code: withPre(lv.pre, `(${lv.code}=${this.initList(e.r, lv.type)})`), type: lv.type };
         }
         const r = this.expr(e.r);
         if (lv.type.dims) this.err('invalid array assignment', e.tok);
-        if (lv.type.b === 'obj') this.err(`cannot assign to a ${lv.type.cls} object`, e.tok);
+        if (lv.type.b === 'struct' && !isPtr(lv.type)) {
+          if (e.op !== '=') this.err(`no match for 'operator${e.op}' on a struct`, e.tok);
+          return { code: withPre(lv.pre, `(${lv.code}=R.clone(${this.conv(r.code, r.type, lv.type, e.tok)}))`), type: lv.type };
+        }
+        if (lv.type.b === 'obj' && !(r.type.b === 'obj' && r.type.cls === lv.type.cls && VALUE_CLASSES.has(lv.type.cls!))) this.err(`cannot assign to a ${lv.type.cls} object`, e.tok);
         if (e.op === '=') return { code: withPre(lv.pre, `(${lv.code}=${this.conv(r.code, r.type, lv.type, e.tok)})`), type: lv.type };
         const op = e.op.slice(0, -1);
         const res = this.binary(op, { code: lv.code, type: lv.type }, r, e.tok);
@@ -944,18 +1138,17 @@ class Gen {
         if (e.type) t = e.type;
         else if (e.e!.k === 'id' && this.lookup(e.e!.name)) t = this.lookup(e.e!.name)!.type;
         else t = this.expr(e.e!).type;
-        let size = t.ptr && !t.dims ? 2 : SIZE[t.b];
-        for (const d of t.dims ?? []) size *= d ?? 0;
+        const size = this.sizeOfType(t, e.tok);
         if (t.dims && e.e?.k === 'id') {
           // arrays sized by initializer: use runtime length
           const v = this.lookup(e.e.name)!;
-          return { code: `(R.sizeOf(${v.js},${SIZE[t.b]}))`, type: T('uint') };
+          const elem = this.sizeOfType({ ...t, dims: undefined }, e.tok);
+          return { code: `(R.sizeOf(${v.js},${elem}))`, type: T('uint') };
         }
         return { code: String(size), type: T('uint') };
       }
       case 'member':
-        this.err(`'${this.describe(e.obj)}' has no member named '${e.name}' (only method calls are supported)`, e.tok);
-      // falls through
+        return this.member(e);
       case 'call':
         return this.call(e);
       case 'init':
@@ -966,12 +1159,52 @@ class Gen {
     }
   }
 
+  /** `s.x`, `p->x`, `gps.location` */
+  member(e: Expr & { k: 'member' }): { code: string; type: Type } {
+    const o = this.expr(e.obj);
+    let base = o.code, t = o.type;
+    if (e.tok.v === '->') {
+      if (!isPtr(t)) this.err(`base operand of '->' is not a pointer`, e.tok);
+      base = `R.deref(${o.code})`;
+      t = elemOf(t);
+    } else if (isPtr(t)) this.err(`request for member '${e.name}' in a pointer; use '->' instead of '.'`, e.tok);
+    if (t.b === 'struct' && !t.dims) {
+      const f = this.fieldsOf(t.cls!, e.tok).find((x) => x.name === e.name);
+      if (!f) this.err(`'struct ${t.cls}' has no member named '${e.name}'`, e.tok);
+      return { code: `${base}.${e.name}`, type: f.type };
+    }
+    if (t.b === 'obj' && !t.dims) {
+      const f = LIBS[t.cls!]?.fields?.[e.name];
+      if (!f) this.err(`'${t.cls}' has no member named '${e.name}'`, e.tok);
+      return { code: `${base}.${e.name}`, type: retType(f) };
+    }
+    this.err(`request for member '${e.name}' in '${this.describe(e.obj)}', which is of non-class type '${typeName(t)}'`, e.tok);
+  }
+
   newObj(cls: string, args: Expr[], tok: Token): string {
     const spec = LIBS[cls];
     const [min, max] = spec.ctor;
     if (args.length < min || args.length > max) this.err(`no matching constructor for ${cls} with ${args.length} argument(s)`, tok);
     const a = this.args(args).map((x) => x.code);
     return `R.lib.create(${JSON.stringify(cls)},[${a.join(',')}])`;
+  }
+
+  /** argument for C string functions: char arrays become JS strings */
+  strArg(x: { code: string; type: Type }): string {
+    return isCharArray(x.type) ? `R.cstr(${x.code})` : x.code;
+  }
+
+  /** store a JS string into a String variable or a char buffer */
+  storeStr(target: Expr, valueCode: string): string {
+    const lv = this.lvalue(target);
+    if (isCharArray(lv.type)) return withPre(lv.pre, `R.setCstr(${lv.code},${valueCode})`);
+    if (lv.type.b !== 'String' || lv.type.dims) this.err('the destination must be a char array or a String', target.tok);
+    return withPre(lv.pre, `(${lv.code}=${valueCode})`);
+  }
+
+  /** JS truth test for a condition (library objects like File/Serial test their "ok" state). */
+  test(x: { code: string; type: Type }): string {
+    return x.type.b === 'obj' && !x.type.dims ? `R.ok(${x.code})` : x.code;
   }
 
   describe(e: Expr): string {
@@ -984,7 +1217,7 @@ class Gen {
 
   binary(op: string, l: { code: string; type: Type }, r: { code: string; type: Type }, tok: Token): { code: string; type: Type } {
     if (op === '&&' || op === '||') {
-      const tb = (x: { code: string; type: Type }) => (isPtr(x.type) ? `(${x.code}!=null)` : `(${x.code})`);
+      const tb = (x: { code: string; type: Type }) => (isPtr(x.type) ? `(${x.code}!=null)` : `(${this.test(x)})`);
       return { code: `(!!(${tb(l)}${op}${tb(r)}))`, type: T('bool') };
     }
     const pl = isPtr(l.type) || (!!l.type.dims && op !== '='), pr = isPtr(r.type) || (!!r.type.dims && op !== '=');
@@ -1072,6 +1305,12 @@ class Gen {
       if (r.code.startsWith('R.charAt(')) this.err('modifying String characters with [] is not supported; use setCharAt()', e.tok);
       return r;
     }
+    if (e.k === 'member') {
+      const m = this.member(e);
+      const o = this.expr(e.obj);
+      if (o.type.b === 'obj') this.err(`cannot assign to '${e.name}' of a ${o.type.cls}`, e.tok);
+      return { code: m.code, type: m.type };
+    }
     this.err('lvalue required as left operand of assignment', e.tok);
   }
 
@@ -1089,13 +1328,14 @@ class Gen {
       if (e.args.length !== user.params.length) this.err(`wrong number of arguments to function '${name}' (expected ${user.params.length})`, e.tok);
       const argCodes = e.args.map((a, i) => {
         const pt = user.params[i].type;
-        if (pt.ref && !pt.dims && pt.b !== 'obj') {
+        if (pt.ref && !pt.dims && pt.b !== 'obj' && pt.b !== 'struct') {
           const ptr = this.addrOf(a);
           return ptr.code;
         }
         const x = this.expr(a);
         if (pt.dims && !x.type.dims && !isPtr(x.type)) this.err(`argument ${i + 1} of '${name}' must be an array`, a.tok);
-        return this.conv(x.code, x.type, pt, a.tok);
+        const c = this.conv(x.code, x.type, pt, a.tok);
+        return pt.b === 'struct' && !pt.ref && !isPtr(pt) && !pt.dims ? `R.clone(${c})` : c;
       });
       return { code: `(yield* ${user.js}(${argCodes.join(',')}))`, type: user.ret };
     }
@@ -1105,19 +1345,7 @@ class Gen {
   }
 
   method(obj: Expr, name: string, args: Expr[], tok: Token): { code: string; type: Type } {
-    if (obj.k === 'id' && !this.lookup(obj.name) && /^Serial\d?$/.test(obj.name)) {
-      const m = SERIAL[name];
-      if (!m) this.err(`'Serial' has no member named '${name}'`, tok);
-      return m(this, args, tok);
-    }
     if (obj.k === 'id' && !this.lookup(obj.name) && UNSUPPORTED_TYPES[obj.name]) this.err(UNSUPPORTED_TYPES[obj.name], tok);
-    if (obj.k === 'id' && !this.lookup(obj.name) && obj.name === 'Wire') return this.libCall('Wire', 'R.wire', name, args, tok);
-    if (obj.k === 'id' && !this.lookup(obj.name) && (obj.name === 'SPI' || obj.name === 'EEPROM')) {
-      this.err(`The ${obj.name} library is on the roadmap and not supported yet.`, tok);
-    }
-    if (obj.k === 'id' && !this.lookup(obj.name) && ['WiFi', 'SerialBT', 'WebServer', 'HTTPClient', 'BLEDevice', 'esp_now'].includes(obj.name)) {
-      this.err(`${obj.name}: wireless networking isn't simulated yet (Phase 3). GPIO, ADC, PWM, DAC, I2C, Servo and LCD all work on the ESP32.`, tok);
-    }
     const o = this.expr(obj);
     if (o.type.b === 'obj' && !o.type.dims) return this.libCall(o.type.cls!, o.code, name, args, tok);
     if (o.type.b === 'String' && !o.type.dims) {
@@ -1160,28 +1388,45 @@ class Gen {
 
   /** Method call on a library object (Servo, LiquidCrystal, Wire …). */
   libCall(cls: string, target: string, name: string, args: Expr[], tok: Token): { code: string; type: Type } {
-    const m = LIBS[cls].methods[name];
+    const spec = LIBS[cls];
+    const m = spec?.methods[name];
     if (!m) this.err(`'${cls}' has no member named '${name}'`, tok);
     const [min, max, ret] = m;
     if (args.length < min) this.err(`too few arguments to '${cls}::${name}'`, tok);
     if (args.length > max) this.err(`too many arguments to '${cls}::${name}'`, tok);
-    const a = this.args(args);
-    if (name === 'print' || name === 'println') {
-      // format like Serial.print, then hand the text to the library
-      const text = a.length ? `R.fmt(${a[0].code},${JSON.stringify(a[0].type.b)}${a[1] ? ',' + a[1].code : ''})` : '""';
-      return { code: `${target}.${name}(${text})`, type: T(ret) };
+    const rt = retType(ret);
+    const wrapGen = (code: string) => (ret.startsWith('gen:') ? `(yield* ${code})` : code);
+    if (cls === 'EEPROMClass' && (name === 'put' || name === 'get')) {
+      const addr = this.expr(args[0]);
+      if (name === 'put') {
+        const x = this.expr(args[1]);
+        return { code: `${target}.put(${addr.code},${x.code},${JSON.stringify(typeDesc(this, x.type, tok))})`, type: T('void') };
+      }
+      const lv = this.lvalue(args[1]);
+      return { code: withPre(lv.pre, `(${lv.code}=${target}.get(${addr.code},${lv.code},${JSON.stringify(typeDesc(this, lv.type, tok))}),undefined)`), type: T('void') };
     }
-    if (name === 'write' && a[0] && a[0].type.b === 'String' && !a[0].type.dims) return { code: `${target}.writeStr(${a[0].code})`, type: T(ret) };
+    const a = this.args(args);
+    if (name === 'printf') {
+      return { code: `${target}.print(R.sprintf(${a.map((x) => this.strArg(x)).join(',')}))`, type: rt };
+    }
+    if ((name === 'print' || name === 'println') && (a.length <= 2) && !(a[0] && a[0].type.b === 'obj')) {
+      // format like Serial.print, then hand the text to the library
+      if (a[0]?.type.dims && !isCharArray(a[0].type)) this.err('cannot print an array; print its elements in a loop', tok);
+      const text = !a.length ? '""' : a[0].type.dims ? `R.cstr(${a[0].code})` : `R.fmt(${a[0].code},${JSON.stringify(a[0].type.b)}${a[1] ? ',' + a[1].code : ''})`;
+      return { code: wrapGen(`${target}.${name}(${text})`), type: rt };
+    }
+    if (name === 'write' && a[0] && a[0].type.b === 'String' && !a[0].type.dims && a.length === 1) return { code: `${target}.writeStr(${a[0].code})`, type: rt };
     const codes = a.map((x) => (isPtr(x.type) ? `R.toArr(${x.code})` : x.code));
-    return { code: `${target}.${name}(${codes.join(',')})`, type: T(ret) };
+    return { code: wrapGen(`${target}.${name}(${codes.join(',')})`), type: rt };
   }
 
   initList(e: Expr & { k: 'init' }, type: Type): string {
     const dims = type.dims ?? [];
     const inner: Type = elemOf(type);
     const items = e.items.map((it) => {
-      if (it.k === 'init') return this.initList(it, inner);
+      if (it.k === 'init') return inner.b === 'struct' && !inner.dims ? this.structInit(it, inner) : this.initList(it, inner);
       const x = this.expr(it);
+      if (inner.b === 'struct' && !inner.dims) return `R.clone(${this.conv(x.code, x.type, inner, it.tok)})`;
       return this.conv(x.code, x.type, inner, it.tok);
     });
     const size = dims[0];
@@ -1195,7 +1440,7 @@ class Gen {
 
   zeroArray(t: Type): string {
     const dims = t.dims ?? [];
-    if (!dims.length) return t.b === 'obj' ? `R.lib.create(${JSON.stringify(t.cls)},[])` : isPtr(t) ? 'null' : zeroOf(t.b);
+    if (!dims.length) return t.b === 'obj' ? `R.lib.create(${JSON.stringify(t.cls)},[])` : t.b === 'struct' ? this.newStruct(t.cls!) : isPtr(t) ? 'null' : zeroOf(t.b);
     if (dims[0] == null) return '[]';
     const inner: Type = { ...t, dims: dims.slice(1) };
     return `Array.from({length:${dims[0]}},()=>${this.zeroArray(inner)})`;
@@ -1208,7 +1453,15 @@ class Gen {
       let type = d.type;
       let init: string;
       let ref = false;
-      if (type.ref && !type.dims && type.b !== 'obj') {
+      if (type.ref && !type.dims && (type.b === 'obj' || type.b === 'struct')) {
+        // Data &d = arr[i];  → an alias of the same JS object
+        if (!d.init) this.err(`'${d.name}' declared as reference but not initialized`, d.tok);
+        const { ref: _r, ...rest } = type;
+        void _r;
+        type = rest;
+        const x = this.expr(d.init);
+        init = this.conv(x.code, x.type, type, d.tok);
+      } else if (type.ref && !type.dims && type.b !== 'obj') {
         // int &r = x;  → r holds a pointer to x
         if (!d.init) this.err(`'${d.name}' declared as reference but not initialized`, d.tok);
         const { ref: _r, ...rest } = type;
@@ -1217,8 +1470,18 @@ class Gen {
         init = this.addrOf(d.init).code;
         ref = true;
       } else if (type.b === 'obj' && !type.dims) {
-        if (d.init && d.init.k !== 'new') this.err(`${type.cls} objects are created as '${type.cls} ${d.name}(...);'`, d.tok);
-        init = this.newObj(type.cls!, d.init?.k === 'new' ? d.init.args : [], d.tok);
+        if (d.init && d.init.k !== 'new') {
+          // DateTime now = rtc.now();
+          const x = this.expr(d.init);
+          init = this.conv(x.code, x.type, type, d.tok);
+        } else init = this.newObj(type.cls!, d.init?.k === 'new' ? d.init.args : [], d.tok);
+      } else if (type.b === 'struct' && !type.dims && !isPtr(type)) {
+        if (!d.init) init = this.newStruct(type.cls!);
+        else if (d.init.k === 'init') init = this.structInit(d.init, type);
+        else {
+          const x = this.expr(d.init);
+          init = `R.clone(${this.conv(x.code, x.type, type, d.tok)})`;
+        }
       } else if (d.init?.k === 'init' || (d.init?.k === 'str' && type.dims)) {
         if (!type.dims) {
           if (d.init.k === 'init' && d.init.items.length === 1) {
@@ -1249,7 +1512,7 @@ class Gen {
       } else if (type.dims) {
         if (type.dims.some((x) => x == null)) this.err(`array size missing in '${d.name}'`, d.tok);
         init = this.zeroArray(type);
-      } else init = isPtr(type) ? 'null' : zeroOf(type.b);
+      } else init = this.zeroValue(type);
 
       const boxed = !ref && !type.dims && type.b !== 'obj' && this.boxedNames.has(d.name);
       if (boxed) init = `[${init}]`;
@@ -1294,7 +1557,7 @@ class Gen {
         const c = this.expr(s.c);
         const a: string[] = [];
         this.scoped(() => this.stmt(s.a, a));
-        let code = `if(${c.code}){${a.join('\n')}}`;
+        let code = `if(${this.test(c)}){${a.join('\n')}}`;
         if (s.b) {
           const b: string[] = [];
           this.scoped(() => this.stmt(s.b!, b));
@@ -1307,14 +1570,14 @@ class Gen {
         const c = this.expr(s.c);
         const body: string[] = [];
         this.scoped(() => this.stmt(s.body, body));
-        out.push(`while(${c.code}){${this.tick(cost(s.body))}${body.join('\n')}}`);
+        out.push(`while(${this.test(c)}){${this.tick(cost(s.body))}${body.join('\n')}}`);
         break;
       }
       case 'do': {
         const body: string[] = [];
         this.scoped(() => this.stmt(s.body, body));
         const c = this.expr(s.c);
-        out.push(`do{${this.tick(cost(s.body))}${body.join('\n')}}while(${c.code});`);
+        out.push(`do{${this.tick(cost(s.body))}${body.join('\n')}}while(${this.test(c)});`);
         break;
       }
       case 'for': {
@@ -1324,7 +1587,7 @@ class Gen {
           if (s.init.k === 'decl') this.decl(s.init, init, false);
           else if (s.init.k === 'expr') init.push(`${this.expr(s.init.e).code};`);
         }
-        const c = s.c ? this.expr(s.c).code : 'true';
+        const c = s.c ? this.test(this.expr(s.c)) : 'true';
         const step = s.step ? this.expr(s.step).code : '';
         const body: string[] = [];
         this.scoped(() => this.stmt(s.body, body));
@@ -1540,6 +1803,69 @@ const BUILTINS: Record<string, BuiltinGen> = {
   },
   isDigit: simple('isDigit', 'R.isDigit', 'bool', 1),
   isAlpha: simple('isAlpha', 'R.isAlpha', 'bool', 1),
+  sprintf: (c, args, tok) => {
+    if (args.length < 2) c.err("too few arguments to function 'sprintf'", tok);
+    const a = c.args(args.slice(1));
+    return { code: `R.strlen(${c.storeStr(args[0], `R.sprintf(${a.map((x) => c.strArg(x)).join(',')})`)})`, type: T('int') };
+  },
+  snprintf: (c, args, tok) => {
+    if (args.length < 3) c.err("too few arguments to function 'snprintf'", tok);
+    const n = c.expr(args[1]).code;
+    const a = c.args(args.slice(2));
+    return { code: `R.strlen(${c.storeStr(args[0], `R.sprintf(${a.map((x) => c.strArg(x)).join(',')}).slice(0,Math.max(0,(${n})-1))`)})`, type: T('int') };
+  },
+  dtostrf: (c, args, tok) => {
+    argCheck(c, 'dtostrf', args, 4, 4, tok);
+    const [v, w, p] = c.args(args.slice(0, 3));
+    return { code: c.storeStr(args[3], `R.dtostrf(${v.code},${w.code},${p.code})`), type: T('String') };
+  },
+  itoa: (c, args, tok) => {
+    argCheck(c, 'itoa', args, 3, 3, tok);
+    const v = c.expr(args[0]), base = c.expr(args[2]);
+    return { code: c.storeStr(args[1], `R.itoa(${v.code},${base.code})`), type: T('String') };
+  },
+  strlen: (c, args, tok) => {
+    argCheck(c, 'strlen', args, 1, 1, tok);
+    return { code: `R.strlen(${c.expr(args[0]).code})`, type: T('uint') };
+  },
+  strcmp: (c, args, tok) => {
+    argCheck(c, 'strcmp', args, 2, 2, tok);
+    const [a, b] = c.args(args);
+    return { code: `R.strcmp(${c.strArg(a)},${c.strArg(b)})`, type: T('int') };
+  },
+  strcpy: (c, args, tok) => {
+    argCheck(c, 'strcpy', args, 2, 2, tok);
+    const x = c.expr(args[1]);
+    return { code: c.storeStr(args[0], c.conv(x.code, x.type, T('String'), tok)), type: T('String') };
+  },
+  strncpy: (c, args, tok) => {
+    argCheck(c, 'strncpy', args, 3, 3, tok);
+    const x = c.expr(args[1]);
+    return { code: c.storeStr(args[0], `${c.conv(x.code, x.type, T('String'), tok)}.slice(0,${c.expr(args[2]).code})`), type: T('String') };
+  },
+  strcat: (c, args, tok) => {
+    argCheck(c, 'strcat', args, 2, 2, tok);
+    const d = c.expr(args[0]);
+    const x = c.expr(args[1]);
+    return { code: c.storeStr(args[0], `(${c.conv(d.code, d.type, T('String'), tok)}+${c.conv(x.code, x.type, T('String'), tok)})`), type: T('String') };
+  },
+  atoi: (c, args, tok) => {
+    argCheck(c, 'atoi', args, 1, 1, tok);
+    return { code: `R.toInt(${c.strArg(c.expr(args[0]))})`, type: T('int') };
+  },
+  atol: (c, args, tok) => {
+    argCheck(c, 'atol', args, 1, 1, tok);
+    return { code: `R.toInt(${c.strArg(c.expr(args[0]))})`, type: T('long') };
+  },
+  atof: (c, args, tok) => {
+    argCheck(c, 'atof', args, 1, 1, tok);
+    return { code: `R.toFloat(${c.strArg(c.expr(args[0]))})`, type: T('float') };
+  },
+  makeKeymap: (c, args, tok) => {
+    argCheck(c, 'makeKeymap', args, 1, 1, tok);
+    return c.expr(args[0]);
+  },
+  yield: simple('yield', 'R.noop', 'void', 0),
   F: (c, args, tok) => {
     argCheck(c, 'F', args, 1, 1, tok);
     return c.expr(args[0]);
@@ -1552,38 +1878,9 @@ const BUILTINS: Record<string, BuiltinGen> = {
   },
 };
 
-const printGen = (ln: boolean): BuiltinGen => (c, args, tok) => {
-  argCheck(c, ln ? 'println' : 'print', args, ln ? 0 : 1, 2, tok);
-  if (!args.length) return { code: 'R.serialWrite("\\n")', type: T('uint') };
-  const [x, f] = c.args(args);
-  if (x.type.dims) c.err('cannot print an array; print its elements in a loop', tok);
-  return { code: `R.serialWrite(R.fmt(${x.code},${JSON.stringify(x.type.b)}${f ? ',' + f.code : ''})${ln ? '+"\\n"' : ''})`, type: T('uint') };
-};
-
-const SERIAL: Record<string, BuiltinGen> = {
-  begin: simple('begin', 'R.serialBegin', 'void', 1, 2),
-  end: simple('end', 'R.noop', 'void', 0),
-  print: printGen(false),
-  println: printGen(true),
-  write: (c, args, tok) => {
-    argCheck(c, 'write', args, 1, 1, tok);
-    const x = c.expr(args[0]);
-    return { code: `R.serialWrite(${x.type.b === 'String' ? x.code : `String.fromCharCode(${x.code})`})`, type: T('uint') };
-  },
-  available: simple('available', 'R.serialAvailable', 'int', 0),
-  read: simple('read', 'R.serialRead', 'int', 0),
-  peek: simple('peek', 'R.serialPeek', 'int', 0),
-  flush: simple('flush', 'R.noop', 'void', 0),
-  parseInt: simple('parseInt', 'R.serialParseInt', 'long', 0),
-  parseFloat: simple('parseFloat', 'R.serialParseFloat', 'float', 0),
-  readString: simple('readString', 'R.serialReadString', 'String', 0),
-  readStringUntil: simple('readStringUntil', 'R.serialReadStringUntil', 'String', 1),
-  setTimeout: simple('setTimeout', 'R.noop', 'void', 1),
-};
-
 /** Names used with unary `&` or passed to reference parameters: those variables get boxed. */
 function findAddressTaken(roots: unknown[], funcs: FuncDef[]): Set<string> {
-  const refParams = new Map(funcs.map((f) => [f.name, f.params.map((p) => !!p.type.ref && !p.type.dims && p.type.b !== 'obj')]));
+  const refParams = new Map(funcs.map((f) => [f.name, f.params.map((p) => !!p.type.ref && !p.type.dims && p.type.b !== 'obj' && p.type.b !== 'struct')]));
   const out = new Set<string>();
   const walk = (n: any) => {
     if (!n || typeof n !== 'object') return;
@@ -1605,36 +1902,34 @@ function findAddressTaken(roots: unknown[], funcs: FuncDef[]): Set<string> {
 
 // ---------------------------------------------------------------- libraries
 
-type MethodSpec = [min: number, max: number, ret: Base];
-const LCD_METHODS: Record<string, MethodSpec> = {
-  begin: [0, 3, 'void'], clear: [0, 0, 'void'], home: [0, 0, 'void'], setCursor: [2, 2, 'void'],
-  print: [1, 2, 'uint'], println: [0, 2, 'uint'], write: [1, 1, 'uint'],
-  cursor: [0, 0, 'void'], noCursor: [0, 0, 'void'], blink: [0, 0, 'void'], noBlink: [0, 0, 'void'],
-  display: [0, 0, 'void'], noDisplay: [0, 0, 'void'], scrollDisplayLeft: [0, 0, 'void'], scrollDisplayRight: [0, 0, 'void'],
-  autoscroll: [0, 0, 'void'], noAutoscroll: [0, 0, 'void'], leftToRight: [0, 0, 'void'], rightToLeft: [0, 0, 'void'],
-  createChar: [2, 2, 'void'], command: [1, 1, 'void'],
-};
-const LIBS: Record<string, { ctor: [number, number]; methods: Record<string, MethodSpec> }> = {
-  Servo: {
-    ctor: [0, 0],
-    methods: {
-      attach: [1, 3, 'uchar'], write: [1, 1, 'void'], writeMicroseconds: [1, 1, 'void'], read: [0, 0, 'int'],
-      readMicroseconds: [0, 0, 'int'], attached: [0, 0, 'bool'], detach: [0, 0, 'void'],
-    },
-  },
-  LiquidCrystal: { ctor: [6, 11], methods: LCD_METHODS },
-  LiquidCrystal_I2C: {
-    ctor: [3, 3],
-    methods: { ...LCD_METHODS, init: [0, 0, 'void'], backlight: [0, 0, 'void'], noBacklight: [0, 0, 'void'], setBacklight: [1, 1, 'void'] },
-  },
-  Wire: {
-    ctor: [0, 0],
-    methods: {
-      begin: [0, 1, 'void'], end: [0, 0, 'void'], setClock: [1, 1, 'void'], beginTransmission: [1, 1, 'void'],
-      write: [1, 2, 'uint'], endTransmission: [0, 1, 'uchar'], requestFrom: [2, 3, 'uchar'], available: [0, 0, 'int'], read: [0, 0, 'int'],
-    },
-  },
-};
+const BASES = new Set(['void', 'bool', 'char', 'uchar', 'int', 'uint', 'long', 'ulong', 'float', 'String']);
+
+/** Type of a library method's return value / field (see libspecs.ts). */
+function retType(r: string): Type {
+  const name = r.startsWith('gen:') ? r.slice(4) : r;
+  if (BASES.has(name)) return T(name as Base);
+  if (LIB_STRUCTS[name]) return { b: 'struct', cls: name };
+  return { b: 'obj', cls: name };
+}
+
+/** Library structs (sensors_event_t …) as struct definitions. */
+function BUILTIN_STRUCTS(): Record<string, StructField[]> {
+  const out: Record<string, StructField[]> = {};
+  for (const [name, fields] of Object.entries(LIB_STRUCTS)) {
+    out[name] = fields.map(([f, t, n]) => {
+      const type = retType(t);
+      return { name: f, type: n ? { ...type, dims: [n] } : type };
+    });
+  }
+  return out;
+}
+
+/** Compact runtime descriptor of a type, used to serialise values (EEPROM.put/get). */
+function typeDesc(g: Gen, t: Type, tok: Token): unknown {
+  if (t.dims?.length) return { a: t.dims[0] ?? 0, e: typeDesc(g, elemOf(t), tok) };
+  if (t.b === 'struct') return { s: g.fieldsOf(t.cls!, tok).map((f) => [f.name, typeDesc(g, f.type, tok)]) };
+  return t.b;
+}
 
 // ---------------------------------------------------------------- entry point
 
@@ -1646,7 +1941,7 @@ export interface CompiledProgram {
 
 export function compileSketch(src: string, board: BoardSpec = UNO): CompiledProgram {
   INT32 = board.int32;
-  const toks = tokenize(src);
+  const toks = tokenize(src, board.macros);
   const parser = new Parser(toks);
   const { globals, funcs } = parser.parseProgram();
   const g = new Gen();
@@ -1665,6 +1960,17 @@ export function compileSketch(src: string, board: BoardSpec = UNO): CompiledProg
   if (!loop) throw new CompileError("undefined reference to 'loop' — every sketch needs a loop() function", 1, 1);
 
   g.boxedNames = findAddressTaken([...globals, ...funcs.map((f) => f.body)], funcs);
+  g.structs = parser.structs;
+  const factories: string[] = [];
+  const madeFactory = new Set<string>();
+  for (const [name, fields] of parser.structs) {
+    const js = g.newStruct(name).slice(0, -2);
+    if (madeFactory.has(js)) continue;
+    madeFactory.add(js);
+    g.temps = [];
+    const body = fields.map((f) => `${JSON.stringify(f.name)}:${g.zeroValue(f.type, f.init)}`).join(',');
+    factories.push(`function ${js}(){return {${body}};}`);
+  }
   const globalInit: string[] = [];
   g.temps = [];
   for (const s of globals) g.decl(s as Stmt & { k: 'decl' }, globalInit, true);
@@ -1679,7 +1985,7 @@ export function compileSketch(src: string, board: BoardSpec = UNO): CompiledProg
     g.temps = [];
     const prologue: string[] = [];
     const params = f.params.map((p) => {
-      const isRef = !!p.type.ref && !p.type.dims && p.type.b !== 'obj';
+      const isRef = !!p.type.ref && !p.type.dims && p.type.b !== 'obj' && p.type.b !== 'struct';
       const { ref: _r, ...pt } = p.type;
       void _r;
       const v = g.declare(p.name, pt, f.tok);
@@ -1701,6 +2007,7 @@ export function compileSketch(src: string, board: BoardSpec = UNO): CompiledProg
   const js = [
     '"use strict";',
     globalNames.length ? `let ${globalNames.join(',')};` : '',
+    ...factories,
     ...g.statics,
     ...fnCode,
     `function* __main(){`,

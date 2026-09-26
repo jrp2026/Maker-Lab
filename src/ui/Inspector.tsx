@@ -4,7 +4,26 @@ import type { PropField } from '../components/types';
 import { WIRE_COLORS, deleteSelection, flipSelection, rotateSelection, setProp, updateWire, useEditor, beginGesture, endGesture } from '../model/store';
 import { formatSI, parseSI } from '../components/util';
 import type { ComponentInstance } from '../model/types';
-import { useSimView } from '../sim/controller';
+import { getSimulator, useSimView } from '../sim/controller';
+
+/** Queue text for a running part (it drains `input[key]` while simulating). */
+function SendField({ comp, f }: { comp: ComponentInstance; f: Extract<PropField, { kind: 'send' }> }) {
+  const running = useEditor((s) => s.running);
+  const [text, setText] = useState('');
+  const send = () => {
+    const sim = getSimulator();
+    if (!sim || !text) return;
+    const inp = sim.input(comp.id);
+    (inp[f.key] ??= [] as string[]).push(f.newline === false ? text : `${text}\r\n`);
+    setText('');
+  };
+  return (
+    <div className="send-row">
+      <input value={text} placeholder={running ? f.placeholder ?? 'type and press Enter' : 'start the simulation first'} disabled={!running} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && send()} />
+      <button className="btn small" disabled={!running || !text} onClick={send}>Send</button>
+    </div>
+  );
+}
 
 function NumberField({ comp, f }: { comp: ComponentInstance; f: Extract<PropField, { kind: 'number' }> }) {
   const value = Number(comp.props[f.key]);
@@ -54,6 +73,8 @@ function Field({ comp, f }: { comp: ComponentInstance; f: PropField }) {
       return <input type="checkbox" checked={!!v} onChange={(e) => setProp(comp.id, f.key, e.target.checked)} />;
     case 'text':
       return <input value={String(v)} onChange={(e) => setProp(comp.id, f.key, e.target.value)} />;
+    case 'send':
+      return <SendField comp={comp} f={f} />;
   }
 }
 
