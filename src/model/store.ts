@@ -21,6 +21,8 @@ export interface EditorState {
   view: ViewMode;
   running: boolean;
   codeOpen: boolean;
+  /** phones: the parts library is a bottom sheet, open or closed */
+  libraryOpen: boolean;
   codeTarget: string | null;
   compileErrors: Record<string, McuError>;
   muted: boolean;
@@ -43,6 +45,7 @@ export const useEditor = create<EditorState>(() => ({
   view: 'breadboard',
   running: false,
   codeOpen: false,
+  libraryOpen: false,
   codeTarget: null,
   compileErrors: {},
   muted: false,

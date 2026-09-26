@@ -20,6 +20,8 @@ type Drag =
   | { kind: 'handle'; wire: string; index: number }
   | { kind: 'wireEnd'; wire: string; end: 'a' | 'b'; cur: Point }
   | { kind: 'press'; comp: string }
+  /** two fingers: zoom about their midpoint and pan with it */
+  | { kind: 'pinch'; d0: number; mx: number; my: number; vp: { x: number; y: number; s: number } }
   | { kind: 'knob'; comp: string; key: string; startY: number; startVal: number; lo: number; hi: number }
   /** a part that is both pushed and turned (encoder, joystick): holding still presses, moving turns */
   | { kind: 'pressOrKnob'; comp: string; knob: Extract<Drag, { kind: 'knob' }>; startX: number; pressed: boolean; timer: number };
@@ -63,6 +65,15 @@ export function Canvas() {
   const snapState = useSimView((s) => s.snap);
   const svgRef = useRef<SVGSVGElement>(null);
   const drag = useRef<Drag | null>(null);
+  /** fingers currently on the canvas (for pinch zoom) */
+  const touches = useRef(new Map<number, { x: number; y: number }>());
+  /** a pinch happened: the fingers still down do nothing until they are all lifted */
+  const pinched = useRef(false);
+  const pinchStart = (): Drag => {
+    const [a, b] = [...touches.current.values()];
+    const r = svgRef.current!.getBoundingClientRect();
+    return { kind: 'pinch', d0: Math.max(10, Math.hypot(a.x - b.x, a.y - b.y)), mx: (a.x + b.x) / 2 - r.left, my: (a.y + b.y) / 2 - r.top, vp: { ...useViewport.getState() } };
+  };
   const [draft, setDraft] = useState<Draft | null>(null);
   const [marquee, setMarquee] = useState<{ a: Point; b: Point } | null>(null);
   const [hover, setHover] = useState<{ comp: string; pin: string; x: number; y: number } | null>(null);
@@ -90,6 +101,9 @@ export function Canvas() {
 
   useEffect(() => {
     const el = svgRef.current!;
+    // record the size now: the first zoom-to-fit runs before the observer's first callback
+    const r0 = el.getBoundingClientRect();
+    setCanvasSize(r0.width, r0.height);
     const ro = new ResizeObserver(() => {
       const r = el.getBoundingClientRect();
       setCanvasSize(r.width, r.height);
@@ -134,6 +148,32 @@ export function Canvas() {
 
   const onPointerDown = (e: React.PointerEvent) => {
     if (e.button === 2) return;
+    if (e.pointerType === 'touch') {
+      // the first finger of a new gesture: forget any finger whose lift we never heard about
+      if (e.isPrimary) {
+        touches.current.clear();
+        pinched.current = false;
+      }
+      touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (touches.current.size === 2) {
+        // a second finger turns whatever the first one started into a pinch
+        if (drag.current?.kind === 'press') {
+          const sim = getSimulator();
+          if (sim) sim.input(drag.current.comp).pressed = false;
+        }
+        if (drag.current?.kind === 'pressOrKnob') window.clearTimeout(drag.current.timer);
+        // a part the first finger started moving stays where it got to (one undo step)
+        if (drag.current && ['move', 'handle', 'knob', 'wireEnd'].includes(drag.current.kind)) endGesture();
+        setWireEndDrag(null);
+        setDraft(null);
+        setMarquee(null);
+        svgRef.current!.setPointerCapture(e.pointerId);
+        drag.current = pinchStart();
+        pinched.current = true;
+        return;
+      }
+      if (touches.current.size > 2) return;
+    }
     const w = toWorld(e.clientX, e.clientY);
     const t = (e.target as Element).closest('[data-kind]') as SVGElement | null;
     const kind = t?.dataset.kind;
@@ -238,8 +278,20 @@ export function Canvas() {
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
+    if (e.pointerType === 'touch' && touches.current.has(e.pointerId)) touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     const w = toWorld(e.clientX, e.clientY);
     const d = drag.current;
+    if (d?.kind === 'pinch') {
+      const [a, b] = [...touches.current.values()];
+      if (!a || !b) return;
+      const r = svgRef.current!.getBoundingClientRect();
+      const s = Math.max(0.25, Math.min(6, d.vp.s * Math.hypot(a.x - b.x, a.y - b.y) / d.d0));
+      const mx = (a.x + b.x) / 2 - r.left, my = (a.y + b.y) / 2 - r.top;
+      // the world point that was under the fingers stays under them
+      const wx = (d.mx - d.vp.x) / d.vp.s, wy = (d.my - d.vp.y) / d.vp.s;
+      useViewport.setState({ s, x: mx - wx * s, y: my - wy * s });
+      return;
+    }
     if (draft) setDraft((x) => (x ? { ...x, cursor: w } : x));
     if (!d) {
       const h = hitAt(e.clientX, e.clientY);
@@ -296,6 +348,13 @@ export function Canvas() {
   };
 
   const onPointerUp = (e: React.PointerEvent) => {
+    touches.current.delete(e.pointerId);
+    if (pinched.current) {
+      // lifting a finger ends the pinch; the others do nothing more until lifted
+      drag.current = null;
+      if (!touches.current.size) pinched.current = false;
+      return;
+    }
     const d = drag.current;
     drag.current = null;
     const w = toWorld(e.clientX, e.clientY);
@@ -462,6 +521,7 @@ export function Canvas() {
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
         onPointerLeave={() => setHover(null)}
         onDoubleClick={onDoubleClick}
         onContextMenu={(e) => e.preventDefault()}
@@ -562,7 +622,13 @@ export function Canvas() {
           {hoverInfo.volts && <em>{hoverInfo.volts}</em>}
         </div>
       )}
-      {draft && <div className="canvas-hint">Click a pin to finish the wire · click empty space to add a bend · Esc to cancel</div>}
+      {draft && (
+        <div className="canvas-hint">
+          <span className="hint-mouse">Click a pin to finish the wire · click empty space to add a bend · Esc to cancel</span>
+          <span className="hint-touch">Tap a pin to finish · tap empty space to bend</span>
+          <button className="hint-cancel" onClick={() => setDraft(null)}>✕ Cancel</button>
+        </div>
+      )}
       {!doc.components.length && (
         <div className="empty-state">
           <div className="empty-card">

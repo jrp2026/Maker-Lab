@@ -60,8 +60,18 @@ export function Toolbar() {
     requestAnimationFrame(() => zoomToFit(useEditor.getState().doc));
   };
 
+  // the toolbar wraps onto several rows on phones; panels that sit under it need its height
+  const headerRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => document.documentElement.style.setProperty('--toolbar-h', `${el.offsetHeight}px`));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   return (
-    <header className="toolbar">
+    <header className="toolbar" ref={headerRef}>
       <div className="brand">
         <div className="logo" aria-hidden>
           <svg viewBox="0 0 32 32" width="26" height="26"><rect width="32" height="32" rx="8" fill="#00a39a" /><path d="M6 16h6l2-6 4 12 2-6h6" stroke="#fff" strokeWidth="2.6" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>
@@ -150,8 +160,9 @@ export function Toolbar() {
       <button className={`btn${codeOpen ? ' active' : ''}`} onClick={() => useEditor.setState({ codeOpen: !codeOpen })}>{'</>'} Code</button>
 
       {running && <SimClock />}
-      <button className={`btn sim-btn${running ? ' running' : ''}`} onClick={toggleSimulation}>
-        {running ? '■ Stop Simulation' : '▶ Start Simulation'}
+      <button className={`btn sim-btn${running ? ' running' : ''}`} onClick={toggleSimulation} aria-label={running ? 'Stop Simulation' : 'Start Simulation'}>
+        {running ? '■' : '▶'} <span className="lbl-lg">{running ? 'Stop Simulation' : 'Start Simulation'}</span>
+        <span className="lbl-sm">{running ? 'Stop' : 'Run'}</span>
       </button>
 
       <input ref={fileRef} type="file" accept=".json,application/json" hidden onChange={async (e) => {

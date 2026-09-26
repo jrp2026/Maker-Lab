@@ -2,7 +2,7 @@ import { memo, useMemo, useState } from 'react';
 import { CATALOG } from '../components/catalog';
 import { DEFS, getDef } from '../components/registry';
 import { boundsOf } from '../components/types';
-import { addComponent, showToast } from '../model/store';
+import { addComponent, showToast, useEditor } from '../model/store';
 import { getCanvasSize, useViewport } from './viewport';
 import type { ComponentInstance } from '../model/types';
 import { forgetPart, useAiParts } from '../ai/library';
@@ -45,7 +45,11 @@ function LibItem({ e }: { e: Entry }) {
         ev.dataTransfer.setData('text/x-component', e.type!);
         ev.dataTransfer.effectAllowed = 'copy';
       }}
-      onClick={() => placeAtCenter(e.type!)}
+      onClick={() => {
+        placeAtCenter(e.type!);
+        // phones: close the sheet so the new part is visible
+        useEditor.setState({ libraryOpen: false });
+      }}
     >
       <div className="thumb"><Thumb type={e.type!} /></div>
       <span>{e.name}</span>
@@ -160,6 +164,8 @@ export function LibraryPanel() {
       <div className="panel-head">
         <h3>Components</h3>
         <span className="muted small">{DEFS.length} parts</span>
+        <span className="grow" />
+        <button className="icon-btn sheet-close" title="Close" onClick={() => useEditor.setState({ libraryOpen: false })}>✕</button>
       </div>
       <button className="ai-cta" onClick={() => setAiOpen(true)}>
         <span>✨</span>

@@ -23,6 +23,7 @@ function isTyping(e: KeyboardEvent) {
 
 export function App() {
   const codeOpen = useEditor((s) => s.codeOpen);
+  const libraryOpen = useEditor((s) => s.libraryOpen);
   const toast = useEditor((s) => s.toast);
   const running = useEditor((s) => s.running);
 
@@ -99,14 +100,21 @@ export function App() {
   }, []);
 
   return (
-    <div className={`app${running ? ' is-running' : ''}`}>
+    <div className={`app${running ? ' is-running' : ''}${libraryOpen ? ' lib-open' : ''}${codeOpen ? ' code-open' : ''}`}>
       <Toolbar />
       <main className="workspace">
         <div className="stage">
           <Canvas />
           <div className="overlay-right"><Inspector /></div>
           <IssuesBar />
+          {/* phones: the parts library opens as a bottom sheet */}
+          {!codeOpen && (
+            <button className="fab-parts" onClick={() => useEditor.setState({ libraryOpen: true })}>
+              <span aria-hidden>＋</span> Parts
+            </button>
+          )}
         </div>
+        {libraryOpen && !codeOpen && <div className="sheet-backdrop" onClick={() => useEditor.setState({ libraryOpen: false })} />}
         {codeOpen ? <CodePanel /> : <LibraryPanel />}
       </main>
       {toast && <div className={`toast ${toast.kind}`}>{toast.text}</div>}

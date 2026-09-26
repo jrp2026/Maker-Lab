@@ -1,8 +1,30 @@
-# MakerLab — browser electronics simulator
+<h1 align="center">MakerLab</h1>
+
+<p align="center">
+  <b>A browser electronics &amp; Arduino simulator</b> — build circuits from 197 realistic parts, write a sketch, press Run.
+</p>
+
+<p align="center">
+  <a href="https://github.com/jrp2026/electronic-simulator/actions/workflows/pages.yml"><img src="https://img.shields.io/github/actions/workflow/status/jrp2026/electronic-simulator/pages.yml?style=flat-square&label=tests%20%26%20deploy" alt="Tests and deploy status"></a>
+  <a href="https://jrp2026.github.io/electronic-simulator/"><img src="https://img.shields.io/badge/demo-live-00a39a?style=flat-square" alt="Live demo"></a>
+  <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-22-339933?style=flat-square&logo=nodedotjs&logoColor=white" alt="Node.js 22"></a>
+  <a href="https://react.dev"><img src="https://img.shields.io/badge/react-19-61dafb?style=flat-square&logo=react&logoColor=black" alt="React 19"></a>
+  <a href="https://www.typescriptlang.org"><img src="https://img.shields.io/badge/typescript-strict-3178c6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript"></a>
+  <a href="https://vite.dev"><img src="https://img.shields.io/badge/vite-8-646cff?style=flat-square&logo=vite&logoColor=white" alt="Vite 8"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue?style=flat-square" alt="License: GPL-3.0"></a>
+</p>
+
+<p align="center">
+  <a href="https://jrp2026.github.io/electronic-simulator/"><b>Open the live demo</b></a> ·
+  <a href="#features">Features</a> ·
+  <a href="#development">Development</a>
+</p>
 
 A Tinkercad-Circuits-style workspace: drag parts onto a breadboard, wire them pin to pin,
 press **Start Simulation** and watch LEDs light, motors spin, meters read and Arduino
-sketches run — all in the browser, no server.
+sketches run — all in the browser, no server. Works on desktop, tablets and phones.
+
+## Development
 
 ```bash
 npm install
@@ -11,13 +33,16 @@ npm test           # solver, sketch compiler and end-to-end simulation tests
 npm run build      # static site in dist/
 ```
 
-**Live demo:** https://jrp2026.github.io/electronic-simulator/
 
 ## Features
 
 - **Canvas** – pan (drag background), zoom (wheel), breadboard and schematic views.
   Parts snap to the 0.1" grid; a leg sitting on a breadboard hole or Uno header plugs in
   (green outline). Hover a pin to see its connected strip and, while simulating, its voltage.
+- **Phones & tablets** – the toolbar wraps to fit, **＋ Parts** opens the parts library as a
+  bottom sheet, pinch to zoom and drag with two fingers to pan, tap a pin to start a wire (a
+  **Cancel** button replaces Esc), the inspector docks at the bottom and the code editor
+  opens full screen.
 - **Wiring** – click a pin, optionally click empty space to add bends, click another pin.
   Select a wire to recolour it, drag bend handles, double-click to add/remove bends, drag an
   end to reconnect.

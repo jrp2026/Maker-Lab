@@ -35,7 +35,7 @@ kbd { background: #f1f4f7; border: 1px solid var(--line); border-bottom-width: 2
 
 /* ---------------------------------------------------------------- toolbar */
 .toolbar {
-  height: 54px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 10px;
+  min-height: 54px; flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; row-gap: 6px; padding: 6px 10px;
   background: var(--panel); border-bottom: 1px solid var(--line); z-index: 20; position: relative;
 }
 .brand { display: flex; align-items: center; gap: 8px; }
@@ -317,3 +317,81 @@ kbd { background: #f1f4f7; border: 1px solid var(--line); border-bottom-width: 2
 .send-row input { flex: 1; min-width: 0; }
 
 .brand-name { font-weight: 800; font-size: 15px; letter-spacing: -0.01em; color: var(--text, #1d2c3a); white-space: nowrap; }
+
+/* ---------------------------------------------------------------- phones & small tablets */
+.fab-parts, .sheet-close, .sheet-backdrop, .lbl-sm, .hint-touch, .hint-cancel { display: none; }
+@supports (height: 100dvh) { .app { height: 100dvh; } }
+
+@media (max-width: 1100px) {
+  .lbl-lg { display: none; }
+  .lbl-sm { display: inline; }
+}
+
+@media (max-width: 760px) {
+  /* toolbar wraps onto a few compact rows instead of running off the screen */
+  .toolbar { height: auto; flex-wrap: wrap; row-gap: 6px; gap: 6px; padding: 6px 8px; }
+  .toolbar > .grow, .brand-name, .doc-name, .tool-group .sep { display: none; }
+  .brand .logo { display: block; }
+  .icon-btn { min-width: 34px; height: 34px; }
+  .btn { height: 34px; padding: 0 10px; }
+  .view-toggle button { padding: 6px 10px; }
+  .lbl-lg { display: none; }
+  .lbl-sm { display: inline; }
+  .sim-btn { margin-left: auto; }
+  /* dropdowns become a full-width sheet so they never hang off the edge */
+  .menu-pop { position: fixed; left: 8px; right: 8px; top: 8px; min-width: 0; max-height: 72dvh; z-index: 300; box-shadow: 0 12px 40px rgba(20, 28, 38, 0.35); }
+
+  /* the parts library is a bottom sheet opened with the ＋ Parts button */
+  .library {
+    position: fixed; left: 0; right: 0; bottom: 0; width: auto; height: min(72dvh, 620px); z-index: 60;
+    border-left: none; border-radius: 16px 16px 0 0; box-shadow: 0 -8px 30px rgba(20, 28, 38, 0.25);
+    transform: translateY(105%); transition: transform 0.22s ease-out;
+  }
+  .lib-open .library { transform: none; }
+  .lib-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
+  .sheet-close { display: inline-flex; }
+  .lib-open .sheet-backdrop { display: block; position: fixed; inset: 0; background: rgba(20, 28, 38, 0.3); z-index: 55; }
+  .fab-parts {
+    display: flex; align-items: center; gap: 6px; position: absolute; right: 12px; bottom: 12px; z-index: 12;
+    height: 44px; padding: 0 16px; border: none; border-radius: 22px; background: var(--accent); color: #fff;
+    font-weight: 700; font-size: 14px; box-shadow: 0 4px 14px rgba(0, 163, 154, 0.4);
+  }
+  .fab-parts span { font-size: 18px; line-height: 1; }
+
+  /* code editor takes the whole screen under the toolbar */
+  .code-panel, .code-panel.wide { position: fixed; left: 0; right: 0; bottom: 0; top: var(--toolbar-h, 130px); width: auto; z-index: 60; border-left: none; }
+
+  /* inspector docks at the bottom, above the Parts button; problems list moves to the top */
+  .overlay-right { top: auto; left: 8px; right: 8px; bottom: 64px; }
+  .inspector { width: auto; max-height: 42dvh; }
+  .issues { top: 8px; bottom: auto; left: 8px; right: 8px; max-width: none; }
+  .issues ul { max-height: 30dvh; }
+
+  .modal-back { padding: 8px; }
+  .modal { max-height: calc(100dvh - 16px); padding: 12px; }
+  .toast { bottom: 70px; max-width: calc(100vw - 24px); }
+}
+
+@media (max-width: 760px) {
+  .inspector { max-height: 36dvh; }
+  .inspector .desc { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+}
+/* very small phones (iPhone SE and friends): tighter toolbar */
+@media (max-width: 380px) {
+  .toolbar { gap: 4px; row-gap: 4px; padding: 5px 6px; }
+  .icon-btn { min-width: 29px; height: 32px; padding: 0 3px; }
+  .btn { height: 32px; padding: 0 8px; font-size: 12.5px; }
+  .view-toggle button { padding: 5px 8px; font-size: 12.5px; }
+  .brand .logo svg { width: 22px; height: 22px; }
+}
+
+/* fingers are bigger than mouse pointers: larger pin targets to start and finish wires */
+@media (pointer: coarse) {
+  .pins circle.pin-target { r: 4.6px; }
+  .hint-mouse { display: none; }
+  .hint-touch { display: inline; }
+  .hint-cancel { display: inline-block; }
+  .pin-target:hover { fill: transparent; stroke: none; }
+}
+.canvas-hint:has(.hint-cancel) { pointer-events: auto; display: flex; align-items: center; gap: 10px; }
+.hint-cancel { border: none; background: rgba(255, 255, 255, 0.18); color: #fff; border-radius: 14px; padding: 4px 10px; font-weight: 700; }
