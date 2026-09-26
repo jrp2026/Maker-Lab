@@ -31,6 +31,18 @@ const FUNCS: Record<string, [number, number, (...a: number[]) => number]> = {
   floor: [1, 1, Math.floor],
   ceil: [1, 1, Math.ceil],
   sign: [1, 1, Math.sign],
+  round: [1, 1, Math.round],
+  atan2: [2, 2, Math.atan2],
+  tanh: [1, 1, Math.tanh],
+  /** positive modulo */
+  mod: [2, 2, (a, b) => (b === 0 ? 0 : ((a % b) + b) % b)],
+  bit: [2, 2, (x, n) => (Math.floor(x) >>> Math.floor(n)) & 1],
+  band: [2, 2, (a, b) => (Math.floor(a) & Math.floor(b)) >>> 0],
+  bor: [2, 2, (a, b) => (Math.floor(a) | Math.floor(b)) >>> 0],
+  bxor: [2, 2, (a, b) => (Math.floor(a) ^ Math.floor(b)) >>> 0],
+  shl: [2, 2, (a, n) => (Math.floor(a) * Math.pow(2, Math.floor(n)))],
+  shr: [2, 2, (a, n) => Math.floor(Math.floor(a) / Math.pow(2, Math.floor(n)))],
+  hi: [2, 2, (x, th) => (x > th ? 1 : 0)],
 };
 
 export class ExprError extends Error {}
@@ -127,13 +139,16 @@ export interface ExprScope {
   /** current through a named element */
   i(name: string): number;
   t(): number;
+  dt?(): number;
+  /** frequency of a tone/PWM signal reaching a pin */
+  freq?(pin: string): number;
   prop(name: string): number | undefined;
 }
 
 export type Compiled = (s: ExprScope) => number;
 
 /** Compile to a closure, checking every name up front. */
-export function compileExpr(src: string | number, names: { nodes: Set<string>; elements: Set<string>; props: Set<string> }): Compiled {
+export function compileExpr(src: string | number, names: { nodes: Set<string>; elements: Set<string>; props: Set<string>; pins?: Set<string> }): Compiled {
   if (typeof src === 'number') return () => src;
   const ast = parseExpr(String(src));
   const build = (e: Expr): Compiled => {
@@ -142,6 +157,7 @@ export function compileExpr(src: string | number, names: { nodes: Set<string>; e
         return () => e.v;
       case 'id': {
         if (e.name === 't') return (s) => s.t();
+        if (e.name === 'dt') return (s) => s.dt?.() ?? 0;
         if (e.name === 'pi' || e.name === 'PI') return () => Math.PI;
         if (e.name === 'true') return () => 1;
         if (e.name === 'false') return () => 0;
@@ -188,6 +204,12 @@ export function compileExpr(src: string | number, names: { nodes: Set<string>; e
           if (ids.length === 1) return (s) => s.v(ids[0]);
           if (ids.length === 2) return (s) => s.v(ids[0]) - s.v(ids[1]);
           throw new ExprError('v() takes one or two names');
+        }
+        if (e.fn === 'freq') {
+          const a = e.args[0];
+          if (e.args.length !== 1 || a.k !== 'id' || !(names.pins ?? names.nodes).has(a.name)) throw new ExprError('freq() needs a pin name');
+          const n = a.name;
+          return (s) => s.freq?.(n) ?? 0;
         }
         if (e.fn === 'i') {
           const a = e.args[0];

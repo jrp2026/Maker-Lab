@@ -74,6 +74,10 @@ export interface ComponentDef {
   build?: (b: SimBuilder, comp: ComponentInstance) => SimComponent;
   /** Is the part interactive during simulation (click / press)? */
   interactive?: 'press' | 'toggle' | 'drag';
+  /** prop flipped 0/1 by a click while simulating (default "position") */
+  toggleKey?: string;
+  /** slider prop adjusted by dragging while simulating (default "position") */
+  dragKey?: string;
   /** Microcontroller boards have code. */
   mcu?: { defaultCode: string; board: BoardSpec };
   /** Thumbnail scale override for the library panel. */

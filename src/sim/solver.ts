@@ -505,3 +505,260 @@ export class BehaviouralResistor extends Behavioural {
     return [i, -i];
   }
 }
+
+// ---------------------------------------------------------------- general helpers for multi-terminal devices
+
+/**
+ * Stamp a linearised terminal current: I_into(row) = Σ coef[k]·v[node k] + c.
+ * Rows/nodes of -1 (unconnected) are skipped.
+ */
+function stampRow(c: StampCtx, row: number, nodes: number[], coefs: number[], constant: number) {
+  if (row < 0) return;
+  const n = c.n;
+  for (let k = 0; k < nodes.length; k++) if (nodes[k] >= 0 && coefs[k] !== 0) c.G[row * n + nodes[k]] += coefs[k];
+  c.I[row] -= constant;
+}
+
+// ---------------------------------------------------------------- MOSFET
+
+export interface MosfetParams {
+  pmos: boolean;
+  /** threshold voltage magnitude (V); negative for depletion devices (JFET-like) */
+  vth: number;
+  /** transconductance parameter (A/V²) */
+  k: number;
+  lambda?: number;
+}
+
+/** Square-law MOSFET with a smooth turn-on. Nodes: [drain, gate, source]. Symmetric (drain/source swap). */
+export class Mosfet extends Prim {
+  nonlinear = true;
+  vgs = 0;
+  vds = 0;
+  constructor(d: number, g: number, s: number, public p: MosfetParams) {
+    super([d, g, s]);
+  }
+  private evalIds(vgs: number, vds: number) {
+    const { vth, k } = this.p;
+    const lambda = this.p.lambda ?? 0.01;
+    const nvt = 0.04;
+    // smooth overdrive (softplus) so the solver sees a continuous derivative near threshold
+    const x = (vgs - vth) / nvt;
+    const vov = x > 30 ? vgs - vth : nvt * Math.log1p(Math.exp(x));
+    const dvov = x > 30 ? 1 : 1 / (1 + Math.exp(-x));
+    let id: number, gm: number, gds: number;
+    if (vds < vov) {
+      id = k * (vov * vds - (vds * vds) / 2) * (1 + lambda * vds);
+      gm = k * vds * (1 + lambda * vds) * dvov;
+      gds = k * (vov - vds) * (1 + lambda * vds) + k * (vov * vds - (vds * vds) / 2) * lambda;
+    } else {
+      id = (k / 2) * vov * vov * (1 + lambda * vds);
+      gm = k * vov * (1 + lambda * vds) * dvov;
+      gds = (k / 2) * vov * vov * lambda;
+    }
+    return { id, gm, gds: gds + 1e-9 };
+  }
+  /** drain current (into drain) in the actual frame, plus Jacobian w.r.t. node voltages */
+  private solve(vd: number, vg: number, vs: number) {
+    const s = this.p.pmos ? -1 : 1;
+    let d0 = vd, s0 = vs, swapped = false;
+    if (s * (vd - vs) < 0) {
+      [d0, s0] = [vs, vd];
+      swapped = true;
+    }
+    const vgs = s * (vg - s0), vds = s * (d0 - s0);
+    const { id, gm, gds } = this.evalIds(vgs, vds);
+    // current into the "effective drain" (actual frame) = s*id
+    return { id: s * id, gm, gds, swapped, vgs, vds };
+  }
+  stamp(c: StampCtx) {
+    const [nd, ng, ns] = this.nodes;
+    const vd = nv(c.v, nd), vg = nv(c.v, ng), vs = nv(c.v, ns);
+    // limit gate-source swings between iterations for robustness
+    const s = this.p.pmos ? -1 : 1;
+    let vgs = s * (vg - vs);
+    if (Math.abs(vgs - this.vgs) > 1) vgs = this.vgs + Math.sign(vgs - this.vgs);
+    const vgL = vs + s * vgs;
+    const r = this.solve(vd, vgL, vs);
+    this.vgs = vgs;
+    this.vds = s * (vd - vs);
+    // effective drain/source nodes
+    const D = r.swapped ? ns : nd, S = r.swapped ? nd : ns;
+    const vD = r.swapped ? vs : vd, vS = r.swapped ? vd : vs;
+    // I_into(D) = id(vgs, vds); partials in actual frame: dI/dVg = gm, dI/dVD = gds, dI/dVS = -(gm+gds)
+    const coefs = [r.gds, r.gm, -(r.gm + r.gds)];
+    const nodes = [D, ng, S];
+    const lin = r.gds * vD + r.gm * vgL - (r.gm + r.gds) * vS;
+    stampRow(c, D, nodes, coefs, r.id - lin);
+    stampRow(c, S, nodes, coefs.map((x) => -x), -(r.id - lin));
+  }
+  converged(v: Float64Array) {
+    const [nd, ng, ns] = this.nodes;
+    const s = this.p.pmos ? -1 : 1;
+    const vgs = s * (nv(v, ng) - nv(v, ns));
+    return Math.abs(vgs - this.vgs) < 1e-6 + 1e-3 * Math.abs(vgs) && Math.abs(s * (nv(v, nd) - nv(v, ns)) - this.vds) < 1e-5 + 1e-3 * Math.abs(this.vds);
+  }
+  currents(v: Float64Array) {
+    const [nd, ng, ns] = this.nodes;
+    const r = this.solve(nv(v, nd), nv(v, ng), nv(v, ns));
+    const idrain = r.swapped ? -r.id : r.id;
+    return [idrain, 0, -idrain];
+  }
+}
+
+// ---------------------------------------------------------------- op-amp / comparator
+
+export interface OpAmpParams {
+  gain: number;
+  /** output headroom below V+ and above V− */
+  dropHigh: number;
+  dropLow: number;
+  rout: number;
+}
+
+/** Op-amp with tanh output saturation. Nodes: [in+, in−, out, V+, V−]. Output current returns through V−. */
+export class OpAmp extends Prim {
+  nonlinear = true;
+  /** normalised tanh argument used in the last iteration (limited like a junction voltage) */
+  private x = 0;
+  constructor(p: number, n: number, out: number, vcc: number, vee: number, public prm: OpAmpParams) {
+    super([p, n, out, vcc, vee]);
+  }
+  private rails(v: Float64Array) {
+    const [, , , vcc, vee] = this.nodes;
+    const hi = nv(v, vcc) - this.prm.dropHigh, lo = nv(v, vee) + this.prm.dropLow;
+    return { c: (hi + lo) / 2, h: Math.max(0.01, (hi - lo) / 2) };
+  }
+  private xOf(v: Float64Array, h: number) {
+    const [p, n] = this.nodes;
+    return (this.prm.gain * (nv(v, p) - nv(v, n))) / h;
+  }
+  stamp(c: StampCtx) {
+    const [p, n, out, , vee] = this.nodes;
+    const { c: mid, h } = this.rails(c.v);
+    let x = this.xOf(c.v, h);
+    // step limiting: the operating point may only move ~2 "tanh units" per iteration
+    if (Math.abs(x - this.x) > 2) x = this.x + 2 * Math.sign(x - this.x);
+    x = Math.max(-40, Math.min(40, x));
+    this.x = x;
+    const t = Math.tanh(x);
+    const vt = mid + h * t;
+    const d = this.prm.gain * (1 - t * t); // dVt/d(vp − vn)
+    const vdL = (x * h) / this.prm.gain;
+    const g = 1 / this.prm.rout;
+    // I_into(out) = g·(v_out − Vt − d·(vd − vdL))
+    const nodes = [out, p, n];
+    const coefs = [g, -g * d, g * d];
+    const k0 = -g * (vt - d * vdL);
+    stampRow(c, out, nodes, coefs, k0);
+    stampRow(c, vee, nodes, coefs.map((q) => -q), -k0);
+  }
+  converged(v: Float64Array) {
+    const { h } = this.rails(v);
+    const x = this.xOf(v, h);
+    if (Math.abs(x) > 30 && Math.abs(this.x) > 30 && Math.sign(x) === Math.sign(this.x)) return true;
+    return Math.abs(x - this.x) < 1e-3;
+  }
+  currents(v: Float64Array) {
+    const [, , out] = this.nodes;
+    const { c: mid, h } = this.rails(v);
+    const x = Math.max(-40, Math.min(40, this.xOf(v, h)));
+    const i = (nv(v, out) - (mid + h * Math.tanh(x))) / this.prm.rout;
+    return [0, 0, i, 0, -i];
+  }
+}
+
+/** Open-collector comparator (LM393 style): output sinks to V− when in+ < in−. Nodes: [in+, in−, out, V−]. */
+export class Comparator extends Prim {
+  nonlinear = true;
+  private lastG = 0;
+  constructor(p: number, n: number, out: number, vee: number, public gon = 1 / 80, public sharpness = 400) {
+    super([p, n, out, vee]);
+  }
+  private g(v: Float64Array) {
+    const [p, n] = this.nodes;
+    const x = Math.max(-40, Math.min(40, this.sharpness * (nv(v, n) - nv(v, p))));
+    const s = 1 / (1 + Math.exp(-x));
+    return { g: this.gon * s + 1e-9, dg: this.gon * this.sharpness * s * (1 - s) };
+  }
+  stamp(c: StampCtx) {
+    const [p, n, out, vee] = this.nodes;
+    const { g, dg } = this.g(c.v);
+    this.lastG = g;
+    const vo = nv(c.v, out) - nv(c.v, vee);
+    // I_into(out) = g(vn − vp)·(v_out − v_vee)
+    const nodes = [out, vee, n, p];
+    const coefs = [g, -g, dg * vo, -dg * vo];
+    const i0 = g * vo;
+    const lin = g * nv(c.v, out) - g * nv(c.v, vee) + dg * vo * nv(c.v, n) - dg * vo * nv(c.v, p);
+    stampRow(c, out, nodes, coefs, i0 - lin);
+    stampRow(c, vee, nodes, coefs.map((x) => -x), -(i0 - lin));
+  }
+  converged(v: Float64Array) {
+    return Math.abs(this.g(v).g - this.lastG) < 1e-7 + 1e-3 * this.lastG;
+  }
+  currents(v: Float64Array) {
+    const [, , out, vee] = this.nodes;
+    const i = this.g(v).g * (nv(v, out) - nv(v, vee));
+    return [0, 0, i, -i];
+  }
+}
+
+// ---------------------------------------------------------------- inductors
+
+export class Inductor extends Prim {
+  iPrev = 0;
+  lastI = 0;
+  constructor(a: number, b: number, public l: number, initial = 0) {
+    super([a, b]);
+    this.iPrev = initial;
+  }
+  stamp(c: StampCtx) {
+    const g = c.h / this.l;
+    addG(c, this.nodes[0], this.nodes[1], g);
+    addI(c, this.nodes[0], this.nodes[1], this.iPrev);
+  }
+  accept(v: Float64Array, h: number) {
+    this.lastI = (h / this.l) * (nv(v, this.nodes[0]) - nv(v, this.nodes[1])) + this.iPrev;
+    this.iPrev = this.lastI;
+  }
+  currents() {
+    return [this.lastI, -this.lastI];
+  }
+}
+
+/** Two coupled inductors (transformer). Nodes: [p1, p2, s1, s2]. */
+export class Transformer extends Prim {
+  i1 = 0;
+  i2 = 0;
+  constructor(p1: number, p2: number, s1: number, s2: number, public l1: number, public l2: number, public k = 0.995) {
+    super([p1, p2, s1, s2]);
+  }
+  private admittance(h: number) {
+    const m = this.k * Math.sqrt(this.l1 * this.l2);
+    const det = this.l1 * this.l2 - m * m;
+    return [(h * this.l2) / det, (-h * m) / det, (-h * m) / det, (h * this.l1) / det];
+  }
+  stamp(c: StampCtx) {
+    const [p1, p2, s1, s2] = this.nodes;
+    const [a11, a12, a21, a22] = this.admittance(c.h);
+    const nodes = [p1, p2, s1, s2];
+    // i1 = a11·v1 + a12·v2 + i1prev (into p1, out of p2), i2 likewise on the secondary
+    const r1 = [a11, -a11, a12, -a12];
+    const r2 = [a21, -a21, a22, -a22];
+    stampRow(c, p1, nodes, r1, this.i1);
+    stampRow(c, p2, nodes, r1.map((x) => -x), -this.i1);
+    stampRow(c, s1, nodes, r2, this.i2);
+    stampRow(c, s2, nodes, r2.map((x) => -x), -this.i2);
+  }
+  accept(v: Float64Array, h: number) {
+    const [p1, p2, s1, s2] = this.nodes;
+    const [a11, a12, a21, a22] = this.admittance(h);
+    const v1 = nv(v, p1) - nv(v, p2), v2 = nv(v, s1) - nv(v, s2);
+    this.i1 = a11 * v1 + a12 * v2 + this.i1;
+    this.i2 = a21 * v1 + a22 * v2 + this.i2;
+  }
+  currents() {
+    return [this.i1, -this.i1, this.i2, -this.i2];
+  }
+}

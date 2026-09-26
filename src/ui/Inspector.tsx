@@ -47,7 +47,7 @@ function Field({ comp, f }: { comp: ComponentInstance; f: PropField }) {
       return (
         <div className="slider-row">
           <input type="range" min={f.min} max={f.max} step={f.step} value={Number(v)} onPointerDown={beginGesture} onPointerUp={endGesture} onChange={(e) => setProp(comp.id, f.key, Number(e.target.value))} />
-          <span className="slider-val">{Math.round(Number(v) * 100)}%</span>
+          <span className="slider-val">{f.unit ? `${+Number(v).toFixed(2)}${f.unit}` : f.max === 1 && f.min === 0 ? `${Math.round(Number(v) * 100)}%` : +Number(v).toFixed(2)}</span>
         </div>
       );
     case 'bool':

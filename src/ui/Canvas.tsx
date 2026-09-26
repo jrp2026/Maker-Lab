@@ -20,7 +20,7 @@ type Drag =
   | { kind: 'handle'; wire: string; index: number }
   | { kind: 'wireEnd'; wire: string; end: 'a' | 'b'; cur: Point }
   | { kind: 'press'; comp: string }
-  | { kind: 'knob'; comp: string; key: string; startY: number; startVal: number };
+  | { kind: 'knob'; comp: string; key: string; startY: number; startVal: number; lo: number; hi: number };
 
 interface Draft {
   from: PinRef;
@@ -179,12 +179,18 @@ export function Canvas() {
           if (comp.type === 'multimeter') {
             const order = ['V', 'A', 'R'];
             setProp(comp.id, 'mode', order[(order.indexOf(String(comp.props.mode)) + 1) % order.length]);
-          } else setProp(comp.id, 'position', Number(comp.props.position) === 1 ? 0 : 1);
+          } else {
+            const key = def.toggleKey ?? 'position';
+            setProp(comp.id, key, Number(comp.props[key]) === 1 ? 0 : 1);
+          }
           select({ comps: [comp.id] });
         } else if (def.interactive === 'drag') {
-          const key = comp.type === 'photoresistor' ? 'light' : 'position';
+          const key = def.dragKey ?? (comp.type === 'photoresistor' ? 'light' : 'position');
+          const f = def.fields?.find((x) => x.key === key);
+          const lo = f && 'min' in f && f.min !== undefined ? f.min : 0;
+          const hi = f && 'max' in f && f.max !== undefined ? f.max : 1;
           beginGesture();
-          drag.current = { kind: 'knob', comp: comp.id, key, startY: e.clientY, startVal: Number(comp.props[key]) };
+          drag.current = { kind: 'knob', comp: comp.id, key, startY: e.clientY, startVal: Number(comp.props[key]), lo, hi };
           select({ comps: [comp.id] });
         }
         return;
@@ -254,8 +260,9 @@ export function Canvas() {
         setWireEndDrag({ wire: d.wire, end: d.end, cur: w });
         break;
       case 'knob': {
-        const v = Math.max(0, Math.min(1, d.startVal + (d.startY - e.clientY) / 150));
-        setProp(d.comp, d.key, Math.round(v * 100) / 100);
+        const span = d.hi - d.lo;
+        const v = Math.max(d.lo, Math.min(d.hi, d.startVal + ((d.startY - e.clientY) / 150) * span));
+        setProp(d.comp, d.key, Math.round(((v - d.lo) / span) * 200) / 200 * span + d.lo);
         break;
       }
     }

@@ -45,10 +45,32 @@ export interface PartProp {
 export type PartElement =
   | { id: string; kind: 'resistor' | 'capacitor'; a: string; b: string; value: string | number }
   | { id: string; kind: 'rvar'; a: string; b: string; value: string | number }
-  | { id: string; kind: 'diode'; a: string; k: string; model?: 'silicon' | 'schottky' | 'power' | 'led' | 'zener'; vz?: number; vf?: number }
+  | { id: string; kind: 'diode'; a: string; k: string; model?: 'silicon' | 'schottky' | 'power' | 'led' | 'zener'; vz?: string | number; vf?: string | number }
   | { id: string; kind: 'npn' | 'pnp'; c: string; b: string; e: string; beta?: number }
   | { id: string; kind: 'vsource'; p: string; n: string; value: string | number; r?: number }
-  | { id: string; kind: 'isource'; p: string; n: string; value: string | number };
+  | { id: string; kind: 'isource'; p: string; n: string; value: string | number }
+  | { id: string; kind: 'nmos' | 'pmos'; d: string; g: string; s: string; vth?: string | number; k?: string | number }
+  | { id: string; kind: 'opamp'; p: string; n: string; out: string; vcc: string; vee: string; gain?: number; railToRail?: boolean }
+  | { id: string; kind: 'comparator'; p: string; n: string; out: string; vee: string }
+  | { id: string; kind: 'inductor'; a: string; b: string; value: string | number }
+  | { id: string; kind: 'transformer'; p1: string; p2: string; s1: string; s2: string; l1: number; ratio: string | number; k?: number };
+
+export interface PartState {
+  name: string;
+  init: string | number;
+  /** new value, evaluated after every simulation step (states update in order) */
+  next: string;
+}
+
+export interface PartAnimation {
+  shape: PartShape;
+  /** rotation in degrees about (cx, cy) */
+  rotate?: string;
+  cx?: number;
+  cy?: number;
+  dx?: string;
+  dy?: string;
+}
 
 export interface PartIndicator {
   shape: PartShape;
@@ -88,13 +110,30 @@ export interface CustomPartSpec {
   warnings?: PartWarning[];
   /** 'press': hold on the canvas while simulating; `pressed` (0/1) is usable in formulas */
   interactive?: 'press';
+  /** click while simulating flips this 0/1 prop */
+  toggle?: string;
+  /** drag up/down while simulating adjusts this slider prop */
+  drag?: string;
   model: { nodes?: string[]; elements: PartElement[] };
+  states?: PartState[];
+  animations?: PartAnimation[];
+  /** tone frequency (Hz) the part emits while the formula is non-zero */
+  sound?: string;
+  /** groups of pins joined inside the part (e.g. both legs of a header, strips of a stripboard) */
+  connections?: string[][];
+  /** largest simulation step this part tolerates (s) */
+  maxStep?: number;
+  /** built-in parts are authored by hand; AI parts get a disclaimer */
+  origin?: 'ai' | 'builtin';
+  /** short text shown under the name in the inspector */
+  summary?: string;
+  keywords?: string[];
   /** the request that produced it */
   prompt?: string;
 }
 
 const CATEGORIES: CategoryId[] = ['passive', 'diodes', 'transistors', 'switches', 'power', 'output', 'instruments', 'mcu', 'boards'];
-const RESERVED = new Set(['t', 'v', 'i', 'pi', 'PI', 'pressed', 'true', 'false']);
+const RESERVED = new Set(['t', 'dt', 'v', 'i', 'pi', 'PI', 'pressed', 'true', 'false', 'freq']);
 const COLOR = /^(#[0-9a-fA-F]{3,8}|[a-zA-Z]{3,20}|rgba?\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*(,\s*(0|1|0?\.\d+)\s*)?\))$/;
 const PATH_D = /^[MmLlHhVvCcSsQqTtAaZz0-9eE.,\s+-]{1,3000}$/;
 const PIN_ID = /^[A-Za-z0-9_+\-]{1,10}$/;
@@ -163,7 +202,8 @@ function slug(s: string) {
  * Validate & normalise untrusted JSON into a part spec. Throws SpecError listing every
  * problem (the list is fed back to the model for a repair round).
  */
-export function validateSpec(raw: any, opts: { keepType?: boolean } = {}): CustomPartSpec {
+export function validateSpec(raw: any, opts: { keepType?: boolean; builtin?: boolean } = {}): CustomPartSpec {
+  const big = !!opts.builtin;
   const problems: string[] = [];
   if (!raw || typeof raw !== 'object') throw new SpecError(['the answer is not a JSON object']);
   const name = str(raw.name, 48)?.trim();
@@ -175,7 +215,7 @@ export function validateSpec(raw: any, opts: { keepType?: boolean } = {}): Custo
   const pins: PartPin[] = [];
   const pinIds = new Set<string>();
   if (!Array.isArray(raw.pins) || !raw.pins.length) problems.push('"pins" must be a non-empty array');
-  for (const [n, p] of (Array.isArray(raw.pins) ? raw.pins : []).slice(0, 40).entries()) {
+  for (const [n, p] of (Array.isArray(raw.pins) ? raw.pins : []).slice(0, big ? 120 : 40).entries()) {
     const id = String(p?.id ?? '');
     if (!PIN_ID.test(id)) problems.push(`pin ${n}: id '${id}' must be 1–10 letters/digits/_+-`);
     else if (pinIds.has(id)) problems.push(`pin id '${id}' is used twice`);
@@ -193,7 +233,7 @@ export function validateSpec(raw: any, opts: { keepType?: boolean } = {}): Custo
 
   // props
   const props: PartProp[] = [];
-  for (const [n, p] of (Array.isArray(raw.props) ? raw.props : []).slice(0, 8).entries()) {
+  for (const [n, p] of (Array.isArray(raw.props) ? raw.props : []).slice(0, big ? 20 : 8).entries()) {
     const key = String(p?.key ?? '');
     if (!NAME.test(key) || RESERVED.has(key)) {
       problems.push(`prop ${n}: key '${key}' must be a simple identifier (not t, v, i, pressed)`);
@@ -219,25 +259,46 @@ export function validateSpec(raw: any, opts: { keepType?: boolean } = {}): Custo
     props.push(prop);
   }
   const propKeys = new Set(props.map((p) => p.key));
+  // state machines
+  const states: PartState[] = [];
+  for (const [n, st] of (Array.isArray(raw.states) ? raw.states : []).slice(0, big ? 96 : 24).entries()) {
+    const name = String(st?.name ?? '');
+    if (!NAME.test(name) || RESERVED.has(name) || propKeys.has(name) || states.some((x) => x.name === name)) {
+      problems.push(`state ${n}: name '${name}' must be a new identifier`);
+      continue;
+    }
+    states.push({ name, init: typeof st.init === 'number' ? st.init : String(st.init ?? '0'), next: String(st.next ?? name) });
+  }
+  const varKeys = new Set([...propKeys, ...states.map((x) => x.name)]);
 
   // model
   const nodes: string[] = [];
-  for (const nm of (Array.isArray(raw.model?.nodes) ? raw.model.nodes : []).slice(0, 30)) {
+  for (const nm of (Array.isArray(raw.model?.nodes) ? raw.model.nodes : []).slice(0, big ? 200 : 30)) {
     const s = String(nm);
     if (!NAME.test(s) || pinIds.has(s) || RESERVED.has(s)) problems.push(`node '${s}' must be a new identifier (not a pin id)`);
     else nodes.push(s);
   }
   const nodeSet = new Set([...pins.map((p) => p.id), ...nodes]);
   const elements: PartElement[] = [];
+  const deferredChecks: [string, string][] = [];
+  /** numeric parameter that may also be a formula of props (evaluated when the circuit is built) */
+  const exprOrNum = (x: unknown, lo: number, hi: number, where: string): string | number | undefined => {
+    if (typeof x === 'number') return num(x, lo, hi);
+    const s = str(x, 200);
+    if (s === undefined || s === '') return undefined;
+    deferredChecks.push([s, where]);
+    return s;
+  };
   const elemIds = new Set<string>();
-  const rawEls = Array.isArray(raw.model?.elements) ? raw.model.elements.slice(0, 60) : [];
+  const rawEls = Array.isArray(raw.model?.elements) ? raw.model.elements.slice(0, big ? 400 : 60) : [];
   if (!rawEls.length) problems.push('"model.elements" must list at least one electrical element');
   const needNode = (el: any, key: string, where: string) => {
     const n = String(el?.[key] ?? '');
     if (!nodeSet.has(n)) problems.push(`${where}: '${key}' = '${n}' is not a pin id or declared node`);
     return n;
   };
-  const exprNames = () => ({ nodes: nodeSet, elements: elemIds, props: new Set([...propKeys, 'pressed']) });
+  const pinSet = new Set(pins.map((p) => p.id));
+  const exprNames = () => ({ nodes: nodeSet, elements: elemIds, props: new Set([...varKeys, 'pressed']), pins: pinSet });
   for (const [n, el] of rawEls.entries()) {
     const id = String(el?.id ?? `E${n + 1}`);
     const where = `element '${id}'`;
@@ -256,7 +317,7 @@ export function validateSpec(raw: any, opts: { keepType?: boolean } = {}): Custo
       case 'diode': {
         const model = ['silicon', 'schottky', 'power', 'led', 'zener'].includes(el.model) ? el.model : 'silicon';
         const d: PartElement = { id, kind, a: needNode(el, 'a', where), k: needNode(el, 'k', where), model };
-        const vz = num(el.vz, 0.5, 400), vf = num(el.vf, 0.1, 5);
+        const vz = exprOrNum(el.vz, 0.5, 400, `${where} vz`), vf = exprOrNum(el.vf, 0.1, 5, `${where} vf`);
         if (vz !== undefined) d.vz = vz;
         if (vf !== undefined) d.vf = vf;
         if (model === 'zener' && vz === undefined) problems.push(`${where}: a zener needs "vz"`);
@@ -275,8 +336,26 @@ export function validateSpec(raw: any, opts: { keepType?: boolean } = {}): Custo
         if (value === undefined || value === '') problems.push(`${where}: needs a value`);
         elements.push({ id, kind, p: needNode(el, 'p', where), n: needNode(el, 'n', where), value: value ?? 0 });
         break;
+      case 'nmos':
+      case 'pmos':
+        elements.push({ id, kind, d: needNode(el, 'd', where), g: needNode(el, 'g', where), s: needNode(el, 's', where), vth: exprOrNum(el.vth, -20, 20, `${where} vth`) ?? 2, k: exprOrNum(el.k, 1e-6, 1000, `${where} k`) ?? 1 });
+        break;
+      case 'opamp':
+        elements.push({ id, kind, p: needNode(el, 'p', where), n: needNode(el, 'n', where), out: needNode(el, 'out', where), vcc: needNode(el, 'vcc', where), vee: needNode(el, 'vee', where), gain: num(el.gain, 1, 1e7) ?? 1e5, railToRail: !!el.railToRail });
+        break;
+      case 'comparator':
+        elements.push({ id, kind, p: needNode(el, 'p', where), n: needNode(el, 'n', where), out: needNode(el, 'out', where), vee: needNode(el, 'vee', where) });
+        break;
+      case 'inductor':
+        if (value === undefined || value === '') problems.push(`${where}: needs a value (henries)`);
+        elements.push({ id, kind, a: needNode(el, 'a', where), b: needNode(el, 'b', where), value: value ?? 1e-3 });
+        break;
+      case 'transformer':
+        elements.push({ id, kind, p1: needNode(el, 'p1', where), p2: needNode(el, 'p2', where), s1: needNode(el, 's1', where), s2: needNode(el, 's2', where), l1: num(el.l1, 1e-6, 1000) ?? 1, ratio: typeof el.ratio === 'number' ? Math.max(1e-3, Math.min(1e3, el.ratio)) : (str(el.ratio, 200) ?? 1), k: num(el.k, 0.5, 0.9999) ?? 0.995 });
+        if (typeof el.ratio === 'string') deferredChecks.push([el.ratio, `${where} ratio`]);
+        break;
       default:
-        problems.push(`${where}: unknown kind '${kind}' (use resistor, capacitor, rvar, diode, npn, pnp, vsource, isource)`);
+        problems.push(`${where}: unknown kind '${kind}' (use resistor, capacitor, rvar, inductor, transformer, diode, npn, pnp, nmos, pmos, opamp, comparator, vsource, isource)`);
     }
   }
   // formulas compile?
@@ -289,10 +368,35 @@ export function validateSpec(raw: any, opts: { keepType?: boolean } = {}): Custo
     }
   };
   for (const el of elements) if ('value' in el) check(el.value, `element '${el.id}' value`);
+  for (const [src, where] of deferredChecks) check(src, where);
+  for (const st of states) {
+    check(st.init, `state '${st.name}' init`);
+    check(st.next, `state '${st.name}' next`);
+  }
+  const animations: PartAnimation[] = [];
+  for (const [n, a] of (Array.isArray(raw.animations) ? raw.animations : []).slice(0, 40).entries()) {
+    const sh = cleanShape(a?.shape, problems, `animation ${n}`);
+    if (!sh) continue;
+    const anim: PartAnimation = { shape: sh, cx: num(a.cx) ?? 0, cy: num(a.cy) ?? 0 };
+    for (const k of ['rotate', 'dx', 'dy'] as const) {
+      if (a[k] === undefined) continue;
+      check(a[k], `animation ${n} ${k}`);
+      anim[k] = String(a[k]);
+    }
+    animations.push(anim);
+  }
+  if (raw.sound !== undefined) check(raw.sound, 'sound');
+  const connections: string[][] = [];
+  for (const g of (Array.isArray(raw.connections) ? raw.connections : []).slice(0, 60)) {
+    if (!Array.isArray(g)) continue;
+    const ids = g.map(String).filter((x: string) => pinIds.has(x));
+    if (ids.length >= 2) connections.push(ids);
+  }
+  const propOk = (k: unknown) => (typeof k === 'string' && propKeys.has(k) ? k : undefined);
 
   // art
   const shapes: PartShape[] = [];
-  for (const [n, s] of (Array.isArray(raw.shapes) ? raw.shapes : []).slice(0, 200).entries()) {
+  for (const [n, s] of (Array.isArray(raw.shapes) ? raw.shapes : []).slice(0, big ? 1200 : 200).entries()) {
     const c = cleanShape(s, problems, `shape ${n}`);
     if (c) shapes.push(c);
   }
@@ -303,14 +407,14 @@ export function validateSpec(raw: any, opts: { keepType?: boolean } = {}): Custo
     if (c) symbol.push(c);
   }
   const indicators: PartIndicator[] = [];
-  for (const [n, ind] of (Array.isArray(raw.indicators) ? raw.indicators : []).slice(0, 10).entries()) {
+  for (const [n, ind] of (Array.isArray(raw.indicators) ? raw.indicators : []).slice(0, big ? 300 : 10).entries()) {
     const sh = cleanShape(ind?.shape, problems, `indicator ${n}`);
     if (!sh) continue;
     check(ind.level, `indicator ${n} level`);
     indicators.push({ shape: sh, color: color(ind.color) ?? '#ffd54a', level: String(ind.level ?? '0') });
   }
   const readouts: PartReadout[] = [];
-  for (const [n, r] of (Array.isArray(raw.readouts) ? raw.readouts : []).slice(0, 6).entries()) {
+  for (const [n, r] of (Array.isArray(raw.readouts) ? raw.readouts : []).slice(0, 12).entries()) {
     check(r?.value, `readout ${n}`);
     readouts.push({ label: str(r?.label, 12), value: String(r?.value ?? '0'), unit: str(r?.unit, 4), x: num(r?.x) ?? 0, y: num(r?.y) ?? 0, size: num(r?.size, 3, 20), color: color(r?.color) });
   }
@@ -321,7 +425,12 @@ export function validateSpec(raw: any, opts: { keepType?: boolean } = {}): Custo
   }
 
   if (problems.length) throw new SpecError(problems);
-  const type = opts.keepType && typeof raw.type === 'string' && /^ai-[a-z0-9-]{1,48}$/.test(raw.type) ? raw.type : `ai-${slug(name!)}-${Math.random().toString(36).slice(2, 7)}`;
+  const type =
+    opts.builtin && typeof raw.type === 'string'
+      ? raw.type
+      : opts.keepType && typeof raw.type === 'string' && /^ai-[a-z0-9-]{1,48}$/.test(raw.type)
+        ? raw.type
+        : `ai-${slug(name!)}-${Math.random().toString(36).slice(2, 7)}`;
   return {
     version: 1,
     type,
@@ -336,7 +445,17 @@ export function validateSpec(raw: any, opts: { keepType?: boolean } = {}): Custo
     readouts: readouts.length ? readouts : undefined,
     warnings: warnings.length ? warnings : undefined,
     interactive: raw.interactive === 'press' ? 'press' : undefined,
+    toggle: propOk(raw.toggle),
+    drag: propOk(raw.drag),
     model: { nodes, elements },
+    states: states.length ? states : undefined,
+    animations: animations.length ? animations : undefined,
+    sound: raw.sound !== undefined ? String(raw.sound) : undefined,
+    connections: connections.length ? connections : undefined,
+    maxStep: num(raw.maxStep, 1e-6, 1e-3),
+    origin: opts.builtin ? 'builtin' : 'ai',
+    summary: str(raw.summary, 60),
+    keywords: Array.isArray(raw.keywords) ? raw.keywords.slice(0, 20).map((k: unknown) => String(k).slice(0, 30)) : undefined,
     prompt: str(raw.prompt, 300),
   };
 }

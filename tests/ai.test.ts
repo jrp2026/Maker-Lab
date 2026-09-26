@@ -37,7 +37,7 @@ describe('part spec validation', () => {
       name: 'x',
       pins: [{ id: 'A', x: 0, y: 0 }, { id: 'A', x: 0, y: 0 }],
       shapes: [{ type: 'path', d: 'M0 0 L10 10"/><script>alert(1)</script>' }, { type: 'foreignObject' }, { type: 'rect', x: 0, y: 0, w: 5, h: 5, fill: 'url(javascript:alert(1))' }],
-      model: { elements: [{ id: 'R1', kind: 'resistor', a: 'A', b: 'Z', value: 'evil()' }, { kind: 'transformer' }] },
+      model: { elements: [{ id: 'R1', kind: 'resistor', a: 'A', b: 'Z', value: 'evil()' }, { kind: 'flux_capacitor' }] },
     };
     try {
       validateSpec(bad);
@@ -49,7 +49,7 @@ describe('part spec validation', () => {
       expect(p).toMatch(/unknown shape type/);
       expect(p).toMatch(/'Z' is not a pin/);
       expect(p).toMatch(/unknown function 'evil'/);
-      expect(p).toMatch(/unknown kind 'transformer'/);
+      expect(p).toMatch(/unknown kind 'flux_capacitor'/);
     }
     // a colour that isn't a plain colour is dropped rather than rendered
     const ok = validateSpec({ ...EXAMPLE_7805, shapes: [{ type: 'rect', x: 0, y: 0, w: 5, h: 5, fill: 'url(javascript:alert(1))' }] });

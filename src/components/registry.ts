@@ -10,6 +10,7 @@ import { arduinoUno } from './defs/arduino';
 import { esp32 } from './defs/esp32';
 import { servo } from './defs/servo';
 import { lcdI2C, lcdParallel } from './defs/lcd';
+import { buildSpecParts } from '../parts';
 
 export const DEFS: ComponentDef[] = [
   breadboardSmall, breadboardFull,
@@ -22,6 +23,7 @@ export const DEFS: ComponentDef[] = [
   lcdParallel, lcdI2C,
   multimeter, oscilloscope,
   arduinoUno, esp32,
+  ...buildSpecParts(),
 ];
 
 const byType = new Map(DEFS.map((d) => [d.type, d]));
