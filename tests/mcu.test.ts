@@ -47,6 +47,18 @@ describe('sketch compiler', () => {
     expect(r.serialOut.trim().split('\n')).toEqual(['3', '24464', '4', '300000', '3.50', '65535', '-1', 'FF', '101', 'A', '3.142']);
   });
 
+  it('lets a named enum be used as a type (variables, parameters, arrays)', () => {
+    const r = run(`
+      enum Phase { GREEN, YELLOW = 5, RED };
+      Phase now = YELLOW;
+      const Phase order[] = {RED, GREEN};
+      Phase next(Phase p) { return p == RED ? GREEN : (p == GREEN ? YELLOW : RED); }
+      void setup() { Serial.begin(9600); Serial.println(now); now = next(now); Serial.println(now); Serial.println(next(order[1])); }
+      void loop() {}
+    `, 1000);
+    expect(r.serialOut.trim().split('\n')).toEqual(['5', '6', '5']);
+  });
+
   it('supports functions, arrays, loops, switch, strings and statics', () => {
     const r = run(`
       #define N 5

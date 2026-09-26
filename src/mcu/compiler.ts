@@ -383,7 +383,8 @@ class Parser {
 
   parseEnum(): Stmt {
     this.expect('enum');
-    if (this.cur.k === 'id') this.i++;
+    // a named enum is also a type: `enum Phase {…}; Phase p = GREEN;` (values are ints)
+    if (this.cur.k === 'id') this.typedefs.set(this.ident().v, T('int'));
     this.expect('{');
     let val = 0;
     const decls: Declarator[] = [];

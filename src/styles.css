@@ -86,6 +86,11 @@ kbd { background: #f1f4f7; border: 1px solid var(--line); border-bottom-width: 2
   position: absolute; right: 0; top: 38px; min-width: 300px; max-height: 70vh; overflow: auto; background: #fff;
   border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); padding: 6px; z-index: 50;
 }
+.menu-heading {
+  padding: 10px 10px 4px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent-dark);
+  border-top: 1px solid var(--line); margin-top: 4px;
+}
+.menu-heading:first-child { border-top: none; margin-top: 0; padding-top: 6px; }
 .menu-item {
   display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; text-align: left;
   border: none; background: transparent; padding: 8px 10px; border-radius: 8px;

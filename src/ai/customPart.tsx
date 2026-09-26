@@ -434,6 +434,7 @@ export function defFromSpec(spec: CustomPartSpec, ext?: PartExt): ComponentDef {
         dy: a.dy !== undefined ? compile(a.dy) : null,
       }));
       const sound = spec.sound !== undefined ? compile(spec.sound) : null;
+      const maxStepFn = typeof spec.maxStep === 'string' ? compile(spec.maxStep) : null;
       const levels = (spec.indicators ?? []).map((ind) => compile(ind.level));
       const readouts = (spec.readouts ?? []).map((r) => compile(r.value));
       const checks = (spec.warnings ?? []).map((w) => ({ ...w, fn: compile(w.when) }));
@@ -445,7 +446,9 @@ export function defFromSpec(spec: CustomPartSpec, ext?: PartExt): ComponentDef {
           stepH = h;
           if (hooks.values) extVals = hooks.values();
         },
-        maxStep: spec.maxStep ? () => spec.maxStep! : undefined,
+        maxStep: maxStepFn
+          ? () => Math.min(1e-3, Math.max(1e-6, maxStepFn(scope) || 1e-3))
+          : spec.maxStep ? () => spec.maxStep as number : undefined,
         afterStep(v, h) {
           cur = v;
           stepH = h;

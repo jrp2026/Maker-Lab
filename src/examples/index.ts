@@ -5,6 +5,7 @@ import { EXAMPLE_7805 } from '../ai/prompt';
 import { validateSpec } from '../ai/spec';
 import { registerSpec } from '../ai/library';
 import { DEVICE_EXAMPLES } from './devices';
+import { ADVANCED_EXAMPLES } from './advanced';
 
 // ------------------------------------------------------------------ placement helpers
 
@@ -351,6 +352,8 @@ export interface Example {
   id: string;
   name: string;
   description: string;
+  /** heading the example is listed under in the Examples menu */
+  group?: string;
   build: () => CircuitDoc;
 }
 
@@ -616,5 +619,6 @@ export const EXAMPLES: Example[] = [
       };
     },
   },
-  ...DEVICE_EXAMPLES,
+  ...DEVICE_EXAMPLES.map((e) => ({ ...e, group: 'Modules & ICs' })),
+  ...ADVANCED_EXAMPLES.map((e) => ({ ...e, group: 'Advanced projects' })),
 ];

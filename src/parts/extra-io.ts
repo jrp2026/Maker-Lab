@@ -770,7 +770,7 @@ const fourDigit: Raw = (() => {
       rect(-26, 8, 104, 12, '#ffffff', { opacity: 0.04 }),
     ],
     // each segment holds its glow for a few ms so a multiplexed digit looks steadily lit
-    states: digits.flatMap((k) => segs.map((s) => ({ name: `b${k}${s}`, init: 0, next: `max(clamp(i(L${k}${s}) / 0.008, 0, 1), b${k}${s} - dt / 0.03)` }))),
+    states: digits.flatMap((k) => segs.map((s) => ({ name: `b${k}${s}`, init: 0, next: `max(clamp(i(L${k}${s}) / 0.004, 0, 1), b${k}${s} - dt / 0.03)` }))),
     indicators: digits.flatMap((k) => segs.map((s) => ({ shape: { ...segShape(ox(k), s), fill: '#ff2a1a' }, color: '#ff2a1a', level: `b${k}${s}` }))),
     model: { elements: digits.flatMap((k) => segs.map((s) => ({ id: `L${k}${s}`, kind: 'diode', a: s, k: `D${k}`, model: 'led', vf: 1.9 }))) },
     warnings: digits.map((k) => ({ when: segs.map((s) => `i(L${k}${s}) > 0.03`).join(' || '), level: 'error', message: `A digit ${k} segment carries more than 30 mA — add series resistors on the segment pins.` })),

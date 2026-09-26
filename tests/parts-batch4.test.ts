@@ -148,6 +148,27 @@ describe('third batch: analog, power & discretes', () => {
     expect(volts('s:1') - volts('p:GND')).toBeLessThan(0.1);
   });
 
+  it('a 555 at ~1 kHz keeps its timing with the adaptive step (counted by a 74HC393)', () => {
+    // f = 1.44 / ((1 k + 2 × 6.8 k) × 100 nF) ≈ 986 Hz; the two counters are chained to count to 255
+    const doc: CircuitDoc = {
+      version: 1, name: 't',
+      components: [usb(), part('t', 'ne555'), part('r1', 'resistor', { resistance: 1000 }), part('r2', 'resistor', { resistance: 6800 }), part('c', 'capacitor', { capacitance: 100e-9 }), part('n', '74hc393')],
+      wires: [
+        wire('p.VBUS', 't.VCC'), wire('p.VBUS', 't.RESET'), wire('p.GND', 't.GND'), wire('p.VBUS', 'r1.1'), wire('r1.2', 't.DIS'), wire('t.DIS', 'r2.1'),
+        wire('r2.2', 't.THR'), wire('t.THR', 't.TRIG'), wire('t.TRIG', 'c.1'), wire('c.2', 'p.GND'),
+        ...pw('n'), wire('t.OUT', 'n.CP1'), wire('n.Q31', 'n.CP2'), ...lo('n', 'MR1', 'MR2'),
+      ],
+    };
+    const sim = new Simulator(doc);
+    sim.start();
+    while (sim.time < 0.2 - 1e-6) sim.advance(0.2 - sim.time);   // not limited by the per-frame CPU budget
+    const v = sim.snapshot().comps.n!.vars!;
+    const hz = (v.c1 + 16 * v.c2) / sim.time;
+    // within ~15 % of the textbook value (the model's 50 µs step floor stretches each half-period slightly)
+    expect(hz).toBeGreaterThan(830);
+    expect(hz).toBeLessThan(1000);
+  });
+
   it('the siren wails while powered', () => {
     const { snap } = simulate([part('b', 'battery'), part('z', 'siren')], [wire('b.+', 'z.P'), wire('b.-', 'z.N')], 0.05);
     expect(snap.comps.z!.freq).toBeGreaterThan(1000);

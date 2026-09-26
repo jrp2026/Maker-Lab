@@ -135,9 +135,16 @@ npm run build      # static site in dist/
   There's also a built-in example part to try without any AI.
 - **Projects** – autosave, save/open in the browser, JSON import/export, PNG export, and share
   links that carry the whole circuit in the URL.
-- **Examples** – blink, button, dimmer, RC charging, motor, melody, servo, LCD, ESP32, interrupts,
-  OLED, NeoPixel rainbow, weather station, parking sensor, stepper, RFID lock, 555 blinker,
-  74HC595 chaser, two-board nRF24 remote, and an AI-made regulator.
+- **Examples** (31, in three groups):
+  - *getting started*: blink, button, dimmer, RC charging, motor, melody, servo, LCD, ESP32, interrupts,
+    and an AI-made regulator
+  - *modules & ICs*: OLED, NeoPixel rainbow, weather station, parking sensor, stepper, RFID lock,
+    555 blinker, 74HC595 chaser, two-board nRF24 remote
+  - *advanced projects*: thermostat with hysteresis (relay + heater + LCD), traffic intersection
+    (enum/switch state machine, interrupt crossing button), automatic plant waterer (OLED, MOSFET pump),
+    stopwatch on a multiplexed 4-digit display, keypad door lock (Keypad, Servo, String), PWM fan
+    controller (NTC beta equation), two-LDR solar tracker, reaction-time game (EEPROM high score),
+    and two no-code logic circuits — a DIP-switch binary adder and a 555 → 74HC393 → CD4511 decimal counter
 
 ## Layout
 

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import {
   deleteSelection, flipSelection, loadDoc, redo, rotateSelection, showToast, undo, updateDoc, useEditor,
 } from '../model/store';
@@ -103,12 +103,19 @@ export function Toolbar() {
       <Menu label="Examples" icon="✦">
         {(close) => (
           <>
-            {EXAMPLES.map((ex) => (
-              <button key={ex.id} className="menu-item" onClick={() => { loadExample(ex.id); close(); }}>
-                <b>{ex.name}</b>
-                <span>{ex.description}</span>
-              </button>
-            ))}
+            {EXAMPLES.map((ex, i) => {
+              const group = ex.group ?? 'Getting started';
+              const heading = i === 0 || group !== (EXAMPLES[i - 1].group ?? 'Getting started');
+              return (
+                <Fragment key={ex.id}>
+                  {heading && <div className="menu-heading">{group}</div>}
+                  <button className="menu-item" onClick={() => { loadExample(ex.id); close(); }}>
+                    <b>{ex.name}</b>
+                    <span>{ex.description}</span>
+                  </button>
+                </Fragment>
+              );
+            })}
           </>
         )}
       </Menu>

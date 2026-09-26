@@ -138,7 +138,8 @@ export interface CustomPartSpec {
   /** groups of pins joined inside the part (e.g. both legs of a header, strips of a stripboard) */
   connections?: string[][];
   /** largest simulation step this part tolerates (s) */
-  maxStep?: number;
+  /** a number, or a formula evaluated before every step (clamped to 1 µs … 1 ms) */
+  maxStep?: number | string;
   /** built-in parts are authored by hand; AI parts get a disclaimer */
   origin?: 'ai' | 'builtin';
   /** short text shown under the name in the inspector */
@@ -416,6 +417,7 @@ export function validateSpec(raw: any, opts: { keepType?: boolean; builtin?: boo
     animations.push(anim);
   }
   if (raw.sound !== undefined) check(raw.sound, 'sound');
+  if (typeof raw.maxStep === 'string') check(raw.maxStep, 'maxStep');
   const connections: string[][] = [];
   for (const g of (Array.isArray(raw.connections) ? raw.connections : []).slice(0, 60)) {
     if (!Array.isArray(g)) continue;
@@ -482,7 +484,7 @@ export function validateSpec(raw: any, opts: { keepType?: boolean; builtin?: boo
     animations: animations.length ? animations : undefined,
     sound: raw.sound !== undefined ? String(raw.sound) : undefined,
     connections: connections.length ? connections : undefined,
-    maxStep: num(raw.maxStep, 1e-6, 1e-3),
+    maxStep: typeof raw.maxStep === 'string' ? String(raw.maxStep) : num(raw.maxStep, 1e-6, 1e-3),
     origin: opts.builtin ? 'builtin' : 'ai',
     summary: str(raw.summary, 60),
     keywords: Array.isArray(raw.keywords) ? raw.keywords.slice(0, 20).map((k: unknown) => String(k).slice(0, 30)) : undefined,

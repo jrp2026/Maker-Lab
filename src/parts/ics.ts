@@ -15,7 +15,14 @@ export const ANALOG_ICS: Raw[] = [
       description: 'The classic NE555: astable (blinker/oscillator), monostable (one-shot) or Schmitt trigger. Internal 5k–5k–5k divider sets the ⅓ and ⅔ VCC thresholds; OUT is ~1.7 V below VCC when high; DIS shorts to GND while OUT is low. 4.5–16 V.',
       keywords: ['555', 'ne555', 'timer', 'astable', 'monostable', 'oscillator', 'blinker', 'pwm'],
       ...d,
-      states: [{ name: 'q', init: 0, next: `v(RESET, GND) < 0.7 ? 0 : (v(TRIG, GND) < v(N1, GND) ? 1 : (v(THR, GND) > v(CTRL, GND) ? 0 : q))` }],
+      states: [
+        { name: 'q', init: 0, next: `v(RESET, GND) < 0.7 ? 0 : (v(TRIG, GND) < v(N1, GND) ? 1 : (v(THR, GND) > v(CTRL, GND) ? 0 : q))` },
+        // how fast THR and TRIG are moving, for the adaptive step below
+        { name: 'sh', init: 0, next: '(v(THR, GND) - ph) / max(dt, 1e-9)' },
+        { name: 'ph', init: 0, next: 'v(THR, GND)' },
+        { name: 'st', init: 0, next: '(v(TRIG, GND) - pt) / max(dt, 1e-9)' },
+        { name: 'pt', init: 0, next: 'v(TRIG, GND)' },
+      ],
       model: {
         nodes: ['N1'],
         elements: [
@@ -34,7 +41,9 @@ export const ANALOG_ICS: Raw[] = [
         { when: 'v(VCC, GND) > 16', level: 'error', message: 'Supply above the 16 V maximum.' },
         { when: 'abs(i(OUTD)) > 0.2', level: 'warn', message: 'OUT is sourcing/sinking more than 200 mA.' },
       ],
-      maxStep: 5e-5,
+      // small steps only near a threshold: cover at most a quarter of the remaining distance per step
+      // (a slow 1 Hz blinker runs at 1 ms steps, an audio-rate oscillator still gets 50 µs)
+      maxStep: 'max(5e-5, min(0.25 * abs(v(CTRL, GND) - v(THR, GND)) / max(abs(sh), 1e-3), 0.25 * abs(v(TRIG, GND) - v(N1, GND)) / max(abs(st), 1e-3)))',
     };
   })(),
   (() => {
