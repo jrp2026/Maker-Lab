@@ -1,9 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { EditorView, basicSetup } from 'codemirror';
 import { cpp } from '@codemirror/lang-cpp';
-import { EditorSelection } from '@codemirror/state';
+import { Compartment, EditorSelection, EditorState } from '@codemirror/state';
 import { getDef } from '../components/registry';
-import { setPropSilent, useEditor } from '../model/store';
+import { setProp, setPropSilent, useEditor } from '../model/store';
+
+const BlocksEditor = lazy(() => import('../blocks/BlocksEditor'));
+type CodeMode = 'blocks' | 'blocks+text' | 'text';
+const editable = new Compartment();
 import { getSimulator, useSimView } from '../sim/controller';
 import { McuRuntime, type McuError } from '../mcu/runtime';
 
@@ -61,6 +65,18 @@ export function CodePanel() {
   const comp = mcus.find((c) => c.id === target) ?? mcus[0];
   const compId = comp?.id;
   const runtimeErr = useSimView((s) => (compId ? s.snap?.warnings.find((w) => w.comp === compId && /Runtime error/.test(w.message))?.message : undefined));
+  const mode = (String(comp?.props.codeMode ?? 'text') as CodeMode);
+  const board = comp ? getDef(comp.type)!.mcu!.board : undefined;
+
+  const switchMode = (next: CodeMode) => {
+    if (!comp || next === mode) return;
+    const fromText = mode === 'text';
+    if (fromText && next !== 'text') {
+      const ok = window.confirm('Switch to blocks?\n\nThe code will be generated from the block program, replacing the text you have now.');
+      if (!ok) return;
+    }
+    setProp(comp.id, 'codeMode', next);
+  };
 
   useEffect(() => {
     if (!hostRef.current || !comp) return;
@@ -70,6 +86,7 @@ export function CodePanel() {
         basicSetup,
         cpp(),
         theme,
+        editable.of([EditorState.readOnly.of(mode !== 'text'), EditorView.editable.of(mode === 'text')]),
         EditorView.updateListener.of((u) => {
           if (u.docChanged) {
             setPropSilent(comp.id, 'code', u.state.doc.toString());
@@ -85,7 +102,11 @@ export function CodePanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [compId]);
 
-  // keep the editor in sync if the code changes from outside (undo, example load)
+  useEffect(() => {
+    viewRef.current?.dispatch({ effects: editable.reconfigure([EditorState.readOnly.of(mode !== 'text'), EditorView.editable.of(mode === 'text')]) });
+  }, [mode]);
+
+  // keep the editor in sync if the code changes from outside (undo, example load, blocks)
   useEffect(() => {
     const view = viewRef.current;
     if (!view || !comp) return;
@@ -112,7 +133,7 @@ export function CodePanel() {
   };
 
   return (
-    <aside className="code-panel">
+    <aside className={`code-panel${mode !== 'text' ? ' wide' : ''}`}>
       <div className="panel-head">
         <h3>Code</h3>
         {mcus.length > 1 && (
@@ -126,15 +147,37 @@ export function CodePanel() {
       </div>
       {!comp ? (
         <div className="pad muted">
-          <p>Add an <b>Arduino Uno</b> to the canvas to write code for it.</p>
+          <p>Add an <b>Arduino Uno</b> or <b>ESP32</b> to the canvas to program it.</p>
         </div>
       ) : (
         <>
           <div className="code-meta">
-            <span className="chip">Text (Arduino C++)</span>
-            <span className="chip disabled" title="Block-based coding is planned">Blocks · soon</span>
-            {running && <span className="muted small">Code changes apply when you restart the simulation.</span>}
+            <div className="mode-tabs" role="tablist">
+              {(['blocks', 'blocks+text', 'text'] as CodeMode[]).map((m) => (
+                <button key={m} className={mode === m ? 'on' : ''} onClick={() => switchMode(m)}>
+                  {m === 'blocks' ? 'Blocks' : m === 'blocks+text' ? 'Blocks + Text' : 'Text'}
+                </button>
+              ))}
+            </div>
+            <span className="muted small">{board?.name}</span>
+            {running && <span className="muted small">Changes apply when you restart the simulation.</span>}
           </div>
+          {mode !== 'text' && board && (
+            <div className="blocks-wrap">
+              <Suspense fallback={<div className="pad muted">Loading blocks…</div>}>
+                <BlocksEditor
+                  key={comp.id}
+                  value={String(comp.props.blocks ?? '')}
+                  board={board}
+                  onChange={(json, code) => {
+                    setPropSilent(comp.id, 'blocks', json);
+                    setPropSilent(comp.id, 'code', code);
+                    setCheck(null);
+                  }}
+                />
+              </Suspense>
+            </div>
+          )}
           {err && (
             <div className="code-error" onClick={() => goTo(err.line)}>
               <b>{err.kind === 'compile' ? 'Compile error' : 'Error'}{err.line ? ` · line ${err.line}` : ''}</b>
@@ -143,7 +186,7 @@ export function CodePanel() {
           )}
           {runtimeErr && <div className="code-error"><span>{runtimeErr}</span></div>}
           {check?.ok && <div className="code-ok">Compiled successfully.</div>}
-          <div className="editor-host" ref={hostRef} />
+          <div className={`editor-host${mode === 'blocks' ? ' hidden' : ''}${mode === 'blocks+text' ? ' readonly' : ''}`} ref={hostRef} />
           <SerialMonitor target={comp.id} />
         </>
       )}
