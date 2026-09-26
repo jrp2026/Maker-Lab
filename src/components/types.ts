@@ -48,7 +48,14 @@ export type CategoryId =
   | 'power'
   | 'mcu'
   | 'instruments'
-  | 'output';
+  | 'output'
+  | 'drivers'
+  | 'ics'
+  | 'logic'
+  | 'memory'
+  | 'sensors'
+  | 'displays'
+  | 'comms';
 
 export interface ComponentDef {
   type: string;

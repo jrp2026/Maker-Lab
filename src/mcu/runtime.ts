@@ -22,6 +22,8 @@ export interface PinState {
   volts: number;
   /** last digital level seen by digitalRead (hysteresis) */
   level: 0 | 1;
+  /** rising edges written so far (clock inputs of counters / stepper drivers count these) */
+  rises: number;
 }
 
 export interface McuError {
@@ -56,6 +58,8 @@ export class McuRuntime {
   libWarnings = new Set<string>();
   lib = { create: (cls: string, args: unknown[]) => createLib(this, cls, args) };
   wire = new WireLib(this);
+  /** called on every digitalWrite of an output (devices that clock data on edges listen here) */
+  pinListeners = new Set<(pin: number, value: 0 | 1, t: number) => void>();
   private gen: Generator<number, void, unknown> | null = null;
   private seed = 12345;
   private isrs = new Map<number, Isr>();
@@ -76,6 +80,7 @@ export class McuRuntime {
       dac: null,
       volts: 0,
       level: 0 as 0 | 1,
+      rises: 0,
     }));
   }
 
@@ -283,8 +288,12 @@ export class McuRuntime {
     pin.pwm = null;
     pin.servo = null;
     pin.dac = null;
-    if (pin.mode === 'output') pin.value = v ? 1 : 0;
-    else pin.mode = v ? 'pullup' : 'input'; // writing an input toggles the pull-up, like the real AVR
+    if (pin.mode === 'output') {
+      const nv = v ? 1 : 0;
+      if (nv && !pin.value) pin.rises++;
+      pin.value = nv;
+      if (this.pinListeners.size) for (const l of this.pinListeners) l(this.pinIndex(p), nv, this.t);
+    } else pin.mode = v ? 'pullup' : 'input'; // writing an input toggles the pull-up, like the real AVR
   }
   digitalRead(p: number): number {
     return this.levelOf(this.pinIndex(p));

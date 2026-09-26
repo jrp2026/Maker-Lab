@@ -633,8 +633,18 @@ export class OpAmp extends Prim {
     const [p, n] = this.nodes;
     return (this.prm.gain * (nv(v, p) - nv(v, n))) / h;
   }
+  /** no supply across the chip: the output just sits at V− through its output resistance */
+  private unpowered(v: Float64Array) {
+    const [, , , vcc, vee] = this.nodes;
+    return nv(v, vcc) - nv(v, vee) < this.prm.dropHigh + this.prm.dropLow + 0.05;
+  }
   stamp(c: StampCtx) {
     const [p, n, out, , vee] = this.nodes;
+    if (this.unpowered(c.v)) {
+      addG(c, out, vee, 1 / this.prm.rout);
+      this.x = 0;
+      return;
+    }
     const { c: mid, h } = this.rails(c.v);
     let x = this.xOf(c.v, h);
     // step limiting: the operating point may only move ~2 "tanh units" per iteration
@@ -654,13 +664,19 @@ export class OpAmp extends Prim {
     stampRow(c, vee, nodes, coefs.map((q) => -q), -k0);
   }
   converged(v: Float64Array) {
+    if (this.unpowered(v)) return this.x === 0;
     const { h } = this.rails(v);
     const x = this.xOf(v, h);
     if (Math.abs(x) > 30 && Math.abs(this.x) > 30 && Math.sign(x) === Math.sign(this.x)) return true;
-    return Math.abs(x - this.x) < 1e-3;
+    // settled when the target output voltage no longer moves (tiny when the op-amp is unpowered)
+    return Math.abs(x - this.x) < 1e-3 || h * Math.abs(Math.tanh(Math.max(-40, Math.min(40, x))) - Math.tanh(this.x)) < 1e-6;
   }
   currents(v: Float64Array) {
-    const [, , out] = this.nodes;
+    const [, , out, , vee] = this.nodes;
+    if (this.unpowered(v)) {
+      const i0 = (nv(v, out) - nv(v, vee)) / this.prm.rout;
+      return [0, 0, i0, 0, -i0];
+    }
     const { c: mid, h } = this.rails(v);
     const x = Math.max(-40, Math.min(40, this.xOf(v, h)));
     const i = (nv(v, out) - (mid + h * Math.tanh(x))) / this.prm.rout;

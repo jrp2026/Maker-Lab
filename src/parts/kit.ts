@@ -187,3 +187,21 @@ export function motorModel(p: string, n: string, o: { r: number; k: number; j: n
 }
 
 export const rpm = (gear = 1) => `w * 60 / 6.28318 / ${gear}`;
+
+/** Tri-state push-pull output: drives `cond` when `en` is true, otherwise high impedance. */
+export const tri = (id: string, pin: string, cond: string, en = '1', vcc = 'VCC', gnd = 'GND', r = 40): Raw[] => [
+  { id: `${id}H`, kind: 'rvar', a: vcc, b: pin, value: `((${en}) && (${cond})) ? ${r} : 1e9` },
+  { id: `${id}L`, kind: 'rvar', a: pin, b: gnd, value: `((${en}) && !(${cond})) ? ${r} : 1e9` },
+];
+
+/** Half-bridge (motor driver output): high side on / low side on / both off. */
+export const halfBridge = (id: string, out: string, vpos: string, gnd: string, hi: string, lo: string, ron = 0.5): Raw[] => [
+  { id: `${id}H`, kind: 'rvar', a: vpos, b: out, value: `(${hi}) ? ${ron} : 1e9` },
+  { id: `${id}L`, kind: 'rvar', a: out, b: gnd, value: `(${lo}) ? ${ron} : 1e9` },
+  // body diodes: the motor's inductive kick returns to the rails
+  { id: `${id}DH`, kind: 'diode', a: out, k: vpos, model: 'power' },
+  { id: `${id}DL`, kind: 'diode', a: gnd, k: out, model: 'power' },
+];
+
+/** Rising edges on a pin since the state `prev` was last updated (use with a state `prev` = edges(PIN)). */
+export const newEdges = (pin: string, prev: string) => `max(0, edges(${pin}) - ${prev})`;

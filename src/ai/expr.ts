@@ -142,6 +142,10 @@ export interface ExprScope {
   dt?(): number;
   /** frequency of a tone/PWM signal reaching a pin */
   freq?(pin: string): number;
+  /** rising edges seen on a pin so far (from a board pin, or counted from the voltage) */
+  edges?(pin: string): number;
+  /** servo pulse width (µs) a board sends to a pin, 0 if none */
+  servo?(pin: string): number;
   prop(name: string): number | undefined;
 }
 
@@ -205,10 +209,13 @@ export function compileExpr(src: string | number, names: { nodes: Set<string>; e
           if (ids.length === 2) return (s) => s.v(ids[0]) - s.v(ids[1]);
           throw new ExprError('v() takes one or two names');
         }
-        if (e.fn === 'freq') {
+        if (e.fn === 'freq' || e.fn === 'edges' || e.fn === 'servo') {
           const a = e.args[0];
-          if (e.args.length !== 1 || a.k !== 'id' || !(names.pins ?? names.nodes).has(a.name)) throw new ExprError('freq() needs a pin name');
+          const fname = e.fn;
+          if (e.args.length !== 1 || a.k !== 'id' || !(names.pins ?? names.nodes).has(a.name)) throw new ExprError(`${fname}() needs a pin name`);
           const n = a.name;
+          if (fname === 'edges') return (s) => s.edges?.(n) ?? 0;
+          if (fname === 'servo') return (s) => s.servo?.(n) ?? 0;
           return (s) => s.freq?.(n) ?? 0;
         }
         if (e.fn === 'i') {

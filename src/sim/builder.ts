@@ -75,6 +75,8 @@ export interface BuildEnv {
   grounds: number[];
   signalFrequency(pinKey: string): number;
   signalInfo(pinKey: string): { freq: number; servoUs: number | null; vcc: number } | null;
+  /** rising edges a board has written to the pin driving this net (null if no board pin drives it) */
+  pinEdges(pinKey: string): number | null;
   lcds: LcdRegistration[];
   i2c: I2CRegistration[];
 }
@@ -114,6 +116,11 @@ export class SimBuilder {
   /** Periodic signal (tone/PWM/servo pulses) reaching this pin from a board, if any. */
   signalInfo(pin: string) {
     return this.env.signalInfo(`${this.compId}:${pin}`);
+  }
+
+  /** Rising edges written by the board pin wired to this pin (null if none). */
+  pinEdges(pin: string): number | null {
+    return this.env.pinEdges(`${this.compId}:${pin}`);
   }
 
   /** Frequency of a periodic signal (tone/PWM) reaching this pin, 0 if none. */

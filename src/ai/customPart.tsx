@@ -162,6 +162,9 @@ export function defFromSpec(spec: CustomPartSpec): ComponentDef {
       const stateVals: Record<string, number> = (b.state.vars ??= {});
       /** element currents from the last accepted step (formulas see them one step late, which keeps feedback stable) */
       const lastI = new Map<string, number>();
+      /** rising-edge counters for pins not driven by a board (counted from the voltage, TTL-style thresholds) */
+      const edgeCounters = new Map<string, { n: number; high: boolean }>();
+      const gndPin = nodeIdx.has('GND') ? 'GND' : null;
       let now = 0;
       let cur: Float64Array = b.v;
       const scope: ExprScope = {
@@ -173,6 +176,18 @@ export function defFromSpec(spec: CustomPartSpec): ComponentDef {
         t: () => now,
         dt: () => stepH,
         freq: (pin) => b.signalFrequency(pin),
+        servo: (pin) => b.signalInfo(pin)?.servoUs ?? 0,
+        edges: (pin) => {
+          const n = b.pinEdges(pin);
+          if (n !== null) return n;
+          let c = edgeCounters.get(pin);
+          if (!c) {
+            const fresh: { n: number; high: boolean } = (b.state[`edge_${pin}`] ??= { n: 0, high: false });
+            edgeCounters.set(pin, fresh);
+            c = fresh;
+          }
+          return c.n;
+        },
         prop: (k) => {
           if (k === 'pressed') return b.input.pressed ? 1 : 0;
           if (k in stateVals) return stateVals[k];
@@ -290,6 +305,13 @@ export function defFromSpec(spec: CustomPartSpec): ComponentDef {
           cur = v;
           stepH = h;
           for (const [id, p] of prims) lastI.set(id, p.currents(v)[0]);
+          for (const [pin, c] of edgeCounters) {
+            const x = scope.v(pin) - (gndPin ? scope.v(gndPin) : 0);
+            if (!c.high && x > 2) {
+              c.high = true;
+              c.n++;
+            } else if (c.high && x < 0.8) c.high = false;
+          }
           for (const c of caps) b.state[`cap_${c.id}`] = c.cap.vPrev;
           for (const l of inductors) b.state[`ind_${l.id}`] = l.ind.iPrev;
           for (const st of stateFns) stateVals[st.name] = st.next(scope);

@@ -89,8 +89,9 @@ export class Simulator {
     this.comps.clear();
     const grounds: number[] = [];
     this.lcds = [];
+    this.mcuPinCache.clear();
     this.i2cDevs = [];
-    const env: BuildEnv = { grounds, signalFrequency: (k: string) => this.signalInfo(k)?.freq ?? 0, signalInfo: (k: string) => this.signalInfo(k), lcds: this.lcds, i2c: this.i2cDevs };
+    const env: BuildEnv = { grounds, signalFrequency: (k: string) => this.signalInfo(k)?.freq ?? 0, signalInfo: (k: string) => this.signalInfo(k), pinEdges: (k: string) => this.pinEdges(k), lcds: this.lcds, i2c: this.i2cDevs };
     const builders: SimBuilder[] = [];
     for (const c of doc.components) {
       const def = getDef(c.type);
@@ -247,8 +248,13 @@ export class Simulator {
     };
   }
 
-  /** Walk from a pin through nearby parts to find a tone()/PWM/servo pin driving it. */
-  private signalInfo(pinKey: string): SignalInfo | null {
+  /** Board pins reachable from a pin through nearby parts (nearest first); cached per rebuild. */
+  private mcuPinCache = new Map<string, { mcu: McuRuntime; idx: number; depth: number }[]>();
+  private nearbyMcuPins(pinKey: string): { mcu: McuRuntime; idx: number; depth: number }[] {
+    const hit = this.mcuPinCache.get(pinKey);
+    if (hit) return hit;
+    const out: { mcu: McuRuntime; idx: number; depth: number }[] = [];
+    this.mcuPinCache.set(pinKey, out);
     const nl = this.netlist;
     const byComp = new Map<string, string[]>();
     for (const key of nl.netOf.keys()) {
@@ -259,7 +265,7 @@ export class Simulator {
     const compOf = (k: string) => k.slice(0, k.indexOf(':'));
     const startComp = compOf(pinKey);
     const startNet = nl.netOf.get(pinKey);
-    if (startNet === undefined) return null;
+    if (startNet === undefined) return out;
     let frontier = [startNet];
     const seenNets = new Set(frontier);
     const seenComps = new Set([startComp]);
@@ -271,10 +277,7 @@ export class Simulator {
           const mcu = this.mcus.get(cid);
           if (mcu) {
             const idx = mcu.spec.pinIndex(k.slice(cid.length + 1));
-            if (idx >= 0) {
-              const f = mcu.pinFrequency(idx);
-              if (f) return { freq: f, servoUs: mcu.pins[idx].servo, vcc: mcu.spec.vcc };
-            }
+            if (idx >= 0) out.push({ mcu, idx, depth });
             continue;
           }
           if (seenComps.has(cid)) continue;
@@ -292,8 +295,25 @@ export class Simulator {
       }
       frontier = next;
     }
+    return out;
+  }
+
+  /** Walk from a pin through nearby parts to find a tone()/PWM/servo pin driving it. */
+  private signalInfo(pinKey: string): SignalInfo | null {
+    for (const { mcu, idx } of this.nearbyMcuPins(pinKey)) {
+      const f = mcu.pinFrequency(idx);
+      if (f) return { freq: f, servoUs: mcu.pins[idx].servo, vcc: mcu.spec.vcc };
+    }
     return null;
   }
+
+  /** Rising edges written by the board output pin wired (directly) to this pin. */
+  private pinEdges(pinKey: string): number | null {
+    // only a direct wire (same net) counts as a clock line
+    for (const { mcu, idx, depth } of this.nearbyMcuPins(pinKey)) if (depth === 0 && mcu.pins[idx].mode === 'output') return mcu.pins[idx].rises;
+    return null;
+  }
+
 
   /** Topology checks that don't need a solve: e.g. circuits hanging off a board with no ground return. */
   private staticChecks(): SimWarning[] {

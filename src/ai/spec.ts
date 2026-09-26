@@ -132,8 +132,8 @@ export interface CustomPartSpec {
   prompt?: string;
 }
 
-const CATEGORIES: CategoryId[] = ['passive', 'diodes', 'transistors', 'switches', 'power', 'output', 'instruments', 'mcu', 'boards'];
-const RESERVED = new Set(['t', 'dt', 'v', 'i', 'pi', 'PI', 'pressed', 'true', 'false', 'freq']);
+const CATEGORIES: CategoryId[] = ['passive', 'diodes', 'transistors', 'switches', 'power', 'output', 'instruments', 'mcu', 'boards', 'drivers', 'ics', 'logic', 'memory', 'sensors', 'displays', 'comms'];
+const RESERVED = new Set(['t', 'dt', 'v', 'i', 'pi', 'PI', 'pressed', 'true', 'false', 'freq', 'edges', 'servo']);
 const COLOR = /^(#[0-9a-fA-F]{3,8}|[a-zA-Z]{3,20}|rgba?\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*(,\s*(0|1|0?\.\d+)\s*)?\))$/;
 const PATH_D = /^[MmLlHhVvCcSsQqTtAaZz0-9eE.,\s+-]{1,3000}$/;
 const PIN_ID = /^[A-Za-z0-9_+\-]{1,10}$/;
