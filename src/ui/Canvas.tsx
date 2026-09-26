@@ -20,7 +20,18 @@ type Drag =
   | { kind: 'handle'; wire: string; index: number }
   | { kind: 'wireEnd'; wire: string; end: 'a' | 'b'; cur: Point }
   | { kind: 'press'; comp: string }
-  | { kind: 'knob'; comp: string; key: string; startY: number; startVal: number; lo: number; hi: number };
+  | { kind: 'knob'; comp: string; key: string; startY: number; startVal: number; lo: number; hi: number }
+  /** a part that is both pushed and turned (encoder, joystick): holding still presses, moving turns */
+  | { kind: 'pressOrKnob'; comp: string; knob: Extract<Drag, { kind: 'knob' }>; startX: number; pressed: boolean; timer: number };
+
+/** turning a part's knob by dragging up/down, over the range of its inspector field */
+function knobDrag(comp: ComponentInstance, key: string, clientY: number): Extract<Drag, { kind: 'knob' }> {
+  const def = getDef(comp.type)!;
+  const f = def.fields?.find((x) => x.key === key);
+  const lo = f && 'min' in f && f.min !== undefined ? f.min : 0;
+  const hi = f && 'max' in f && f.max !== undefined ? f.max : 1;
+  return { kind: 'knob', comp: comp.id, key, startY: clientY, startVal: Number(comp.props[key]), lo, hi };
+}
 
 interface Draft {
   from: PinRef;
@@ -171,7 +182,19 @@ export function Canvas() {
       if (!comp) return;
       const def = getDef(comp.type)!;
       if (running && def.interactive && kind === 'comp') {
-        if (def.interactive === 'press') {
+        if (def.interactive === 'press' && def.dragKey) {
+          const knob = knobDrag(comp, def.dragKey, e.clientY);
+          const d: Extract<Drag, { kind: 'pressOrKnob' }> = { kind: 'pressOrKnob', comp: comp.id, knob, startX: e.clientX, pressed: false, timer: 0 };
+          // held still for a moment → it's a press
+          d.timer = window.setTimeout(() => {
+            if (drag.current !== d) return;
+            d.pressed = true;
+            const sim = getSimulator();
+            if (sim) sim.input(comp.id).pressed = true;
+          }, 180);
+          drag.current = d;
+          select({ comps: [comp.id] });
+        } else if (def.interactive === 'press') {
           const sim = getSimulator();
           if (sim) sim.input(comp.id).pressed = true;
           drag.current = { kind: 'press', comp: comp.id };
@@ -185,12 +208,8 @@ export function Canvas() {
           }
           select({ comps: [comp.id] });
         } else if (def.interactive === 'drag') {
-          const key = def.dragKey ?? (comp.type === 'photoresistor' ? 'light' : 'position');
-          const f = def.fields?.find((x) => x.key === key);
-          const lo = f && 'min' in f && f.min !== undefined ? f.min : 0;
-          const hi = f && 'max' in f && f.max !== undefined ? f.max : 1;
           beginGesture();
-          drag.current = { kind: 'knob', comp: comp.id, key, startY: e.clientY, startVal: Number(comp.props[key]), lo, hi };
+          drag.current = knobDrag(comp, def.dragKey ?? (comp.type === 'photoresistor' ? 'light' : 'position'), e.clientY);
           select({ comps: [comp.id] });
         }
         return;
@@ -259,6 +278,14 @@ export function Canvas() {
         d.cur = w;
         setWireEndDrag({ wire: d.wire, end: d.end, cur: w });
         break;
+      case 'pressOrKnob':
+        // moved before the press kicked in → turn the knob instead
+        if (!d.pressed && Math.hypot(e.clientX - d.startX, e.clientY - d.knob.startY) > 4) {
+          window.clearTimeout(d.timer);
+          beginGesture();
+          drag.current = d.knob;
+        }
+        break;
       case 'knob': {
         const span = d.hi - d.lo;
         const v = Math.max(d.lo, Math.min(d.hi, d.startVal + ((d.startY - e.clientY) / 150) * span));
@@ -315,6 +342,18 @@ export function Canvas() {
       case 'press': {
         const sim = getSimulator();
         if (sim) sim.input(d.comp).pressed = false;
+        break;
+      }
+      case 'pressOrKnob': {
+        window.clearTimeout(d.timer);
+        const sim = getSimulator();
+        if (!sim) break;
+        if (d.pressed) sim.input(d.comp).pressed = false;
+        else {
+          // a quick click: a short press
+          sim.input(d.comp).pressed = true;
+          window.setTimeout(() => (sim.input(d.comp).pressed = false), 150);
+        }
         break;
       }
     }

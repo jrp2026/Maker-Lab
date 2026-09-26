@@ -3,7 +3,7 @@ import { memo } from 'react';
 import type { ComponentDef, PinDef } from '../types';
 import { Label } from '../util';
 
-const COLS = 24, ROWS = 16, X0 = 12, Y0 = 12;
+const COLS = 24, ROWS = 16, X0 = 10, Y0 = 10;
 
 function grid(prefix = ''): PinDef[] {
   const pins: PinDef[] = [];

@@ -1,4 +1,4 @@
-import { useId, type ReactNode } from 'react';
+import { memo, useId, type ReactNode } from 'react';
 import type { ComponentDef, PinDef, PropField } from '../components/types';
 import type { CustomPartSpec, PartShape } from './spec';
 import { compileExpr, type Compiled, type ExprScope } from './expr';
@@ -47,6 +47,20 @@ function pivot(s: PartShape): [number, number] {
   }
 }
 
+/** paint for a shape's drop shadow: black, offset down-right, translucent */
+function shadowPaint(s: PartShape): Record<string, unknown> {
+  const a = Math.min(1, s.shadow ?? 0) * 0.3, stroked = s.type === 'line' || s.type === 'polyline';
+  return {
+    fill: stroked ? 'none' : '#000',
+    fillOpacity: a,
+    stroke: stroked || s.stroke ? '#000' : undefined,
+    strokeOpacity: a,
+    strokeWidth: s.strokeWidth,
+    transform: 'translate(0.9 1.6)',
+    style: { pointerEvents: 'none' },
+  };
+}
+
 const GRAD_AXES = { v: [0, 0, 0, 1], h: [0, 0, 1, 0], d: [0, 0, 1, 1] } as const;
 
 function Shape({ s, glow }: { s: PartShape; glow?: string }): ReactNode {
@@ -79,21 +93,21 @@ function Shape({ s, glow }: { s: PartShape; glow?: string }): ReactNode {
           )}
         </defs>
       )}
-      {!!s.shadow && s.type !== 'text' && (
-        <g transform="translate(0.9 1.6)" opacity={Math.min(1, s.shadow) * 0.3} style={{ pointerEvents: 'none' }}>
-          {geometry(s, { fill: s.type === 'line' || s.type === 'polyline' ? 'none' : '#000', stroke: s.type === 'line' || s.type === 'polyline' || s.stroke ? '#000' : undefined, strokeWidth: s.strokeWidth })}
-        </g>
-      )}
+      {/* a flat offset copy with its own fill-opacity (a group opacity would composite every shadow separately) */}
+      {!!s.shadow && s.type !== 'text' && geometry(s, shadowPaint(s))}
       {geometry(s, paint)}
     </>
   );
   return s.rotate ? <g transform={`rotate(${s.rotate} ${px} ${py})`}>{body}</g> : body;
 }
 
-/** Draw a list of spec shapes (used by hand-written parts that reuse the part kit's artwork). */
-export function Shapes({ shapes }: { shapes: PartShape[] }): ReactNode {
+/**
+ * Draw a list of spec shapes. Memoised on the array: a part's artwork never changes while it
+ * simulates, so only the live layers (glows, readouts, animations) re-render each frame.
+ */
+export const Shapes = memo(function Shapes({ shapes }: { shapes: PartShape[] }): ReactNode {
   return <>{ordered(shapes).map((s, i) => <Shape key={i} s={s} />)}</>;
-}
+});
 
 /** shapes in drawing order (stable sort by z) */
 const ordered = (shapes: PartShape[]) => (shapes.some((s) => s.z) ? shapes.map((s, i) => [s, i] as const).sort((a, b) => (a[0].z ?? 0) - (b[0].z ?? 0) || a[1] - b[1]).map(([s]) => s) : shapes);
@@ -246,7 +260,7 @@ export function defFromSpec(spec: CustomPartSpec, ext?: PartExt): ComponentDef {
     summary: () => (ai ? '✨ AI-generated part' : spec.summary ?? ''),
     render: ({ sim, comp }) => (
       <g>
-        {ordered(spec.shapes).map((s, i) => <Shape key={i} s={s} />)}
+        <Shapes shapes={spec.shapes} />
         {(spec.animations ?? []).map((a, i) => {
           const st = (sim?.anims?.[i] as [number, number, number] | undefined) ?? [0, 0, 0];
           return (

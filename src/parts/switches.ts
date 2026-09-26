@@ -41,7 +41,7 @@ export const SWITCHES: Raw[] = [
     const b = moduleBoard(['GND', 'VCC', 'VRX', 'VRY', 'SW'], { h: 56, w: 60, color: '#23252a', holes: 'corners', labels: { VRX: 'X axis (analog)', VRY: 'Y axis (analog)', SW: 'Button (to GND when pressed)', VCC: '+5 V' } });
     return {
       type: 'joystick', name: 'Joystick module', category: 'switches',
-      description: 'Two-axis thumb joystick (two 10 kΩ pots) with a push button. VRX/VRY sit at VCC/2 when centred. Move the axes in the inspector; press on the canvas to click the stick.',
+      description: 'Two-axis thumb joystick (two 10 kΩ pots) with a push button. VRX/VRY sit at VCC/2 when centred. Drag the stick up/down on the canvas (Y) or set both axes in the inspector; press and hold without moving to click it.',
       keywords: ['joystick', 'thumbstick', 'ky-023', 'analog stick', 'gamepad'],
       pins: b.pins,
       props: [

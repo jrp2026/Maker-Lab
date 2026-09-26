@@ -159,7 +159,7 @@ export function Inspector() {
       )}
       {running && def.interactive && (
         <p className="hint small">
-          {def.interactive === 'press' && 'Press and hold it on the canvas to push the button.'}
+          {def.interactive === 'press' && (def.dragKey ? 'Drag it up/down on the canvas to turn it; press and hold (without moving) to push the button.' : 'Press and hold it on the canvas to push the button.')}
           {def.interactive === 'toggle' && 'Click it on the canvas to switch.'}
           {def.interactive === 'drag' && 'Drag it up/down on the canvas to adjust.'}
         </p>

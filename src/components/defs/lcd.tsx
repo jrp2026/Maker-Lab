@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import type { ComponentDef, PinDef } from '../types';
 import type { Props } from '../../model/types';
 import { Avg, type SimBuilder, type SimComponent, type SimWarning } from '../../sim/builder';
@@ -45,7 +46,8 @@ function Screen({ id, props, view }: { id: string; props: Props; view?: LcdView 
   const glass = lit ? c.glass : c.glassOff;
   const ink = lit ? c.ink : c.inkOff;
   const show = view && view.on;
-  const pid = `lcdpx-${id}`;
+  // unique per drawing: the same part id ('thumb') appears in several previews at once
+  const pid = `lcdpx-${id}-${useId().replace(/[^A-Za-z0-9]/g, '')}`;
   return (
     <g>
       <defs>
