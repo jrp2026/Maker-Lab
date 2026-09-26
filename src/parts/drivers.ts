@@ -350,7 +350,7 @@ function stepperDriver(o: { type: string; name: string; chip: string; ms: string
       { name: 'rcA', init: 20, next: 'abs(i(OA)) > 0.02 ? clamp(abs(v(A1, A2)) / abs(i(OA)), 0.5, 200) : rcA' },
       { name: 'rcB', init: 20, next: 'abs(i(OB)) > 0.02 ? clamp(abs(v(B1, B2)) / abs(i(OB)), 0.5, 200) : rcB' },
     ],
-    readouts: [{ value: 'round(pos * micro)', label: 'µstep', x: 35, y: 34, size: 3.6, color: '#ddd' }],
+    readouts: [{ value: 'round(pos * micro)', label: 'µstep', x: 35, y: 72, size: 4, color: '#333' }],
     model: {
       elements: [
         { id: 'OA', kind: 'vsource', p: 'A1', n: 'A2', value: drive('A', 'cos'), r: 0.3 },

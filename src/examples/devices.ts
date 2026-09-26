@@ -313,7 +313,7 @@ export const DEVICE_EXAMPLES: DeviceExample[] = [
     build: () => {
       const u = board('arduino-uno', WEATHER);
       const d = place('dht', 'VCC', { x: 300, y: -30 });
-      const l = place('lcd-i2c', 'GND', { x: 60, y: 280 });
+      const l = place('lcd-i2c', 'GND', { x: 60, y: 460 });
       return doc('Weather station', [u, d, l], [
         link(d, 'VCC', u, '5V', RED, 240), link(d, 'GND', u, 'GND3', BLACK, -12), link(d, 'DATA', u, 'D2', GREEN, -20),
         link(l, 'GND', u, 'GND1', BLACK, 250), link(l, 'VCC', u, '5V', RED, 258), link(l, 'SDA', u, 'A4', BLUE, 266), link(l, 'SCL', u, 'A5', YELLOW, 274),
@@ -399,10 +399,10 @@ export const DEVICE_EXAMPLES: DeviceExample[] = [
         link(u, '5V', s, 'VCC', RED, 230), link(u, 'GND1', s, 'GND', BLACK, 238), link(s, 'OE', s, 'GND', BLACK, 140), link(s, 'SRCLR', s, 'VCC', RED, 60),
       ];
       ['QA', 'QB', 'QC', 'QD', 'QE', 'QF', 'QG', 'QH'].forEach((q, i) => {
-        const r = place('resistor', '1', { x: 480, y: -40 + i * 30 }, { resistance: 330 });
-        const led = place('led', 'A', { x: 540, y: -40 + i * 30 }, { color: ['red', 'yellow', 'green', 'blue', 'red', 'yellow', 'green', 'blue'][i] });
+        const r = place('resistor', '1', { x: 480, y: -80 + i * 40 }, { resistance: 330 });
+        const led = place('led', 'A', { x: 540, y: -80 + i * 40 }, { color: ['red', 'yellow', 'green', 'blue', 'red', 'yellow', 'green', 'blue'][i] });
         parts.push(r, led);
-        wires.push(link(s, q, r, '1', GREEN), link(r, '2', led, 'A', GREEN), link(led, 'K', u, 'GND3', BLACK, 250 + i * 4));
+        wires.push(link(s, q, r, '1', GREEN), link(r, '2', led, 'A', GREEN), link(led, 'K', u, 'GND3', BLACK, 280 + i * 4));
       });
       return doc('LED chaser', parts, wires);
     },
