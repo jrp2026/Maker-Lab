@@ -9,11 +9,12 @@ const pwrLed = (x: number, y: number, vcc: string, gnd = 'GND', th = 4) => statu
 
 const l298n: Raw = (() => {
   const ctrl = pinRow(['ENA', 'IN1', 'IN2', 'IN3', 'IN4', 'ENB'], { x0: 20, labels: { ENA: 'ENA (PWM speed A; jumper = full speed)', ENB: 'ENB (PWM speed B)', IN1: 'IN1 (direction A)', IN2: 'IN2', IN3: 'IN3 (direction B)', IN4: 'IN4' } });
-  const pwr = pinRow(['V12', 'GND', 'V5'], { x0: 30, y: -110, kind: 'terminal', labels: { V12: '+12 V motor supply (5–35 V)', GND: 'GND', V5: '+5 V (out with the 5 V jumper fitted)' } });
+  // power terminal at the front-left corner, like the real module
+  const pwr = pinRow(['V12', 'GND', 'V5'], { x0: -30, y: -10, kind: 'terminal', labels: { V12: '+12 V motor supply (5–35 V)', GND: 'GND', V5: '+5 V (out with the 5 V jumper fitted)' } });
   const ma = pinRow(['OUT1', 'OUT2'], { x0: -30, y: -50, step: 12, kind: 'terminal', labels: { OUT1: 'Motor A', OUT2: 'Motor A' } }).map((p, i) => ({ ...p, x: -30, y: -70 + i * 20 }));
   const mb = pinRow(['OUT3', 'OUT4'], { kind: 'terminal', labels: { OUT3: 'Motor B', OUT4: 'Motor B' } }).map((p, i) => ({ ...p, x: 100, y: -70 + i * 20 }));
   const enA = `(jumperA == 1 || ${hi('ENA')})`, enB = `(jumperB == 1 || ${hi('ENB')})`;
-  const led = pwrLed(-2, -21, 'V12', 'GND', 4.5);
+  const led = pwrLed(88, -22, 'V12', 'GND', 4.5);
   return {
     type: 'l298n', name: 'L298N dual motor driver', category: 'drivers',
     description: 'Two H-bridges (2 A each, 5–35 V) for two DC motors or one bipolar stepper. IN1/IN2 set motor A’s direction (HIGH/LOW = forward, LOW/HIGH = back, equal = brake); ENA enables it (PWM it for speed, or leave the jumper on). Its bipolar switches drop ~2 V. With the 5 V jumper on, the on-board regulator supplies 5 V out.',
@@ -25,31 +26,34 @@ const l298n: Raw = (() => {
       { key: 'reg', label: '5 V regulator jumper', type: 'select', default: 1, options: [{ value: 1, label: 'On (5 V out)' }, { value: 0, label: 'Off (feed 5 V in)' }] },
     ],
     shapes: [
-      ...pcb(-40, -122, 150, 130, COL.pcbRed, { holes: 'corners', rx: 3 }),
-      // power terminal along the top edge, its labels printed on the board below it
-      ...screwTerminals(pwr, '#2f7fd6', 'up'),
-      silk(30, -92, '+12V', 2.6), silk(40, -92, 'GND', 2.6), silk(50, -92, '+5V', 2.6),
-      ...jumper(68, -108), silk(68, -101, '5V-EN', 2.4),
-      ...ecap(-18, -102, 8), ...ecap(88, -102, 8),
-      // the Multiwatt-15 L298N standing against its black finned heatsink
-      ...heatsink(8, -87, 74, 25, 12, '#34373c'),
-      rect(8, -87, 74, 2.4, '#5a5e65', { rx: 0.8 }),
-      circle(45, -74.5, 2.8, '#1a1b1e', { stroke: '#6b7078', strokeWidth: 0.6 }), line(43.2, -74.5, 46.8, -74.5, '#6b7078', 0.6),
-      rect(15, -61, 60, 12, '#2a2c30', { rx: 0.8, grad: '#141517', shadow: 1 }),
-      rect(15, -61, 60, 2, '#3d4046', { rx: 0.8 }),
-      text(45, -52.5, 'L298N', 4.6, '#c9ccd1', 'middle', { weight: 600 }),
-      ...Array.from({ length: 15 }, (_, i) => rect(18.6 + i * 3.8, -49, 1.3, 6.5, COL.metal, { grad: COL.metalDark, gradDir: 'h' })),
-      // motor A and motor B terminals on the left and right edges
+      ...pcb(-40, -128, 150, 136, COL.pcbRed, { holes: 'corners', rx: 3 }),
+      // black finned heatsink across the back, the Multiwatt L298N bolted to its front face
+      rect(8, -122, 64, 40, '#1d1e21', { rx: 1.5, shadow: 1 }),
+      ...[0, 1, 2, 3, 4, 5].map((k) => rect(10 + k * 10.6, -121, 7, 38, '#3c3f45', { grad: '#141517', gradDir: 'h', rx: 1 })),
+      rect(8, -86, 64, 5, '#2a2c30', { rx: 0.8 }),
+      rect(14, -84, 52, 16, '#2a2c30', { rx: 1, grad: '#16171a', shadow: 1 }),
+      circle(40, -93, 5.2, '#d9dde2', { grad: '#7e878f', gradDir: 'r', stroke: '#5c636b', strokeWidth: 0.5, z: 1 }),
+      line(37, -93, 43, -93, '#4a5058', 0.9), line(40, -96, 40, -90, '#4a5058', 0.9),
+      text(40, -74, 'L298N', 4.4, '#c9ccd1', 'middle', { weight: 600 }),
+      // 15 staggered legs down into the board
+      ...Array.from({ length: 15 }, (_, i) => rect(15.6 + i * 3.4, -68, 1.3, i % 2 ? 8 : 12, COL.metal, { grad: COL.metalDark, gradDir: 'h' })),
+      // the two big 220 µF capacitors in front of the chip
+      ...ecap(24, -40, 10, '#1c1d20'), ...ecap(56, -40, 10, '#1c1d20'),
+      // motor terminals on the side edges
       ...screwTerminals(ma, '#2f7fd6', 'left'), ...screwTerminals(mb, '#2f7fd6', 'right'),
-      silk(-17, -80, 'OUT1', 2.6), silk(-17, -40, 'OUT2', 2.6), silk(87, -80, 'OUT3', 2.6), silk(87, -40, 'OUT4', 2.6),
-      // 8 flyback diodes, current-sense resistors, the 78M05 and the power LED
-      ...smdRow(-8, -33, 4, 5, false, 'dddd'), ...smdRow(80, -33, 4, 5, false, 'dddd'), ...smdRow(28, -36, 5, 6),
-      ...chip(-32, -26, 14, 9, { legs: 'none', label: '78M05' }), rect(-30, -29, 10, 3, COL.metal),
-      // control header; the ENA / ENB jumpers bridge to the 5 V pins just behind it
-      ...[20, 70].flatMap((x) => [rect(x - 4, -20, 8, 7, COL.header, { rx: 0.8, shadow: 0.6 }), rect(x - 1.2, -17.8, 2.4, 2.4, COL.tin)]),
-      silk(20, -22.5, '5V', 2.2), silk(70, -22.5, '5V', 2.2),
-      ...header(ctrl), ...pinLabels(ctrl, -9.5),
-      led.shape, silk(-2, -16.5, 'PWR', 2.2),
+      silk(-19, -80, 'OUT1', 2.6), silk(-19, -40, 'OUT2', 2.6), silk(89, -80, 'OUT3', 2.6), silk(89, -40, 'OUT4', 2.6),
+      // flyback diodes beside the terminals
+      ...[0, 1, 2, 3].flatMap((k) => [...smd(-6, -114 + k * 7, 'd'), ...smd(86, -114 + k * 7, 'd')]),
+      // front-left: power terminal with its labels, the 5 V jumper and the 78M05
+      ...screwTerminals(pwr, '#2f7fd6', 'down'),
+      silk(-30, -21, '12V', 2.4), silk(-20, -21, 'GND', 2.4), silk(-10, -21, '5V', 2.4),
+      ...jumper(-20, -30), silk(-20, -35.5, '5V-EN', 2.2),
+      ...chip(-6, -32, 12, 8, { legs: 'none', label: '78M05' }), rect(-4, -34.5, 8, 2.5, COL.metal),
+      // control header with the ENA / ENB jumpers bridging to their 5 V pins
+      ...[20, 70].flatMap((x) => [rect(x - 3, -18, 6, 12, COL.header, { rx: 1, grad: '#08090a', gradDir: 'h', shadow: 0.8 }), rect(x - 1.5, -16, 3, 2, '#3c3e43')]),
+      ...header(ctrl), ...pinLabels(ctrl, -21),
+      led.shape, silk(88, -17, 'PWR', 2.2),
+      ...smdRow(76, -10, 3, 5),
     ],
     indicators: [led.indicator],
     model: {
