@@ -4,6 +4,7 @@ import { emptyDoc, newId } from './types';
 import { getDef } from '../components/registry';
 import { snap } from './geometry';
 import type { McuError } from '../mcu/runtime';
+import { useAiParts } from '../ai/library';
 
 export type ViewMode = 'breadboard' | 'schematic';
 
@@ -119,7 +120,13 @@ export function addComponent(type: string, x: number, y: number, props?: Record<
   if (!def) return null;
   const id = newId(type.replace(/[^a-z]/g, '').slice(0, 3));
   const comp: ComponentInstance = { id, type, x: snap(x), y: snap(y), rot: 0, flip: false, props: { ...def.defaultProps, ...props } };
-  updateDoc((d) => ({ ...d, components: def.layer === 0 ? [comp, ...d.components] : [...d.components, comp] }));
+  const spec = useAiParts.getState().known[type];
+  updateDoc((d) => ({
+    ...d,
+    components: def.layer === 0 ? [comp, ...d.components] : [...d.components, comp],
+    // AI parts carry their definition inside the document
+    ...(spec && !(d.customParts ?? []).some((p) => p.type === type) ? { customParts: [...(d.customParts ?? []), spec] } : {}),
+  }));
   set({ selection: { comps: [id], wire: null } });
   return id;
 }

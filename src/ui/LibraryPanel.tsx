@@ -5,6 +5,8 @@ import { boundsOf } from '../components/types';
 import { addComponent, showToast } from '../model/store';
 import { getCanvasSize, useViewport } from './viewport';
 import type { ComponentInstance } from '../model/types';
+import { forgetPart, useAiParts } from '../ai/library';
+import { AiPartDialog } from './AiPartDialog';
 
 const Thumb = memo(function Thumb({ type }: { type: string }) {
   const def = getDef(type);
@@ -33,6 +35,13 @@ export function LibraryPanel() {
   const [q, setQ] = useState('');
   const [cat, setCat] = useState('basic');
   const [showPlanned, setShowPlanned] = useState(true);
+  const [aiOpen, setAiOpen] = useState(false);
+  const saved = useAiParts((s) => s.saved);
+  const known = useAiParts((s) => s.known);
+  const aiEntries = useMemo(() => {
+    const list = [...saved, ...Object.values(known).filter((k) => !saved.some((s) => s.type === k.type))];
+    return list.map((p) => ({ name: p.name, type: p.type, category: '✨ AI parts', saved: saved.some((s) => s.type === p.type) }));
+  }, [saved, known]);
 
   const results = useMemo(() => {
     const query = q.trim().toLowerCase();
@@ -50,11 +59,13 @@ export function LibraryPanel() {
         out.push({ ...e, category: c.name });
       }
     }
+    for (const e of aiEntries) if (`${e.name} ai`.toLowerCase().includes(query)) out.unshift(e);
     return out.sort((a, b) => Number(!a.type) - Number(!b.type));
-  }, [q]);
+  }, [q, aiEntries]);
 
-  const current = CATALOG.find((c) => c.id === cat)!;
-  const entries = results ?? current.entries.map((e) => ({ ...e, category: current.name }));
+  const current = CATALOG.find((c) => c.id === cat);
+  const entries: { name: string; type?: string; phase?: number; category: string; saved?: boolean }[] =
+    results ?? (cat === 'ai' ? aiEntries : current!.entries.map((e) => ({ ...e, category: current!.name })));
   const available = entries.filter((e) => e.type);
   const planned = entries.filter((e) => !e.type);
 
@@ -64,6 +75,14 @@ export function LibraryPanel() {
         <h3>Components</h3>
         <span className="muted small">{DEFS.length} ready · {CATALOG.reduce((n, c) => n + c.entries.filter((e) => !e.type).length, 0)} planned</span>
       </div>
+      <button className="ai-cta" onClick={() => setAiOpen(true)}>
+        <span>✨</span>
+        <div>
+          <b>Make a part with AI</b>
+          <small>Claude · ChatGPT · Gemini · Ollama · LM Studio</small>
+        </div>
+      </button>
+      {aiOpen && <AiPartDialog onClose={() => { setAiOpen(false); if (useAiParts.getState().saved.length) setCat('ai'); }} />}
       <div className="search">
         <svg viewBox="0 0 20 20" width="14" height="14"><circle cx="8.5" cy="8.5" r="5.5" stroke="currentColor" strokeWidth="2" fill="none" /><path d="M13 13l4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
         <input placeholder="Search components…" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -71,6 +90,7 @@ export function LibraryPanel() {
       </div>
       {!results && (
         <select className="cat-select" value={cat} onChange={(e) => setCat(e.target.value)}>
+          <option value="ai">✨ AI parts ({aiEntries.length})</option>
           {CATALOG.map((c) => {
             const ready = c.entries.filter((e) => e.type).length;
             return (
@@ -82,7 +102,10 @@ export function LibraryPanel() {
         </select>
       )}
       <div className="lib-scroll">
-        {results && !results.length && <p className="muted small pad">No components match “{q}”.</p>}
+        {results && !results.length && <p className="muted small pad">No components match “{q}”. <button className="link" onClick={() => setAiOpen(true)}>Ask AI to make it ✨</button></p>}
+        {!results && cat === 'ai' && !aiEntries.length && (
+          <p className="muted small pad">No AI parts yet. Click <b>Make a part with AI</b> above — e.g. “7805 voltage regulator”.</p>
+        )}
         <div className="lib-grid">
           {available.map((e) => {
             const def = getDef(e.type!)!;
@@ -100,6 +123,18 @@ export function LibraryPanel() {
               >
                 <div className="thumb"><Thumb type={e.type!} /></div>
                 <span>{e.name}</span>
+                {'saved' in e && e.saved && (
+                  <em
+                    className="lib-del"
+                    title="Remove from My AI parts"
+                    onClick={(ev) => {
+                      ev.stopPropagation();
+                      forgetPart(e.type!);
+                    }}
+                  >
+                    ✕
+                  </em>
+                )}
               </button>
             );
           })}

@@ -1,3 +1,5 @@
+import type { CustomPartSpec } from '../ai/spec';
+
 export type Rotation = 0 | 1 | 2 | 3;
 
 export interface Point {
@@ -38,6 +40,8 @@ export interface CircuitDoc {
   name: string;
   components: ComponentInstance[];
   wires: Wire[];
+  /** AI-generated part definitions used by this circuit (travel with exports & share links) */
+  customParts?: CustomPartSpec[];
 }
 
 export function pinKey(ref: PinRef): string {

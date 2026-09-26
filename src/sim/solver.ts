@@ -18,6 +18,7 @@ export interface StampCtx {
   n: number;
   v: Float64Array; // current Newton iterate
   h: number; // timestep (s)
+  iter: number; // Newton iteration within this step
 }
 
 export abstract class Prim {
@@ -350,7 +351,7 @@ export class Circuit {
   constructor(public n: number) {
     this.v = new Float64Array(n);
     this.next = new Float64Array(n);
-    this.ctx = { G: new Float64Array(n * n), I: new Float64Array(n), n, v: this.v, h: 1e-3 };
+    this.ctx = { G: new Float64Array(n * n), I: new Float64Array(n), n, v: this.v, h: 1e-3, iter: 0 };
   }
 
   add<T extends Prim>(p: T): T {
@@ -395,6 +396,7 @@ export class Circuit {
       ctx.G.fill(0);
       ctx.I.fill(0);
       ctx.v = this.v;
+      ctx.iter = it;
       for (let i = 0; i < n; i++) ctx.G[i * n + i] += GMIN_NODE;
       for (const a of this.anchors!) ctx.G[a * n + a] += 1;
       for (const p of this.prims) p.stamp(ctx);
@@ -425,5 +427,81 @@ export class Circuit {
     for (const p of this.prims) p.accept(this.v, h);
     this.failed = !ok;
     return ok;
+  }
+}
+
+// ---------------------------------------------------------------- behavioural elements
+// Values come from a formula of node voltages (used by AI-generated parts). They are
+// re-evaluated every Newton iteration and must settle before a step is accepted.
+
+type ValueFn = (v: Float64Array) => number;
+
+const FREEZE_AFTER = 30;
+
+abstract class Behavioural extends Prim {
+  nonlinear = true;
+  last = 0;
+  private frozen = false;
+  constructor(nodes: number[], public fn: ValueFn) {
+    super(nodes);
+  }
+  /** Formula value for this iteration; frozen late in a step so discontinuous formulas still settle. */
+  protected eval(c: StampCtx) {
+    this.frozen = c.iter >= FREEZE_AFTER;
+    if (this.frozen) return this.last;
+    const x = this.fn(c.v);
+    this.last = Number.isFinite(x) ? x : 0;
+    return this.last;
+  }
+  converged(v: Float64Array) {
+    if (this.frozen) return true;
+    const x = this.fn(v);
+    return Math.abs(x - this.last) < 1e-6 + 1e-4 * Math.abs(x);
+  }
+}
+
+/** Voltage source (p above n) with series resistance r whose value is a formula. */
+export class BehaviouralSource extends Behavioural {
+  constructor(p: number, n: number, fn: ValueFn, public r: number) {
+    super([p, n], fn);
+  }
+  stamp(c: StampCtx) {
+    const g = 1 / Math.max(this.r, 1e-6);
+    addG(c, this.nodes[0], this.nodes[1], g);
+    addI(c, this.nodes[1], this.nodes[0], this.eval(c) * g);
+  }
+  currents(v: Float64Array) {
+    const g = 1 / Math.max(this.r, 1e-6);
+    const i = g * (nv(v, this.nodes[0]) - nv(v, this.nodes[1])) - this.last * g;
+    return [i, -i];
+  }
+}
+
+/** Current source pushing `fn` amps out of p through the circuit into n. */
+export class BehaviouralCurrent extends Behavioural {
+  constructor(p: number, n: number, fn: ValueFn) {
+    super([p, n], fn);
+  }
+  stamp(c: StampCtx) {
+    addI(c, this.nodes[1], this.nodes[0], this.eval(c));
+  }
+  currents() {
+    return [-this.last, this.last];
+  }
+}
+
+/** Resistance given by a formula (switches, sensors, thermistors …). */
+export class BehaviouralResistor extends Behavioural {
+  constructor(a: number, b: number, fn: ValueFn) {
+    super([a, b], fn);
+  }
+  stamp(c: StampCtx) {
+    const r = Math.min(1e12, Math.max(1e-3, this.eval(c)));
+    addG(c, this.nodes[0], this.nodes[1], 1 / r);
+  }
+  currents(v: Float64Array) {
+    const r = Math.min(1e12, Math.max(1e-3, this.last));
+    const i = (nv(v, this.nodes[0]) - nv(v, this.nodes[1])) / r;
+    return [i, -i];
   }
 }

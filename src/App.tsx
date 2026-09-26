@@ -12,6 +12,9 @@ import { autosave, docFromHash, loadAutosave, saveProject } from './model/persis
 import { EXAMPLES } from './examples';
 import { zoomToFit } from './ui/viewport';
 import { toggleSimulation } from './sim/controller';
+import { loadSavedParts } from './ai/library';
+
+loadSavedParts();
 
 function isTyping(e: KeyboardEvent) {
   const t = e.target as HTMLElement;

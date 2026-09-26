@@ -1,5 +1,6 @@
 import type { CircuitDoc } from './types';
 import { getDef } from '../components/registry';
+import { adoptDocParts } from '../ai/library';
 
 const AUTOSAVE_KEY = 'circuitlab:autosave';
 const PROJECTS_KEY = 'circuitlab:projects';
@@ -23,6 +24,8 @@ function safeSet(key: string, value: string) {
 export function parseDoc(json: unknown): CircuitDoc {
   const d = json as Partial<CircuitDoc>;
   if (!d || typeof d !== 'object' || !Array.isArray(d.components) || !Array.isArray(d.wires)) throw new Error('Not a circuit file');
+  // AI parts must be registered before their instances can be recognised
+  const customParts = adoptDocParts(d.customParts);
   const components = d.components
     .filter((c) => c && typeof c.id === 'string' && getDef(String(c.type)))
     .map((c) => {
@@ -47,7 +50,11 @@ export function parseDoc(json: unknown): CircuitDoc {
       points: Array.isArray(w.points) ? w.points.map((p) => ({ x: Number(p.x) || 0, y: Number(p.y) || 0 })) : [],
       color: typeof w.color === 'string' ? w.color : '#43a047',
     }));
-  return { version: 1, name: typeof d.name === 'string' ? d.name : 'Imported circuit', components, wires };
+  const used = new Set(components.map((c) => c.type));
+  const doc: CircuitDoc = { version: 1, name: typeof d.name === 'string' ? d.name : 'Imported circuit', components, wires };
+  const parts = customParts.filter((p) => used.has(p.type));
+  if (parts.length) doc.customParts = parts;
+  return doc;
 }
 
 export function autosave(doc: CircuitDoc) {
