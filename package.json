@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -b",
-    "test": "vitest run"
+    "test": "vitest run",
+    "docs": "UPDATE_DOCS=1 vitest run tests/docs.test.ts"
   },
   "dependencies": {
     "@codemirror/lang-cpp": "^6.0.3",

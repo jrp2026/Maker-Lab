@@ -133,6 +133,9 @@ npm run build      # static site in dist/
   Model output is treated as untrusted data: a strict validator whitelists shape types, colours,
   path data and formula functions, so specs (including ones from share links) can't run code.
   There's also a built-in example part to try without any AI.
+- **Let an LLM build circuits** – hand [docs/llm-project-json.md](docs/llm-project-json.md) and the
+  generated [docs/parts-reference.md](docs/parts-reference.md) (every part's exact pins and settings)
+  to ChatGPT, Claude, Gemini… and ask for a project; import the JSON it writes with File → Import.
 - **Projects** – autosave, save/open in the browser, JSON import/export, PNG export, and share
   links that carry the whole circuit in the URL.
 - **Examples** (31, in three groups):
