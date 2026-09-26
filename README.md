@@ -16,13 +16,23 @@
 
 <p align="center">
   <a href="https://jrp2026.github.io/electronic-simulator/"><b>Open the live demo</b></a> ·
+  <a href="#parts">Parts</a> ·
   <a href="#features">Features</a> ·
   <a href="#development">Development</a>
 </p>
 
 A Tinkercad-Circuits-style workspace: drag parts onto a breadboard, wire them pin to pin,
 press **Start Simulation** and watch LEDs light, motors spin, meters read and Arduino
-sketches run — all in the browser, no server. Works on desktop, tablets and phones.
+sketches run — all in the browser, no server. Works on desktop, tablets and phones, and
+installs as an app that keeps working offline.
+
+## Parts
+
+All 247 parts, as they look on the breadboard:
+
+<p align="center">
+  <img src="docs/parts.png" alt="A grid of all 247 MakerLab parts: breadboards, Arduino and other boards, passives, LEDs, transistors, switches, power parts, motors, drivers, ICs, sensors, displays and communication modules" width="100%">
+</p>
 
 ## Development
 
@@ -43,6 +53,8 @@ npm run build      # static site in dist/
   bottom sheet, pinch to zoom and drag with two fingers to pan, tap a pin to start a wire (a
   **Cancel** button replaces Esc), the inspector docks at the bottom and the code editor
   opens full screen.
+- **Install as an app** – on a phone use *Add to Home Screen* (Safari) or *Install app*
+  (Chrome/Edge); MakerLab then opens full screen with its own icon and works offline.
 - **Wiring** – click a pin, optionally click empty space to add bends, click another pin.
   Select a wire to recolour it, drag bend handles, double-click to add/remove bends, drag an
   end to reconnect.
