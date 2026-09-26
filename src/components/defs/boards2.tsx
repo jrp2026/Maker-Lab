@@ -7,6 +7,57 @@ import type { ComponentDef, PinDef } from '../types';
 import { Label, PinTip, SLine, SText } from '../util';
 import { ATMEGA328P, ATTINY85, BLUEPILL, ESP8266, GENERIC_MCU, MEGA, MICRO, NANO, PIC16F877A, PICO, PICO_W, TEENSY40, type BoardSpec } from '../../mcu/boards';
 import { buildBoard, type SupplyPin } from './board';
+import { Shapes } from '../../ai/customPart';
+import type { PartShape } from '../../ai/spec';
+import { COL, chip as chipArt, circle, epoxy, header as headerArt, pcb, rect, shade, text } from '../../parts/kit';
+
+type Art = Record<string, any>[];
+
+/** The static artwork of a board or bare chip, built from the part kit (gradients, headers, packages). */
+function boardArt(c: BoardCfg, pins: PinDef[]): PartShape[] {
+  return boardShapes(c, pins) as unknown as PartShape[];
+}
+
+function boardShapes(c: BoardCfg, pins: PinDef[]): Art {
+  const { body } = c;
+  const hdr = (ps: PinDef[]) => headerArt(ps.map((p) => ({ id: p.id, x: p.x, y: p.y, label: p.label ?? p.id, kind: 'lead' as const })));
+  if (c.dip) {
+    // a bare DIP chip: tinned legs, moulded body with the pin-1 notch
+    const out: Art = pins.flatMap((p) => {
+      const top = p.y === 0, edge = top ? body.y : body.y + body.h;
+      return [
+        rect(p.x - 1.9, top ? edge - 1.4 : edge - 0.6, 3.8, 2, COL.metal, { grad: COL.metalDark, gradDir: 'h' }),
+        rect(p.x - 1, top ? p.y : edge, 2, Math.abs(edge - p.y), COL.metal, { grad: shade(COL.metalDark, -0.1), gradDir: 'h' }),
+      ];
+    });
+    out.push(...(epoxy(body.x, body.y, body.w, body.h, body.color, 1.4)));
+    out.push({ type: 'path', d: `M ${body.x} ${body.y + body.h / 2 - 4} A 4 4 0 0 1 ${body.x} ${body.y + body.h / 2 + 4} Z`, fill: shade(body.color, -0.45) });
+    out.push(circle(body.x + 4, body.y + body.h - 4.5, 1.6, shade(body.color, -0.3), { stroke: 'rgba(255,255,255,0.12)', strokeWidth: 0.4 }));
+    return out;
+  }
+  const out: Art = [...(pcb(body.x, body.y, body.w, body.h, body.color, { holes: body.w > 150 || body.h > 80 ? 'corners' : 'none', rx: 3 }))];
+  if (c.usb) {
+    const u = c.usb;
+    out.push(
+      rect(u.x, u.y, u.w, u.h, '#eef1f4', { rx: u.micro ? 2 : 1.2, grad: '#7f8891', gradDir: u.w > u.h ? 'v' : 'h', stroke: '#5f666e', strokeWidth: 0.5, shadow: 1 }),
+      rect(u.x + 1.2, u.y + 1.2, u.w - 2.4, u.h - 2.4, 'none', { rx: 1, stroke: 'rgba(255,255,255,0.55)', strokeWidth: 0.5 }),
+    );
+  }
+  if (c.chip) {
+    const k = c.chip, light = !!k.color && parseInt(k.color.slice(1, 3), 16) > 150;
+    if (light) {
+      // shielded module (ESP-12): metal can with the maker's print
+      out.push(
+        rect(k.x, k.y, k.w, k.h, '#f1f3f5', { rx: 1.5, grad: '#8a929b', gradDir: 'd', stroke: '#6d757e', strokeWidth: 0.5, shadow: 1 }),
+        text(k.x + k.w / 2, k.y + k.h / 2, k.label, Math.min(6, (k.w - 6) / (0.66 * k.label.length)), '#3a3d42', 'middle', { weight: 800 }),
+      );
+      if (k.sub) out.push(text(k.x + k.w / 2, k.y + k.h / 2 + 7, k.sub, 3.6, '#5c636b', 'middle', { weight: 600 }));
+    } else out.push(...(chipArt(k.x, k.y, k.w, k.h, { legs: k.w === k.h ? 'qfp' : 'soic', n: Math.max(4, Math.round(k.w / 3)), label: k.label, sub: k.sub, color: k.color })));
+  }
+  out.push(...hdr(pins.filter((p) => p.y === 0 && c.top.includes(p.id))), ...hdr(pins.filter((p) => p.y === c.rowGap && c.bottom.includes(p.id))));
+  for (const p of c.extra ?? []) out.push(...hdr([p]));
+  return out;
+}
 
 const blink = (spec: BoardSpec, led: string, note: string) => `// ${spec.name}: blink the LED and say hello.
 // ${note}
@@ -70,13 +121,9 @@ function makeBoard(c: BoardCfg): ComponentDef {
   const bounds = { x: Math.min(body.x, -5), y: Math.min(body.y, -5), w: 0, h: 0 };
   bounds.w = Math.max(body.x + body.w, (Math.max(c.top.length, c.bottom.length) - 1) * 10 + 5, ...(c.extra ?? []).map((p) => p.x + 5)) - bounds.x;
   bounds.h = Math.max(body.y + body.h, c.rowGap + 5, ...(c.extra ?? []).map((p) => p.y + 5)) - bounds.y;
+  const art = boardArt(c, pins);
   const row = (ids: string[], y: number, labelUp: boolean): ReactNode => (
     <g>
-      {c.dip ? (
-        ids.map((id, i) => <rect key={id} x={i * 10 - 2} y={labelUp ? y - 5 : y + 1} width={4} height={4} fill="#b8bec6" />)
-      ) : (
-        <rect x={-5} y={y - 5} width={ids.length * 10} height={10} rx={1} fill="#111" />
-      )}
       {ids.map((id, i) => (
         <text key={id} x={i * 10 + 1.4} y={labelUp ? y + (c.dip ? 8 : 8) : y - 8} fontSize={3.3} fill={c.dip ? '#d7dbe0' : '#e8eaed'} transform={`rotate(${labelUp ? 90 : -90} ${i * 10 + 1.4} ${labelUp ? y + 8 : y - 8})`} fontFamily="Inter, sans-serif" fontWeight={600} style={{ userSelect: 'none' }}>
           {short(id)}
@@ -99,16 +146,13 @@ function makeBoard(c: BoardCfg): ComponentDef {
     thumbScale: c.thumbScale,
     render: ({ sim }) => (
       <g>
-        <rect x={body.x} y={body.y} width={body.w} height={body.h} rx={c.dip ? 2 : 4} fill={body.color} stroke="rgba(0,0,0,.4)" strokeWidth={0.8} />
-        {c.dip && <path d={`M ${body.x} ${body.y + body.h / 2 - 4} A 4 4 0 0 1 ${body.x} ${body.y + body.h / 2 + 4}`} fill="#3b3d42" />}
-        {c.chip && (
+        <Shapes shapes={art} />
+        {c.dip && c.chip && (
           <g>
-            <rect x={c.chip.x} y={c.chip.y} width={c.chip.w} height={c.chip.h} rx={1.5} fill={c.chip.color ?? '#1d1e21'} />
-            <Label x={c.chip.x + c.chip.w / 2} y={c.chip.y + c.chip.h / 2 + (c.chip.sub ? 0 : 2)} size={Math.min(6, (c.chip.w / c.chip.label.length) * 1.5)} fill="#cfd3d8" weight={700}>{c.chip.label}</Label>
-            {c.chip.sub && <Label x={c.chip.x + c.chip.w / 2} y={c.chip.y + c.chip.h / 2 + 6} size={3.4} fill="#8e959e">{c.chip.sub}</Label>}
+            <Label x={c.chip.x + c.chip.w / 2} y={c.chip.y + c.chip.h / 2 + (c.chip.sub ? 0 : 2)} size={Math.min(5.5, (c.chip.w / c.chip.label.length) * 1.4)} fill="#c9ccd1" weight={500}>{c.chip.label}</Label>
+            {c.chip.sub && <Label x={c.chip.x + c.chip.w / 2} y={c.chip.y + c.chip.h / 2 + 6} size={3.2} fill="#8e959e" weight={400}>{c.chip.sub}</Label>}
           </g>
         )}
-        {c.usb && <rect x={c.usb.x} y={c.usb.y} width={c.usb.w} height={c.usb.h} rx={1.5} fill="#c9ced4" stroke="#8d949c" strokeWidth={0.8} />}
         {c.powerLed && (
           <g>
             {sim && !sim.off && <circle cx={c.powerLed.x} cy={c.powerLed.y} r={4} fill="#35d05a" opacity={0.45} style={{ filter: 'blur(2px)' }} />}
@@ -121,11 +165,11 @@ function makeBoard(c: BoardCfg): ComponentDef {
             <rect x={c.ledAt.x - 2.5} y={c.ledAt.y - 1.5} width={5} height={3} rx={0.6} fill={sim?.l ? c.ledAt.color : '#e9e4d0'} />
           </g>
         )}
-        {row(c.top, 0, true)}
-        {row(c.bottom, c.rowGap, false)}
+        {/* a narrow DIP has no room for printed pin names (hover a pin to see it) */}
+        {!(c.dip && c.rowGap < 50) && row(c.top, 0, true)}
+        {!(c.dip && c.rowGap < 50) && row(c.bottom, c.rowGap, false)}
         {(c.extra ?? []).map((p) => (
           <g key={p.id}>
-            <rect x={p.x - 4.5} y={p.y - 4.5} width={9} height={9} fill="#111" />
             <text x={p.x + (p.x > body.x + body.w / 2 ? -6 : 6)} y={p.y + 1.3} fontSize={3.2} fill="#e8eaed" textAnchor={p.x > body.x + body.w / 2 ? 'end' : 'start'} fontFamily="Inter, sans-serif" fontWeight={600}>{short(p.id)}</text>
           </g>
         ))}

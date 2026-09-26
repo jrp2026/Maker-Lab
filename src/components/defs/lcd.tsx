@@ -2,7 +2,7 @@ import type { ComponentDef, PinDef } from '../types';
 import type { Props } from '../../model/types';
 import { Avg, type SimBuilder, type SimComponent, type SimWarning } from '../../sim/builder';
 import { HD44780, lcdChar } from '../../sim/hd44780';
-import { Label, PinTip, SLine, SText, clamp01, ledParams } from '../util';
+import { DropShadow, Label, PinTip, SLine, SText, Sheen, clamp01, ledParams } from '../util';
 
 const CELL_W = 10, CELL_H = 15;
 
@@ -124,7 +124,9 @@ function boardArt(props: Props, header: string[], label: string) {
   const d = dims(props);
   return (
     <>
+      <DropShadow x={d.x0} y={d.y0} w={d.w} h={d.h} rx={4} />
       <rect x={d.x0} y={d.y0} width={d.w} height={d.h} rx={4} fill="#1f7a45" stroke="#145a31" strokeWidth={1} />
+      <Sheen x={d.x0} y={d.y0} w={d.w} h={d.h} rx={4} />
       {[[d.x0 + 6, d.y0 + 6], [d.x0 + d.w - 6, d.y0 + 6], [d.x0 + 6, d.y0 + d.h - 6], [d.x0 + d.w - 6, d.y0 + d.h - 6]].map(([x, y], i) => (
         <circle key={i} cx={x} cy={y} r={2.6} fill="#e9e4d0" />
       ))}

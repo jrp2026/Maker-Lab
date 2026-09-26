@@ -55,9 +55,11 @@ JSON FIELDS
 - name, description (1–3 sentences incl. pinout), category: one of passive | diodes | transistors | switches | power | output | instruments | drivers | ics | logic | memory | sensors | displays | comms
 - pins: [{ id (1–10 chars, letters/digits/_+-), x, y, label, kind: "lead" | "terminal" }]
 - props (optional, ≤ 8 editable settings): [{ key (identifier), label, type: "number" | "slider" | "select", default, unit?, min?, max?, step?, options?: [{value,label}] }]. Sliders are adjustable live while simulating (great for sensor inputs like light or temperature).
-- shapes: the realistic top-down drawing, Tinkercad style (flat, friendly colours). Shape types:
-  rect {x,y,w,h,rx?}  circle {cx,cy,r}  ellipse {cx,cy,rx,ry}  line {x1,y1,x2,y2}  polyline {points:[x1,y1,x2,y2,…]}  path {d}  text {x,y,text,size,anchor?}
-  common style keys: fill, stroke, strokeWidth, opacity. Colours as #hex. Draw metal legs as grey lines from the body to each pin.
+- shapes: the realistic top-down drawing — make it look like the real part (PCB colour, chips, connectors, markings). Shape types:
+  rect {x,y,w,h,rx?}  circle {cx,cy,r}  ellipse {cx,cy,rx,ry}  line {x1,y1,x2,y2}  polyline {points:[x1,y1,x2,y2,…]}  path {d}  text {x,y,text,size,anchor?,weight?,font?: "mono"}
+  common style keys: fill, stroke, strokeWidth, opacity, dash. Colours as #hex. Draw metal legs as grey lines from the body to each pin.
+  realism keys: grad (second colour: the fill fades from fill to grad), gradDir ("v" default, "h", "d" diagonal, "r" radial dome), shadow (0–1 drop shadow), rotate (degrees), z (draw order).
+  e.g. a PCB {type:"rect",…,fill:"#1d5bb8",grad:"#153f80",shadow:1}, a metal can {…,fill:"#eef1f4",grad:"#7f8891",gradDir:"d"}, a lit dome {type:"circle",…,gradDir:"r"}.
 - symbol (optional): schematic drawing in the same coordinates, lines ending on the pins.
 - model: the electrical behaviour, built from these elements (terminals are pin ids or internal node names listed in model.nodes):
   resistor {id,a,b,value}   capacitor {id,a,b,value (farads)}   rvar {id,a,b,value = resistance formula}

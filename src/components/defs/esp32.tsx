@@ -1,5 +1,5 @@
 import type { ComponentDef, PinDef } from '../types';
-import { Label, PinTip, SLine, SText } from '../util';
+import { DropShadow, Label, PinTip, SLine, SText, Sheen } from '../util';
 import { ESP32 } from '../../mcu/boards';
 import { buildBoard } from './board';
 
@@ -55,16 +55,22 @@ export const esp32: ComponentDef = {
     const running = !!sim;
     return (
       <g>
+        <DropShadow x={-30} y={4} w={204} h={92} rx={5} />
         <rect x={-30} y={4} width={204} height={92} rx={5} fill="#23252a" stroke="#101114" strokeWidth={1} />
+        <Sheen x={-30} y={4} w={204} h={92} rx={5} />
         {/* WROOM module: shield + antenna */}
         <rect x={-26} y={16} width={104} height={68} rx={2} fill="#1b1d22" />
-        <rect x={-6} y={20} width={80} height={60} rx={2} fill="#c9ced4" stroke="#9aa3ad" strokeWidth={0.8} />
+        <DropShadow x={-6} y={20} w={80} h={60} rx={2} />
+        <rect x={-6} y={20} width={80} height={60} rx={2} fill="#d3d8dd" stroke="#8a929b" strokeWidth={0.8} />
+        <Sheen x={-6} y={20} w={80} h={60} rx={2} metal />
         <path d="M-22 24 h12 v8 h-12 v8 h12 v8 h-12 v8 h12 v8 h-12 v8" fill="none" stroke="#c9a13b" strokeWidth={1.4} />
         <Label x={34} y={46} size={7} fill="#4a5058" weight={800}>ESP32</Label>
         <Label x={34} y={56} size={5} fill="#5b626b">WROOM-32</Label>
         <Label x={34} y={66} size={3.8} fill="#6d747c">ESPRESSIF</Label>
         {/* USB + buttons */}
-        <rect x={160} y={38} width={20} height={24} rx={2} fill="#c9ced4" stroke="#8d949c" strokeWidth={0.8} />
+        <DropShadow x={160} y={38} w={20} h={24} rx={2} />
+        <rect x={160} y={38} width={20} height={24} rx={2} fill="#d3d8dd" stroke="#6d757e" strokeWidth={0.8} />
+        <Sheen x={160} y={38} w={20} h={24} rx={2} metal />
         <rect x={128} y={20} width={12} height={9} rx={1.5} fill="#e5e7ea" />
         <circle cx={134} cy={24.5} r={2.6} fill="#2b2d31" />
         <Label x={134} y={36} size={3.8} fill="#cfd3d8">EN</Label>
@@ -72,6 +78,7 @@ export const esp32: ComponentDef = {
         <circle cx={134} cy={74.5} r={2.6} fill="#2b2d31" />
         <Label x={134} y={67} size={3.8} fill="#cfd3d8">BOOT</Label>
         <rect x={96} y={34} width={22} height={30} rx={1.5} fill="#15161a" />
+        <Sheen x={96} y={34} w={22} h={30} rx={1.5} strength={0.6} />
         {/* LEDs: red power, blue GPIO2 */}
         {running && <circle cx={150} cy={42} r={5} fill="#ff3b30" opacity={0.45} style={{ filter: 'blur(2px)' }} />}
         <rect x={147.5} y={40.5} width={5} height={3} rx={0.6} fill={running ? '#ff5a4f' : '#e9e4d0'} />

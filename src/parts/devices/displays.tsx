@@ -1,5 +1,12 @@
 /** Display devices driven by libraries: NeoPixel strips, SSD1306 OLEDs, MAX7219 matrix, 74HC595. */
-import { COL, circle, dip, line, moduleBoard, pinRow, rect, tri, type Raw } from '../kit';
+import { chip, circle, dip, ecap, header, line, moduleBoard, path, pcb, pinRow, rect, smd, smdRow, tri, type Raw } from '../kit';
+
+/** a WS2812B package: white 5050 body, the dark window over the three dies */
+const ws2812 = (x: number, y: number): Raw[] => [
+  rect(x - 3.4, y - 3.4, 6.8, 6.8, '#fbfbf9', { rx: 0.6, grad: '#d9d8d2', shadow: 0.6 }),
+  circle(x, y, 2.4, '#e9e6de', { grad: '#b9b4a6', gradDir: 'r' }),
+  rect(x - 1.1, y - 1.3, 0.8, 0.8, '#3a3d42'), rect(x + 0.3, y - 1.3, 0.8, 0.8, '#3a3d42'), rect(x - 0.4, y + 0.4, 0.8, 0.8, '#3a3d42'),
+];
 import { poweredFn, type DevicePart } from './common';
 
 // ------------------------------------------------------------------ NeoPixel
@@ -11,7 +18,7 @@ function neoPixel(type: string, name: string, n: number, pos: (i: number) => [nu
       type, name, category: 'diodes', description,
       keywords: ['neopixel', 'ws2812', 'ws2812b', 'addressable led', 'rgb strip', 'led strip', 'fastled', 'sk6812'],
       pins,
-      shapes: [...body, ...leds.flatMap(([x, y]) => [rect(x - 3.2, y - 3.2, 6.4, 6.4, '#f4f2ec', { rx: 0.8 }), circle(x, y, 2, '#d9d4c3')])],
+      shapes: [...body, ...leds.flatMap(([x, y]) => ws2812(x, y))],
       model: {
         elements: [
           { id: 'LOAD', kind: 'isource', p: 'GND', n: 'VCC', value: 'v(VCC, GND) > 3 ? iload : 0' },
@@ -143,7 +150,7 @@ export function ssd1306Write(s: OledState, bytes: number[], pages: number) {
 function oled(type: string, name: string, h: number): DevicePart {
   const pages = h / 8;
   const b = moduleBoard(['GND', 'VCC', 'SCL', 'SDA'], { h: h === 64 ? 96 : 44, w: 112, color: '#1d3c80', labels: { VCC: '+3.3–5 V', SCL: 'I2C clock', SDA: 'I2C data' } });
-  const scr = { x: -41, y: h === 64 ? -86 : -38, w: 102, px: 102 / 128 };
+  const scr = { x: -36, y: h === 64 ? -86 : -38, w: 102, px: 102 / 128 };
   const scrH = h * scr.px;
   return [
     {
@@ -152,7 +159,14 @@ function oled(type: string, name: string, h: number): DevicePart {
       keywords: ['oled', 'ssd1306', 'display', '128x64', '128x32', 'i2c display', 'screen', 'adafruit_ssd1306'],
       pins: b.pins,
       props: [{ key: 'addr', label: 'I2C address', type: 'select', default: 0x3c, options: [{ value: 0x3c, label: '0x3C' }, { value: 0x3d, label: '0x3D' }] }],
-      shapes: [...b.shapes, rect(scr.x - 3, scr.y - 3, scr.w + 6, scrH + 6, '#0b0d10', { rx: 1.5 }), rect(scr.x, scr.y, scr.w, scrH, '#050607')],
+      shapes: [
+        ...b.shapes,
+        rect(scr.x - 3.5, scr.y - 4, scr.w + 7, scrH + (h === 64 ? 16 : 9), '#dfe3e7', { rx: 1, grad: '#b8c0c8', opacity: 0.55 }),
+        rect(scr.x - 3, scr.y - 3, scr.w + 6, scrH + 6, '#15171b', { rx: 1.2, shadow: 0.8 }),
+        rect(scr.x, scr.y, scr.w, scrH, '#040506'),
+        path(`M ${scr.x} ${scr.y} L ${scr.x + scr.w * 0.35} ${scr.y} L ${scr.x + scr.w * 0.18} ${scr.y + scrH} L ${scr.x} ${scr.y + scrH} Z`, '#ffffff', { opacity: 0.04 }),
+        rect(scr.x + scr.w / 2 - 14, scr.y + scrH + 3, 28, h === 64 ? 6 : 3, '#e0a257', { opacity: 0.8, rx: 0.5 }),
+      ],
       model: { elements: [{ id: 'IQ', kind: 'rvar', a: 'VCC', b: 'GND', value: 'v(VCC, GND) > 2 ? 250 : 1e6' }, { id: 'RSDA', kind: 'resistor', a: 'SDA', b: 'GND', value: 1e6 }, { id: 'RSCL', kind: 'resistor', a: 'SCL', b: 'GND', value: 1e6 }] },
     },
     {
@@ -211,7 +225,14 @@ function max7219(): DevicePart {
       description: 'MAX7219 driver + 8×8 red LED matrix: 3 wires (DIN, CS, CLK) drive all 64 LEDs, and modules daisy-chain (DOUT → next DIN). Use the LedControl library (or MD_MAX72XX-style raw shifting).',
       keywords: ['max7219', 'led matrix', 'dot matrix', 'fc-16', 'ledcontrol', '8x8', 'scrolling text'],
       pins: [...inp, ...out],
-      shapes: [rect(-8, -100, 116, 106, COL.pcbBlue, { rx: 2 }), rect(4, -94, 82, 82, '#15161a', { rx: 1.5 }), ...Array.from({ length: 64 }, (_, i) => circle(...dot(Math.floor(i / 8), i % 8), 3.6, '#3a2323')), rect(-5, -5, 50, 9, COL.header, { rx: 1 }), rect(85, -5, 50, 9, COL.header, { rx: 1 })],
+      shapes: [
+        ...pcb(-8, -100, 146, 106, '#1d5bb8', { holes: 'none' }),
+        ...header(inp), ...header(out),
+        ...chip(96, -70, 26, 12, { n: 12, label: 'MAX7219' }), ...ecap(108, -88, 5), ...smdRow(96, -44, 4, 6, false, 'rcrc'),
+        rect(3, -95, 84, 84, '#34363b', { rx: 1.5, grad: '#111214', shadow: 1 }),
+        ...Array.from({ length: 64 }, (_, i) => ({ ...circle(...dot(Math.floor(i / 8), i % 8), 3.6, '#6d6662'), grad: '#3b3533', gradDir: 'r' })),
+        rect(3, -95, 84, 26, '#ffffff', { opacity: 0.04, rx: 1.5 }),
+      ],
       connections: [['VCC', 'VCC2'], ['GND', 'GND2'], ['CS', 'CS2'], ['CLK', 'CLK2']],
       model: { elements: [{ id: 'LOAD', kind: 'isource', p: 'GND', n: 'VCC', value: 'v(VCC, GND) > 3 ? iload : 0' }, ...['DIN', 'CS', 'CLK'].map((p) => ({ id: `R${p}`, kind: 'resistor', a: p, b: 'GND', value: 1e6 })), { id: 'RDO', kind: 'resistor', a: 'DOUT', b: 'GND', value: 1e6 }] },
     },
@@ -317,13 +338,13 @@ function hc595(): DevicePart {
 
 export const DISPLAY_DEVICES: DevicePart[] = [
   neoPixel('neopixel-stick', 'NeoPixel stick (8 × WS2812)', 8, (i) => [i * 10 + 5, -12],
-    [rect(-4, -22, 88, 16, '#23252a', { rx: 2 })], neoPins(15),
+    [...pcb(-4, -22, 88, 16, '#23252a', { holes: 'none', rx: 2 }), ...neoPins(15).map((p) => rect(p.x - 2.4, -5, 4.8, 4, '#e3c25e', { rx: 0.6, grad: '#9c7b26' })), ...Array.from({ length: 8 }, (_, i) => smd(i * 10 + 10, -18.5, 'c')).flat()], neoPins(15),
     '8 addressable RGB LEDs (WS2812B) in a row. Send colours down one data wire with Adafruit_NeoPixel; chain more strips from DOUT. Each LED draws up to 60 mA at full white.'),
   neoPixel('neopixel-ring', 'NeoPixel ring (16 × WS2812)', 16, (i) => [15 + 26 * Math.cos((i * 2 * Math.PI) / 16 - Math.PI / 2), -40 + 26 * Math.sin((i * 2 * Math.PI) / 16 - Math.PI / 2)],
-    [circle(15, -40, 32, '#23252a'), circle(15, -40, 20, '#f6f6f2')], neoPins(0),
+    [circle(15, -40, 32, '#2a2c31', { grad: '#111214', gradDir: 'd', shadow: 1 }), circle(15, -40, 20, '#f3f4f6', { grad: '#d5d9de', gradDir: 'd' }), ...Array.from({ length: 16 }, (_, i) => { const a = (i * 2 * Math.PI) / 16 - Math.PI / 2 + 0.2; return smd(15 + 21.5 * Math.cos(a), -40 + 21.5 * Math.sin(a), 'c'); }).flat(), line(0, 0, 0, -9, '#26282c', 1.6), line(10, 0, 10, -9, '#d63c35', 1.6), line(20, 0, 20, -9, '#3ec46d', 1.6), line(30, 0, 30, -9, '#f2f4f6', 1.6)], neoPins(0),
     '16 WS2812B RGB LEDs on a ring — clocks, spinners, level meters. Adafruit_NeoPixel with 16 pixels; chain more from DOUT.'),
   neoPixel('neopixel-strip', 'NeoPixel LED strip (30 × WS2812B)', 30, (i) => [i * 10 + 5, -12],
-    [rect(-4, -20, 308, 16, '#f4f2ec', { rx: 1 }), ...Array.from({ length: 10 }, (_, i) => line(i * 30 + 30, -20, i * 30 + 30, -4, '#c9a24a', 0.6))], neoPins(0).map((p, i) => ({ ...p, x: [-30, -20, -10, 310][i], y: 0 })),
+    [path('M -30 0 C -30 -8 -12 -12 -4 -12', 'none', { stroke: '#26282c', strokeWidth: 1.6 }), path('M -20 0 C -20 -6 -12 -9 -4 -9', 'none', { stroke: '#d63c35', strokeWidth: 1.6 }), path('M -10 0 C -10 -3 -8 -6 -4 -6', 'none', { stroke: '#3ec46d', strokeWidth: 1.6 }), line(304, -12, 310, 0, '#3ec46d', 1.6), rect(-4, -21, 308, 18, '#fbfbf9', { rx: 1, grad: '#d9d8d2', shadow: 0.9 }), rect(-4, -21, 308, 2, '#ffffff', { opacity: 0.6 }), ...Array.from({ length: 10 }, (_, i) => [line(i * 30 + 30, -21, i * 30 + 30, -3, '#c9a24a', 0.8), rect(i * 30 + 27, -20, 6, 3, '#e3c25e', { rx: 0.4 }), rect(i * 30 + 27, -7, 6, 3, '#e3c25e', { rx: 0.4 })]).flat(), ...Array.from({ length: 30 }, (_, i) => smd(i * 10 + 10, -18, 'r')).flat()], neoPins(0).map((p, i) => ({ ...p, x: [-30, -20, -10, 310][i], y: 0 })),
     '1 m of addressable LED strip, 30 WS2812B pixels. Power it from a 5 V supply (it can draw 1.8 A at full white!) and join the grounds; data from any pin through ~330 Ω.'),
   oled('oled-128x64', 'OLED display 0.96" (SSD1306 128×64)', 64),
   oled('oled-128x32', 'OLED display 0.91" (SSD1306 128×32)', 32),

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 import type { ComponentDef, PinDef, PropField } from '../components/types';
 import type { CustomPartSpec, PartShape } from './spec';
 import { compileExpr, type Compiled, type ExprScope } from './expr';
@@ -7,37 +7,96 @@ import type { SimBuilder, SimWarning } from '../sim/builder';
 import type { ComponentInstance } from '../model/types';
 import { PinTip, SLine, SText, clamp01, formatSI, ledParams } from '../components/util';
 
-function Shape({ s, glow }: { s: PartShape; glow?: string }): ReactNode {
-  const common = {
-    fill: glow ?? s.fill ?? (s.type === 'line' || s.type === 'polyline' ? 'none' : '#888'),
-    stroke: s.stroke,
-    strokeWidth: s.strokeWidth,
-    opacity: s.opacity,
-  };
+/** the bare SVG element for a shape, with the given paint */
+function geometry(s: PartShape, paint: Record<string, unknown>): ReactNode {
   switch (s.type) {
     case 'rect':
-      return <rect x={s.x ?? 0} y={s.y ?? 0} width={s.w ?? 0} height={s.h ?? 0} rx={s.rx} {...common} />;
+      return <rect x={s.x ?? 0} y={s.y ?? 0} width={s.w ?? 0} height={s.h ?? 0} rx={s.rx} {...paint} />;
     case 'circle':
-      return <circle cx={s.cx ?? 0} cy={s.cy ?? 0} r={s.r ?? 0} {...common} />;
+      return <circle cx={s.cx ?? 0} cy={s.cy ?? 0} r={s.r ?? 0} {...paint} />;
     case 'ellipse':
-      return <ellipse cx={s.cx ?? 0} cy={s.cy ?? 0} rx={s.rx ?? s.r ?? 0} ry={s.ry ?? s.r ?? 0} {...common} />;
+      return <ellipse cx={s.cx ?? 0} cy={s.cy ?? 0} rx={s.rx ?? s.r ?? 0} ry={s.ry ?? s.r ?? 0} {...paint} />;
     case 'line':
-      return <line x1={s.x1 ?? 0} y1={s.y1 ?? 0} x2={s.x2 ?? 0} y2={s.y2 ?? 0} {...common} stroke={s.stroke ?? '#333'} strokeLinecap="round" />;
+      return <line x1={s.x1 ?? 0} y1={s.y1 ?? 0} x2={s.x2 ?? 0} y2={s.y2 ?? 0} {...paint} stroke={(paint.stroke as string) ?? '#333'} strokeLinecap="round" />;
     case 'polyline': {
       const pts: string[] = [];
       for (let i = 0; i + 1 < (s.points ?? []).length; i += 2) pts.push(`${s.points![i]},${s.points![i + 1]}`);
-      return <polyline points={pts.join(' ')} {...common} stroke={s.stroke ?? '#333'} strokeLinejoin="round" strokeLinecap="round" />;
+      return <polyline points={pts.join(' ')} {...paint} stroke={(paint.stroke as string) ?? '#333'} strokeLinejoin="round" strokeLinecap="round" />;
     }
     case 'path':
-      return <path d={s.d} {...common} />;
+      return <path d={s.d} strokeLinejoin="round" {...paint} />;
     case 'text':
       return (
-        <text x={s.x ?? 0} y={s.y ?? 0} fontSize={s.size ?? 6} textAnchor={s.anchor ?? 'middle'} fill={s.fill ?? '#222'} opacity={s.opacity} fontFamily="Inter, system-ui, sans-serif" fontWeight={600} style={{ userSelect: 'none', pointerEvents: 'none' }}>
+        <text x={s.x ?? 0} y={s.y ?? 0} fontSize={s.size ?? 6} textAnchor={s.anchor ?? 'middle'} fill={(paint.fill as string) ?? '#222'} opacity={s.opacity} fontFamily={s.font === 'mono' ? "'JetBrains Mono', ui-monospace, monospace" : 'Inter, system-ui, sans-serif'} fontWeight={s.weight ?? 600} style={{ userSelect: 'none', pointerEvents: 'none' }}>
           {s.text}
         </text>
       );
   }
 }
+
+/** point a shape turns about */
+function pivot(s: PartShape): [number, number] {
+  switch (s.type) {
+    case 'rect': return [(s.x ?? 0) + (s.w ?? 0) / 2, (s.y ?? 0) + (s.h ?? 0) / 2];
+    case 'circle': case 'ellipse': return [s.cx ?? 0, s.cy ?? 0];
+    case 'text': return [s.x ?? 0, s.y ?? 0];
+    default: {
+      const b = shapeBox(s);
+      return b ? [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2] : [0, 0];
+    }
+  }
+}
+
+const GRAD_AXES = { v: [0, 0, 0, 1], h: [0, 0, 1, 0], d: [0, 0, 1, 1] } as const;
+
+function Shape({ s, glow }: { s: PartShape; glow?: string }): ReactNode {
+  const rawId = useId();
+  const baseFill = glow ?? s.fill ?? (s.type === 'line' || s.type === 'polyline' ? 'none' : '#888');
+  const gradOn = !glow && !!s.grad && s.type !== 'text' && s.type !== 'line' && baseFill !== 'none';
+  const gid = `pg${rawId.replace(/[^A-Za-z0-9]/g, '')}`;
+  const paint = {
+    fill: gradOn ? `url(#${gid})` : baseFill,
+    stroke: s.stroke,
+    strokeWidth: s.strokeWidth,
+    strokeDasharray: s.dash,
+    opacity: s.opacity,
+  };
+  const [px, py] = s.rotate ? pivot(s) : [0, 0];
+  const body = (
+    <>
+      {gradOn && (
+        <defs>
+          {s.gradDir === 'r' ? (
+            <radialGradient id={gid} cx="0.38" cy="0.32" r="0.75">
+              <stop offset="0" stopColor={s.grad} />
+              <stop offset="1" stopColor={baseFill} />
+            </radialGradient>
+          ) : (
+            <linearGradient id={gid} x1={GRAD_AXES[s.gradDir ?? 'v'][0]} y1={GRAD_AXES[s.gradDir ?? 'v'][1]} x2={GRAD_AXES[s.gradDir ?? 'v'][2]} y2={GRAD_AXES[s.gradDir ?? 'v'][3]}>
+              <stop offset="0" stopColor={baseFill} />
+              <stop offset="1" stopColor={s.grad} />
+            </linearGradient>
+          )}
+        </defs>
+      )}
+      {!!s.shadow && s.type !== 'text' && (
+        <g transform="translate(0.9 1.6)" opacity={Math.min(1, s.shadow) * 0.3} style={{ pointerEvents: 'none' }}>
+          {geometry(s, { fill: s.type === 'line' || s.type === 'polyline' ? 'none' : '#000', stroke: s.type === 'line' || s.type === 'polyline' || s.stroke ? '#000' : undefined, strokeWidth: s.strokeWidth })}
+        </g>
+      )}
+      {geometry(s, paint)}
+    </>
+  );
+  return s.rotate ? <g transform={`rotate(${s.rotate} ${px} ${py})`}>{body}</g> : body;
+}
+
+/** Draw a list of spec shapes (used by hand-written parts that reuse the part kit's artwork). */
+export function Shapes({ shapes }: { shapes: PartShape[] }): ReactNode {
+  return <>{ordered(shapes).map((s, i) => <Shape key={i} s={s} />)}</>;
+}
+
+/** shapes in drawing order (stable sort by z) */
+const ordered = (shapes: PartShape[]) => (shapes.some((s) => s.z) ? shapes.map((s, i) => [s, i] as const).sort((a, b) => (a[0].z ?? 0) - (b[0].z ?? 0) || a[1] - b[1]).map(([s]) => s) : shapes);
 
 function shapeBox(s: PartShape): [number, number, number, number] | null {
   switch (s.type) {
@@ -54,13 +113,57 @@ function shapeBox(s: PartShape): [number, number, number, number] | null {
       return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
     }
     case 'text': return [(s.x ?? 0) - 10, (s.y ?? 0) - (s.size ?? 6), (s.x ?? 0) + 10, s.y ?? 0];
-    case 'path': {
-      const nums = (s.d ?? '').match(/-?\d*\.?\d+(e[-+]?\d+)?/gi)?.map(Number) ?? [];
-      if (nums.length < 2) return null;
-      const xs = nums.filter((_, i) => i % 2 === 0), ys = nums.filter((_, i) => i % 2 === 1);
-      return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+    case 'path':
+      return pathBox(s.d ?? '');
+  }
+}
+
+const PATH_ARGS: Record<string, number> = { m: 2, l: 2, t: 2, h: 1, v: 1, c: 6, s: 4, q: 4, a: 7, z: 0 };
+
+/** Bounding box of an SVG path's points (end and control points; arcs by their end points and radii). */
+function pathBox(d: string): [number, number, number, number] | null {
+  const tokens = d.match(/[a-zA-Z]|-?\d*\.?\d+(?:e[-+]?\d+)?/gi) ?? [];
+  const xs: number[] = [], ys: number[] = [];
+  let x = 0, y = 0, sx = 0, sy = 0, cmd = '', i = 0;
+  const add = (px: number, py: number) => {
+    xs.push(px);
+    ys.push(py);
+  };
+  while (i < tokens.length) {
+    if (/[a-z]/i.test(tokens[i])) cmd = tokens[i++];
+    const lc = cmd.toLowerCase(), rel = cmd !== cmd.toUpperCase(), n = PATH_ARGS[lc];
+    if (n === undefined) return null;
+    if (lc === 'z') {
+      x = sx;
+      y = sy;
+      if (i < tokens.length && !/[a-z]/i.test(tokens[i])) i++;
+      continue;
+    }
+    const a = tokens.slice(i, i + n).map(Number);
+    if (a.length < n || a.some((v) => !Number.isFinite(v))) break;
+    i += n;
+    const ox = rel ? x : 0, oy = rel ? y : 0;
+    if (lc === 'h') x = a[0] + ox;
+    else if (lc === 'v') y = a[0] + oy;
+    else if (lc === 'a') {
+      x = a[5] + ox;
+      y = a[6] + oy;
+      add(x - a[0], y - a[1]);
+      add(x + a[0], y + a[1]);
+    } else {
+      for (let k = 0; k + 2 < n; k += 2) add(a[k] + ox, a[k + 1] + oy);
+      x = a[n - 2] + ox;
+      y = a[n - 1] + oy;
+    }
+    add(x, y);
+    if (lc === 'm') {
+      sx = x;
+      sy = y;
+      cmd = rel ? 'l' : 'L';
     }
   }
+  if (!xs.length) return null;
+  return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
 }
 
 const DIODES = {
@@ -143,7 +246,7 @@ export function defFromSpec(spec: CustomPartSpec, ext?: PartExt): ComponentDef {
     summary: () => (ai ? '✨ AI-generated part' : spec.summary ?? ''),
     render: ({ sim, comp }) => (
       <g>
-        {spec.shapes.map((s, i) => <Shape key={i} s={s} />)}
+        {ordered(spec.shapes).map((s, i) => <Shape key={i} s={s} />)}
         {(spec.animations ?? []).map((a, i) => {
           const st = (sim?.anims?.[i] as [number, number, number] | undefined) ?? [0, 0, 0];
           return (
@@ -173,7 +276,7 @@ export function defFromSpec(spec: CustomPartSpec, ext?: PartExt): ComponentDef {
         {spec.pins.map((p) => <PinTip key={p.id} x={p.x} y={p.y} />)}
       </g>
     ),
-    schematic: () => (spec.symbol ? <g>{spec.symbol.map((s, i) => <Shape key={i} s={{ ...s, fill: s.fill === 'none' || s.type === 'text' ? s.fill : s.fill ? '#fff' : undefined, stroke: s.type === 'text' ? undefined : '#1f3a5f' }} />)}</g> : autoSymbol()),
+    schematic: () => (spec.symbol ? <g>{spec.symbol.map((s, i) => <Shape key={i} s={{ ...s, grad: undefined, shadow: undefined, fill: s.fill === 'none' || s.type === 'text' ? s.fill : s.fill ? '#fff' : undefined, stroke: s.type === 'text' ? undefined : '#1f3a5f' }} />)}</g> : autoSymbol()),
     build: (b, comp) => {
       const hooks: ExtHooks = ext?.setup?.(b, comp) ?? {};
       let extVals: Record<string, number> = hooks.values?.() ?? {};

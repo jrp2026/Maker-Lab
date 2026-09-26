@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 
 const PREFIXES: [number, string][] = [
   [1e9, 'G'], [1e6, 'M'], [1e3, 'k'], [1, ''], [1e-3, 'm'], [1e-6, 'µ'], [1e-9, 'n'], [1e-12, 'p'],
@@ -69,6 +69,31 @@ export function Lead({ x1, y1, x2, y2, w = 1.6 }: { x1: number; y1: number; x2: 
 }
 
 /** Lead end drawn as a small pad so it reads as a pin on the canvas. */
+/**
+ * Lighting for hand-drawn parts: a highlight fading to a soft shade across a shape, so flat
+ * fills read as moulded plastic, solder mask or brushed metal. Draw it over the body.
+ */
+export function Sheen({ x, y, w, h, rx = 0, strength = 1, metal = false }: { x: number; y: number; w: number; h: number; rx?: number; strength?: number; metal?: boolean }) {
+  const id = `sh${useId().replace(/[^A-Za-z0-9]/g, '')}`;
+  return (
+    <g style={{ pointerEvents: 'none' }}>
+      <defs>
+        <linearGradient id={id} x1="0" y1="0" x2={metal ? 1 : 0} y2="1">
+          <stop offset="0" stopColor="#fff" stopOpacity={(metal ? 0.45 : 0.16) * strength} />
+          <stop offset="0.5" stopColor="#fff" stopOpacity={0} />
+          <stop offset="1" stopColor="#000" stopOpacity={(metal ? 0.3 : 0.22) * strength} />
+        </linearGradient>
+      </defs>
+      <rect x={x} y={y} width={w} height={h} rx={rx} fill={`url(#${id})`} />
+    </g>
+  );
+}
+
+/** Soft drop shadow under a hand-drawn body. */
+export const DropShadow = ({ x, y, w, h, rx = 0 }: { x: number; y: number; w: number; h: number; rx?: number }) => (
+  <rect x={x + 0.9} y={y + 1.6} width={w} height={h} rx={rx} fill="#000" opacity={0.28} style={{ pointerEvents: 'none' }} />
+);
+
 export function PinTip({ x, y }: { x: number; y: number }) {
   return <rect x={x - 1.8} y={y - 1.8} width={3.6} height={3.6} rx={0.8} fill="#c7cdd4" stroke={LEAD_DARK} strokeWidth={0.5} />;
 }

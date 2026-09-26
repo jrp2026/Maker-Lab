@@ -1,4 +1,8 @@
-import { COL, circle, contact, dip, line, pinRow, rect, text, type Raw } from './kit';
+import { COL, circle, contact, dip, pinRow, rect, shade, text, type Raw } from './kit';
+
+/** tinned DIP-style legs from the body edge to each pin */
+const dipLegs = (pins: { x: number; y: number }[], top: number, bottom: number): Raw[] =>
+  pins.map((p) => rect(p.x - 1, p.y === 0 ? 0 : bottom, 2, p.y === 0 ? top : p.y - bottom, COL.metal, { grad: COL.metalDark, gradDir: 'h' }));
 
 // segment geometry inside a 7-seg body spanning x −6…46, y 4…56
 const SEG: Record<string, Raw> = {
@@ -27,9 +31,11 @@ function sevenSeg(anode: boolean): Raw {
     pins: d.pins,
     symbol: d.symbol,
     shapes: [
-      ...d.pins.map((p) => line(p.x, p.y === 0 ? 5 : 55, p.x, p.y, COL.metal, 2.4)),
-      rect(-6, 4, 52, 52, '#1c1d20', { rx: 1.5, stroke: '#000', strokeWidth: 0.6 }),
-      ...segs.map((k) => colored(SEG[k], '#3a2222')),
+      ...dipLegs(d.pins, 5, 55),
+      rect(-6, 4, 52, 52, '#34363b', { rx: 1.5, grad: '#141517', shadow: 1, stroke: '#0a0a0b', strokeWidth: 0.5 }),
+      rect(-3, 7, 46, 46, '#1b1c1f', { rx: 1 }),
+      ...segs.map((k) => colored(SEG[k], '#4a3434')),
+      rect(-3, 7, 46, 12, '#ffffff', { opacity: 0.04 }),
     ],
     indicators: segs.map((k) => ({ shape: colored(SEG[k], '#ff2a1a'), color: '#ff2a1a', level: `clamp(i(D${k}) / 0.01, 0, 1)` })),
     connections: [['COM1', 'COM2']],
@@ -61,9 +67,10 @@ function matrix8x8(): Raw {
     keywords: ['led matrix', '8x8', 'dot matrix', '1088as', 'max7219', 'scrolling text'],
     pins,
     shapes: [
-      ...pins.map((p) => line(p.x, p.y === 0 ? 5 : 95, p.x, p.y, COL.metal, 2)),
-      rect(-6, 4, 82, 92, '#15161a', { rx: 1.5 }),
-      ...rows.flatMap((r) => cols.map((c) => colored(dot(r, c), '#3a2323'))),
+      ...dipLegs(pins, 5, 95),
+      rect(-6, 4, 82, 92, '#34363b', { rx: 1.5, grad: '#111214', shadow: 1 }),
+      ...rows.flatMap((r) => cols.map((c) => ({ ...colored(dot(r, c), '#6d6662'), grad: '#3b3533', gradDir: 'r' }))),
+      rect(-6, 4, 82, 30, '#ffffff', { opacity: 0.04, rx: 1.5 }),
     ],
     indicators,
     model: { elements },
@@ -86,7 +93,12 @@ export const DISPLAYS: Raw[] = [
         { key: 'y', label: 'Touch Y', type: 'slider', default: 0.5, min: 0, max: 1, step: 0.01 },
       ],
       interactive: 'press',
-      shapes: [line(0, 0, 0, -10, COL.copper, 1.4), line(10, 0, 10, -10, COL.copper, 1.4), line(20, 0, 20, -10, COL.copper, 1.4), line(30, 0, 30, -10, COL.copper, 1.4), rect(-6, -12, 42, 6, '#d9b36a', { rx: 1 }), rect(-40, -96, 110, 84, '#cfd8dc', { rx: 3, stroke: '#90a4ae', strokeWidth: 1 }), rect(-36, -92, 102, 76, '#e8eef1', { rx: 2 })],
+      shapes: [
+        rect(-5, -16, 40, 14, '#e8b24a', { rx: 1, grad: '#b8801c', opacity: 0.95 }), ...[0, 10, 20, 30].map((x) => rect(x - 1.4, -8, 2.8, 8, '#d9dde2', { grad: '#8a929b', gradDir: 'h' })),
+        rect(-41, -97, 112, 86, '#dfe6ea', { rx: 3, grad: '#aebbc2', gradDir: 'd', shadow: 1, stroke: '#8ea0aa', strokeWidth: 0.6 }),
+        rect(-36, -92, 102, 76, '#f4f8fa', { rx: 1.5, grad: '#dbe5ea', gradDir: 'd' }),
+        { type: 'path', d: 'M -36 -92 L 10 -92 L -20 -16 L -36 -16 Z', fill: '#ffffff', opacity: 0.35 },
+      ],
       animations: [{ shape: circle(15, -54, 4, '#e53935', { opacity: 0.8 }), dx: '(x - 0.5) * 96', dy: '(0.5 - y) * 70' }],
       model: {
         nodes: ['TX', 'TY'],
@@ -119,9 +131,17 @@ export const KEYPAD: Raw = (() => {
     ],
     interactive: 'press',
     shapes: [
-      ...pins.map((p) => line(p.x, p.y, p.x, -12, '#20242a', 3)),
-      rect(-14, -110, 98, 96, '#1f2226', { rx: 3 }),
-      ...KEYS.flatMap((k, i) => [rect(kx(i), ky(i), 18, 18, i % 4 === 3 ? '#d63c35' : i >= 12 && i !== 13 ? '#2f6fd6' : '#f4f2ec', { rx: 2 }), text(kx(i) + 9, ky(i) + 12, k, 7, i % 4 === 3 || (i >= 12 && i !== 13) ? '#fff' : '#222')]),
+      rect(-5, -16, 80, 16, '#26282c', { rx: 1, grad: '#101113' }), ...pins.map((p) => rect(p.x - 1.3, -16, 2.6, 16, '#c9ced4', { grad: '#7f8891', gradDir: 'h', opacity: 0.9 })),
+      rect(-15, -111, 100, 98, '#f4f5f7', { rx: 3, grad: '#cfd4da', shadow: 1, stroke: '#9aa3ad', strokeWidth: 0.6 }),
+      rect(-12, -108, 94, 92, '#1f2226', { rx: 2 }),
+      ...KEYS.flatMap((k, i) => {
+        const c = i % 4 === 3 ? '#e0453d' : i >= 12 && i !== 13 ? '#3b82e0' : '#fbfbf9';
+        return [
+          rect(kx(i), ky(i), 18, 18, c, { rx: 2.4, grad: shade(c, -0.18), shadow: 0.7 }),
+          rect(kx(i) + 2, ky(i) + 1.5, 14, 3, '#ffffff', { opacity: 0.35, rx: 1.5 }),
+          text(kx(i) + 9, ky(i) + 12, k, 7, i % 4 === 3 || (i >= 12 && i !== 13) ? '#fff' : '#222', 'middle', { weight: 700 }),
+        ];
+      }),
     ],
     indicators: KEYS.map((_, i) => ({ shape: rect(kx(i), ky(i), 18, 18, '#ffe066', { rx: 2, opacity: 0.6 }), color: '#ffe066', level: `(${down(i)}) ? 1 : 0` })),
     model: { elements: KEYS.map((_, i) => contact(`K${i + 1}`, `R${Math.floor(i / 4) + 1}`, `C${(i % 4) + 1}`, down(i), 100)) },

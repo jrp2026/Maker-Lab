@@ -1,6 +1,10 @@
-import { COL, axial, circle, contact, dip, legs, line, pinRow, rect, text, to220, to92, type Raw } from './kit';
+import { COL, axial, circle, contact, dip, header, legs, line, path, pcb, pinLabels, pinRow, rect, screwTerminals, shade, silk, smdRow, text, to220, to220At, to92, type Raw } from './kit';
 
-const diodeBody = (color: string, band: string, w = 16) => [rect(20 - w / 2, -4, w, 8, color, { rx: 2 }), rect(20 + w / 2 - 4, -4, 2.6, 8, band)];
+const diodeBody = (color: string, band: string, w = 16) => [
+  rect(20 - w / 2, -4.2, w, 8.4, shade(color, 0.25), { rx: 2.4, grad: shade(color, -0.35), shadow: 0.8 }),
+  rect(20 + w / 2 - 4.4, -4.2, 2.8, 8.4, shade(band, 0.1), { grad: shade(band, -0.3) }),
+  rect(20 - w / 2 + 2, -3.2, w - 4, 1.4, '#ffffff', { opacity: 0.25, rx: 0.7 }),
+];
 const diodeSymbol = (extra: Raw[] = []) => [
   line(0, 0, 15, 0, '#1f3a5f', 1.3), { type: 'path', d: 'M15 -6 L15 6 L25 0 Z', fill: '#1f3a5f' }, line(25, -6, 25, 6, '#1f3a5f', 1.3), line(25, 0, 40, 0, '#1f3a5f', 1.3), ...extra,
 ];
@@ -9,9 +13,10 @@ const AK = { A: 'Anode (+)', K: 'Cathode (−, banded)' };
 const led5mm = (color: string, glowLevel: string, extra: Raw = {}) => ({
   pins: pinRow(['A', 'K'], { labels: { A: 'Anode (+, long leg)', K: 'Cathode (−)' } }),
   shapes: [
-    line(0, -10, 0, 0), line(10, -10, 10, 0),
-    rect(-4.5, -13, 19, 3.5, color, { rx: 1 }),
-    { type: 'path', d: 'M-3 -12 L-3 -22 A8 8 0 0 1 13 -22 L13 -12 Z', fill: color, opacity: 0.93, stroke: 'rgba(0,0,0,.25)', strokeWidth: 0.6 },
+    ...legs(pinRow(['A', 'K']), -10),
+    rect(-4.5, -13.5, 19, 3.8, shade(color, 0.1), { rx: 1, grad: shade(color, -0.3), opacity: 0.97 }),
+    path('M-3 -12 L-3 -22 A8 8 0 0 1 13 -22 L13 -12 Z', shade(color, 0.3), { grad: shade(color, -0.3), gradDir: 'h', opacity: 0.93, stroke: 'rgba(0,0,0,.25)', strokeWidth: 0.5, shadow: 0.6 }),
+    rect(-0.8, -26, 2, 12, '#ffffff', { opacity: 0.4, rx: 1 }),
   ],
   ...extra,
   glowLevel,
@@ -51,7 +56,7 @@ export const SEMIS: Raw[] = [
     type: 'tvs', name: 'TVS protection diode', category: 'diodes',
     description: 'Bidirectional transient-voltage-suppressor (clamps both polarities above ~6.8 V). Put it across a supply or data line to absorb spikes.',
     keywords: ['tvs', 'esd', 'surge', 'transient', 'protection', 'p6ke'],
-    ...axial(['1', '2'], [rect(12, -4, 16, 8, '#2b2b2e', { rx: 2 }), text(20, 2, 'TVS', 3.5, '#ddd')]),
+    ...axial(['1', '2'], [...diodeBody('#2b2b2e', '#2b2b2e'), text(20, 1.4, 'P6KE', 3, '#c9ccd1', 'middle', { weight: 600 })]),
     symbol: [line(0, 0, 12, 0, '#1f3a5f', 1.3), { type: 'path', d: 'M12 -6 L12 6 L20 0 Z M28 -6 L28 6 L20 0 Z', fill: '#1f3a5f' }, line(20, -6, 20, 6, '#1f3a5f', 1.3), line(28, 0, 40, 0, '#1f3a5f', 1.3)],
     model: {
       nodes: ['M'],
@@ -88,7 +93,13 @@ export const SEMIS: Raw[] = [
     description: '5 V, 650 nm red laser module (with built-in current limiting). S = signal/+, − = ground. Draws ~30 mA.',
     keywords: ['laser', 'ky-008', '650nm', 'pointer'],
     pins: pinRow(['S', 'N'], { labels: { S: 'Signal / +5 V', N: 'GND' } }),
-    shapes: [...legs(pinRow(['S', 'N']), -8), rect(-8, -26, 26, 18, '#b8bec6', { rx: 3, stroke: '#7d858e', strokeWidth: 0.6 }), rect(18, -21, 8, 8, '#8d949c'), circle(26, -17, 2, '#5a1010')],
+    shapes: [
+      ...legs(pinRow(['S', 'N']), -8),
+      rect(-8, -27, 28, 20, '#f3dc9a', { rx: 3, grad: '#a8862e', shadow: 1, stroke: '#8a6c20', strokeWidth: 0.4 }),
+      rect(-6, -25, 24, 3, '#ffffff', { opacity: 0.35, rx: 1.5 }),
+      rect(20, -22, 7, 10, '#e7eaee', { rx: 1, grad: '#8a929b' }), circle(27, -17, 2.4, '#8a1c1c', { grad: '#ff6b6b', gradDir: 'r' }),
+      text(6, -14, '650nm', 3, '#6b5418', 'middle', { weight: 700 }),
+    ],
     indicators: [
       { shape: rect(26, -18, 90, 2, '#ff2a2a'), color: '#ff2a2a', level: 'v(S, N) > 2.5 ? 0.85 : 0' },
       { shape: circle(118, -17, 4, '#ff2a2a'), color: '#ff2a2a', level: 'v(S, N) > 2.5 ? 1 : 0' },
@@ -123,18 +134,20 @@ export const SEMIS: Raw[] = [
   },
   (() => {
     const pins = pinRow(['SIG', 'VCC', 'GND'], { labels: { SIG: 'Signal (PWM ok)', VCC: 'VCC (logic)', GND: 'GND' } });
-    const load = [
-      { id: 'VIN', x: 60, y: 0, label: 'V+ (load supply)', kind: 'terminal' },
-      { id: 'VOUT', x: 70, y: 0, label: 'Load − (switched)', kind: 'terminal' },
-      { id: 'LGND', x: 80, y: 0, label: 'Load supply GND', kind: 'terminal' },
-    ];
+    const load = pinRow(['VIN', 'VOUT', 'LGND'], { x0: 60, kind: 'terminal', labels: { VIN: 'V+ (load supply)', VOUT: 'Load − (switched)', LGND: 'Load supply GND' } });
     return {
       type: 'mosfet-module', name: 'Logic-level MOSFET module', category: 'transistors',
       description: 'MOSFET switch board: connect SIG to a pin, and put your load between V+ and VOUT (low-side switch, up to ~5 A). The LED shows the gate state.',
       keywords: ['mosfet module', 'irf520', 'switch module', 'pwm driver'],
       pins: [...pins, ...load],
-      shapes: [rect(-8, -44, 98, 40, '#b8322a', { rx: 3 }), rect(28, -40, 22, 26, COL.ic, { rx: 1.5 }), text(39, -24, 'IRLZ44', 3.6, '#ddd'), text(20, -8, 'SIG VCC GND', 3.2, '#fff'), rect(55, -8, 30, 12, '#2f7fd6', { rx: 1.5 }), text(70, -30, 'V+ OUT GND', 3.2, '#fff')],
-      indicators: [{ shape: rect(4, -36, 5, 3, '#ff3b30'), color: '#ff3b30', level: 'v(SIG, GND) > 1.5 ? 1 : 0' }],
+      shapes: [
+        ...pcb(-9, -50, 98, 46, '#b02a24', { holes: 'top' }),
+        ...to220At(26, -44, 'IRLZ44N', -14),
+        ...header(pins), ...pinLabels(pins, -9.8),
+        ...screwTerminals(load, '#2f7fd6'), silk(60, -14.5, 'V+', 2.6), silk(70, -14.5, 'OUT', 2.6), silk(80, -14.5, 'GND', 2.6),
+        ...smdRow(56, -36, 4, 6), rect(1.5, -37.5, 5, 3, '#efe9d2', { rx: 0.4 }),
+      ],
+      indicators: [{ shape: rect(1.5, -37.5, 5, 3, '#ff3b30', { rx: 0.4 }), color: '#ff3b30', level: 'v(SIG, GND) > 1.5 ? 1 : 0' }],
       connections: [['GND', 'LGND']],
       model: {
         elements: [

@@ -4,6 +4,7 @@ import { extractJson, SpecError, validateSpec } from '../src/ai/spec';
 import { EXAMPLE_7805, generatePart } from '../src/ai/prompt';
 import { complete, listModels, type AiSettings } from '../src/ai/providers';
 import { registerSpec } from '../src/ai/library';
+import { defFromSpec } from '../src/ai/customPart';
 import { Simulator } from '../src/sim/simulator';
 import { getDef } from '../src/components/registry';
 import type { CircuitDoc, ComponentInstance, Wire } from '../src/model/types';
@@ -54,6 +55,26 @@ describe('part spec validation', () => {
     // a colour that isn't a plain colour is dropped rather than rendered
     const ok = validateSpec({ ...EXAMPLE_7805, shapes: [{ type: 'rect', x: 0, y: 0, w: 5, h: 5, fill: 'url(javascript:alert(1))' }] });
     expect(ok.shapes[0].fill).toBeUndefined();
+  });
+  it('keeps gradients, shadows, rotation and layering, and drops unsafe values', () => {
+    const spec = validateSpec({
+      ...EXAMPLE_7805,
+      shapes: [
+        { type: 'rect', x: 0, y: -20, w: 20, h: 10, fill: '#1d5bb8', grad: '#0b2a5c', gradDir: 'd', shadow: 0.8, rotate: 15, z: 2, dash: 1.5 },
+        { type: 'text', x: 5, y: -12, text: 'LM', weight: 450, font: 'mono', grad: 'url(#x)', gradDir: 'spiral' },
+      ],
+    });
+    expect(spec.shapes[0]).toMatchObject({ grad: '#0b2a5c', gradDir: 'd', shadow: 0.8, rotate: 15, z: 2, dash: 1.5 });
+    expect(spec.shapes[1]).toMatchObject({ weight: 500, font: 'mono' });
+    expect(spec.shapes[1].grad).toBeUndefined();
+    expect(spec.shapes[1].gradDir).toBeUndefined();
+  });
+  it('sizes a part by its path geometry, not by the numbers in arc commands', () => {
+    const def = defFromSpec(validateSpec({ ...EXAMPLE_7805, name: 'arc bounds', shapes: [{ type: 'path', d: 'M 100 -30 A 8 8 0 0 1 116 -30 Z', fill: '#333' }] }));
+    // pins at 0…20, the arc spans x 100…116: nothing should stretch the part towards (0, 0) or (1, …)
+    expect(def.bounds.y).toBeLessThan(-30);
+    expect(def.bounds.x + def.bounds.w).toBeGreaterThanOrEqual(116);
+    expect(def.bounds.y + def.bounds.h).toBeLessThan(10);
   });
   it('extracts JSON from fenced or chatty replies', () => {
     expect(extractJson('Sure!\n```json\n{"a": {"b": "}"}}\n```')).toEqual({ a: { b: '}' } });

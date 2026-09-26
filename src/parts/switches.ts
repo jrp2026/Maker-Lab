@@ -1,4 +1,4 @@
-import { COL, circle, contact, legs, line, moduleBoard, pinRow, rect, screwTerminals, statusLed, text, type Raw } from './kit';
+import { COL, circle, contact, legs, line, moduleBoard, path, pinRow, rect, relayCube, screwTerminals, silk, smd, sot23, statusLed, text, type Raw } from './kit';
 
 export const SWITCHES: Raw[] = [
   {
@@ -8,8 +8,13 @@ export const SWITCHES: Raw[] = [
     pins: pinRow(['1', 'C', '2'], { labels: { C: 'Common' } }),
     props: [{ key: 'on', label: 'Lever', type: 'select', default: 0, options: [{ value: 0, label: 'Down (C–1)' }, { value: 1, label: 'Up (C–2)' }] }],
     toggle: 'on',
-    shapes: [...legs(pinRow(['1', 'C', '2']), -8), rect(-6, -22, 32, 14, '#2f3237', { rx: 2 }), circle(10, -15, 6, '#b8bec6', { stroke: '#7d858e', strokeWidth: 0.6 })],
-    animations: [{ shape: rect(8, -38, 4, 22, '#dfe3e8', { rx: 2, stroke: '#9aa3ad', strokeWidth: 0.5 }), rotate: 'on == 1 ? 25 : -25', cx: 10, cy: -15 }],
+    shapes: [
+      ...legs(pinRow(['1', 'C', '2']), -8),
+      rect(-7, -24, 34, 16, '#3a3d44', { rx: 2, grad: '#15171a', shadow: 1 }),
+      path('M 10 -22.5 L 16.1 -19 L 16.1 -11 L 10 -7.5 L 3.9 -11 L 3.9 -19 Z', '#eef1f4', { grad: '#7f8891', gradDir: 'd', stroke: '#5f666e', strokeWidth: 0.4 }),
+      circle(10, -15, 4.2, '#d5d9de', { grad: '#6f7881', gradDir: 'r' }),
+    ],
+    animations: [{ shape: rect(8.2, -38, 3.6, 23, '#f7f8fa', { rx: 1.8, grad: '#8a929b', gradDir: 'h', stroke: '#6b737c', strokeWidth: 0.4 }), rotate: 'on == 1 ? 25 : -25', cx: 10, cy: -15 }],
     model: { elements: [contact('S1', 'C', '1', 'on == 0'), contact('S2', 'C', '2', 'on == 1')] },
   },
   (() => {
@@ -22,13 +27,18 @@ export const SWITCHES: Raw[] = [
       keywords: ['dip switch', 'config', 'address', 'selector'],
       pins: [...top, ...bottom],
       props,
-      shapes: [...top.map((p) => line(p.x, 0, p.x, 5, COL.metal, 2.2)), ...bottom.map((p) => line(p.x, 25, p.x, 30, COL.metal, 2.2)), rect(-6, 4, 82, 22, '#c0392b', { rx: 1.5 }), ...top.map((p) => rect(p.x - 3, 8, 6, 14, '#fff', { rx: 1 })), text(35, 29, 'ON  1 2 3 4 5 6 7 8', 3, '#fff')],
-      animations: top.map((p, i) => ({ shape: rect(p.x - 2.5, 16, 5, 5, '#39424c', { rx: 0.8 }), dy: `s${i + 1} == 1 ? -7 : 0` })),
+      shapes: [
+        ...top.map((p) => rect(p.x - 1, 0, 2, 5, COL.metal, { grad: COL.metalDark, gradDir: 'h' })), ...bottom.map((p) => rect(p.x - 1, 25, 2, 5, COL.metal, { grad: COL.metalDark, gradDir: 'h' })),
+        rect(-6, 4, 82, 22, '#e0453d', { rx: 1.5, grad: '#9e2721', shadow: 1 }),
+        ...top.map((p) => rect(p.x - 3, 7.5, 6, 13.5, '#2a2c30', { rx: 0.8 })),
+        text(-3, 8.2, 'ON', 2.4, '#fff', 'start', { weight: 700 }), ...top.map((p, i) => text(p.x, 24.4, String(i + 1), 2.6, '#fff', 'middle', { weight: 700 })),
+      ],
+      animations: top.map((p, i) => ({ shape: rect(p.x - 2.5, 14.5, 5, 6, '#f7f8fa', { rx: 0.6, grad: '#c5ccd4' }), dy: `s${i + 1} == 1 ? -6.5 : 0` })),
       model: { elements: top.map((p, i) => contact(`S${i + 1}`, p.id, `${i + 1}b`, `s${i + 1} == 1`)) },
     };
   })(),
   (() => {
-    const b = moduleBoard(['GND', 'VCC', 'VRX', 'VRY', 'SW'], { h: 56, color: '#262a30', title: 'JOYSTICK', labels: { VRX: 'X axis (analog)', VRY: 'Y axis (analog)', SW: 'Button (to GND when pressed)', VCC: '+5 V' } });
+    const b = moduleBoard(['GND', 'VCC', 'VRX', 'VRY', 'SW'], { h: 56, w: 60, color: '#23252a', holes: 'corners', labels: { VRX: 'X axis (analog)', VRY: 'Y axis (analog)', SW: 'Button (to GND when pressed)', VCC: '+5 V' } });
     return {
       type: 'joystick', name: 'Joystick module', category: 'switches',
       description: 'Two-axis thumb joystick (two 10 kΩ pots) with a push button. VRX/VRY sit at VCC/2 when centred. Move the axes in the inspector; press on the canvas to click the stick.',
@@ -40,8 +50,17 @@ export const SWITCHES: Raw[] = [
       ],
       interactive: 'press',
       drag: 'y',
-      shapes: [...b.shapes, circle(20, -34, 18, '#3a3e44'), circle(20, -34, 15, '#2b2d31')],
-      animations: [{ shape: circle(20, -34, 10, '#4b4f56', { stroke: '#666', strokeWidth: 1 }), dx: '(x - 0.5) * 12', dy: '(0.5 - y) * 12' }],
+      shapes: [
+        ...b.shapes,
+        rect(2, -52, 36, 36, '#e6eaee', { rx: 2, grad: '#7f8891', gradDir: 'd', shadow: 1, stroke: '#5f666e', strokeWidth: 0.5 }),
+        rect(5, -49, 30, 30, '#1f2124', { rx: 1.5 }),
+        rect(-6, -40, 8, 10, '#1f2226', { rx: 1 }), rect(38, -40, 8, 10, '#1f2226', { rx: 1 }),
+        circle(20, -34, 13, '#2f3237', { stroke: '#44474d', strokeWidth: 0.6 }),
+      ],
+      animations: [
+        { shape: circle(20, -34, 10.5, '#4d5158', { grad: '#16171a', gradDir: 'r', stroke: '#0c0d0f', strokeWidth: 0.6, shadow: 1 }), dx: '(x - 0.5) * 12', dy: '(0.5 - y) * 12' },
+        { shape: circle(20, -34, 6.5, 'none', { stroke: '#5c6068', strokeWidth: 0.5 }), dx: '(x - 0.5) * 12', dy: '(0.5 - y) * 12' },
+      ],
       model: {
         elements: [
           { id: 'RX1', kind: 'rvar', a: 'VCC', b: 'VRX', value: 'max(20, 10000 * (1 - x))' },
@@ -59,8 +78,17 @@ export const SWITCHES: Raw[] = [
     keywords: ['rotary switch', 'selector', 'band switch', 'mode'],
     pins: pinRow(['C', '1', '2', '3', '4'], { labels: { C: 'Common' } }),
     props: [{ key: 'pos', label: 'Position', type: 'select', default: 1, options: [1, 2, 3, 4].map((v) => ({ value: v, label: `Position ${v}` })) }],
-    shapes: [...legs(pinRow(['C', '1', '2', '3', '4']), -8), circle(20, -30, 22, '#2f3237'), circle(20, -30, 16, '#3c4047'), ...[1, 2, 3, 4].map((i) => text(20 + 19 * Math.cos(((-150 + i * 60) * Math.PI) / 180), -30 + 19 * Math.sin(((-150 + i * 60) * Math.PI) / 180) + 2, String(i), 4.5, '#ddd'))],
-    animations: [{ shape: rect(18.5, -44, 3, 14, '#f2f4f6', { rx: 1.5 }), rotate: '-90 + pos * 60', cx: 20, cy: -30 }],
+    shapes: [
+      ...legs(pinRow(['C', '1', '2', '3', '4']), -8),
+      circle(20, -30, 23, '#f4f6f8', { grad: '#c5ccd4', shadow: 1, stroke: '#9aa3ad', strokeWidth: 0.5 }),
+      ...[1, 2, 3, 4].map((i) => text(20 + 19.5 * Math.cos(((-150 + i * 60) * Math.PI) / 180), -30 + 19.5 * Math.sin(((-150 + i * 60) * Math.PI) / 180) + 1.6, String(i), 4.2, '#333', 'middle', { weight: 700 })),
+      circle(20, -30, 15, '#4a4d53', { grad: '#141517', gradDir: 'r', shadow: 1 }),
+      ...Array.from({ length: 20 }, (_, i) => {
+        const a = (i / 20) * 6.28318;
+        return line(20 + Math.cos(a) * 13, -30 + Math.sin(a) * 13, 20 + Math.cos(a) * 15, -30 + Math.sin(a) * 15, '#26282c', 0.7);
+      }),
+    ],
+    animations: [{ shape: rect(18.8, -43, 2.4, 11, '#f2f4f6', { rx: 1.2 }), rotate: '-90 + pos * 60', cx: 20, cy: -30 }],
     model: { elements: [1, 2, 3, 4].map((i) => contact(`S${i}`, 'C', String(i), `pos == ${i}`)) },
   },
 ];
@@ -74,9 +102,8 @@ export const RELAYS: Raw[] = [
       description: 'Electromechanical relay (SRD-05VDC): energise the 70 Ω coil with ~5 V (via a transistor — it needs 70 mA, and a flyback diode across the coil!) and COM switches from NC to NO. Contacts rated 10 A.',
       keywords: ['relay', 'srd-05vdc', 'spdt', 'coil', 'contactor'],
       pins: [...coil, ...sw],
-      shapes: [...legs([...coil, ...sw], -6), rect(-8, -48, 66, 42, '#2f6fd6', { rx: 2, stroke: '#1f4f9f', strokeWidth: 0.8 }), text(25, -34, 'SRD-05VDC-SL-C', 4, '#fff'), text(25, -24, '10A 250VAC', 3.6, '#d8e4ff')],
+      shapes: [...legs([...coil, ...sw], -6), ...relayCube(-8, -50, 66, 44, '#2463c9', ['SONGLE', 'SRD-05VDC-SL-C', '10A 250VAC  10A 30VDC'])],
       states: [{ name: 'on', init: 0, next: 'abs(v(COIL1, COIL2)) > 3.75 ? 1 : (abs(v(COIL1, COIL2)) < 1.2 ? 0 : on)' }],
-      animations: [{ shape: rect(40, -14, 16, 4, '#f2c230', { rx: 1 }), dx: 'on == 1 ? -4 : 0' }],
       model: {
         nodes: ['CM'],
         elements: [
@@ -98,8 +125,14 @@ export const RELAYS: Raw[] = [
       description: 'Solid-state relay (Fotek SSR-25 DA style): 3–32 V DC on the input turns the load side on — silent, no contacts. Drop ≈ 1 V when on.',
       keywords: ['ssr', 'solid state relay', 'fotek', 'triac'],
       pins: [...inp.map((p) => ({ ...p, id: p.id === 'IN+' ? 'INP' : 'INN' })), ...out],
-      shapes: [rect(-10, -50, 80, 44, '#f4f2ec', { rx: 3, stroke: '#9aa3ad', strokeWidth: 0.8 }), rect(-6, -46, 72, 12, '#1f2226', { rx: 1 }), text(30, -38, 'SSR-25DA', 5, '#fff'), text(5, -12, '+  −', 5, '#333'), text(55, -12, 'LOAD', 4, '#333'), ...screwTerminals([...inp.map((p) => ({ ...p })), ...out])],
-      indicators: [{ shape: circle(30, -26, 2.5, '#ff3b30'), color: '#ff3b30', level: 'v(INP, INN) > 3 ? 1 : 0' }],
+      shapes: [
+        rect(-12, -54, 84, 52, '#fbfbf8', { rx: 3, grad: '#d7d9d4', shadow: 1, stroke: '#a9aca5', strokeWidth: 0.5 }),
+        rect(-7, -49, 74, 14, '#26282c', { rx: 1.5, grad: '#111214' }), text(30, -39.5, 'SSR-25 DA', 5.4, '#fff', 'middle', { weight: 800 }),
+        text(30, -28.5, 'INPUT 3-32VDC · LOAD 24-380VAC', 2.6, '#444', 'middle', { weight: 600 }),
+        text(5, -17, '3+   4−', 3.2, '#333', 'middle', { weight: 700 }), text(55, -17, '1   2', 3.2, '#333', 'middle', { weight: 700 }),
+        ...screwTerminals(inp, '#b9bdb6'), ...screwTerminals(out, '#b9bdb6'),
+      ],
+      indicators: [{ shape: circle(30, -20, 2.2, '#ff3b30'), color: '#ff3b30', level: 'v(INP, INN) > 3 ? 1 : 0' }],
       model: {
         nodes: ['M'],
         elements: [
@@ -111,7 +144,7 @@ export const RELAYS: Raw[] = [
     };
   })(),
   (() => {
-    const b = moduleBoard(['GND', 'VCC', 'IN'], { h: 60, w: 110, color: '#1f5fbf', labels: { IN: 'IN (LOW = on)', VCC: '+5 V', GND: 'GND' } });
+    const b = moduleBoard(['GND', 'VCC', 'IN'], { h: 64, w: 104, boardX: -12, color: '#1d5bb8', holes: 'corners', labels: { IN: 'IN (LOW = on)', VCC: '+5 V', GND: 'GND' } });
     const load = pinRow(['NO', 'COM', 'NC'], { x0: 60, kind: 'terminal', labels: { NO: 'Normally open', COM: 'Common', NC: 'Normally closed' } });
     const led = statusLed(30, -50, '#ff3b30', 'on');
     return {
@@ -119,7 +152,15 @@ export const RELAYS: Raw[] = [
       description: '1-channel relay board: transistor driver, flyback diode and LED already fitted. Active-LOW input (pull IN to GND to switch). Screw terminals NO / COM / NC.',
       keywords: ['relay module', 'relay board', 'relay driver', 'songle', 'optocoupler'],
       pins: [...b.pins, ...load],
-      shapes: [...b.shapes, rect(46, -58, 46, 30, '#2f6fd6', { rx: 1.5 }), text(69, -44, 'SRD-05VDC', 3.8, '#fff'), led.shape, ...screwTerminals(load)],
+      shapes: [
+        ...b.shapes,
+        ...relayCube(40, -60, 52, 38),
+        ...sot23(18, -38, '1AM'), ...smd(8, -38, 'r', true), ...smd(28, -38, 'r', true),
+        rect(4, -28, 14, 4.5, '#2a2b2e', { rx: 1.5 }), rect(15, -28, 2, 4.5, '#d9d9d9'),
+        ...smd(26, -26, 'c'), silk(12, -46, '1 Relay Module', 2.8),
+        led.shape, ...screwTerminals(load),
+        silk(60, -14.5, 'NO', 2.6), silk(70, -14.5, 'COM', 2.6), silk(80, -14.5, 'NC', 2.6),
+      ],
       indicators: [led.indicator],
       states: [{ name: 'on', init: 0, next: '(v(VCC, GND) > 4 && v(IN, GND) < 1.5) ? 1 : 0' }],
       model: {

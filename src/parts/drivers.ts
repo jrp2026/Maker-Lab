@@ -1,4 +1,4 @@
-import { COL, circle, dip, halfBridge, moduleBoard, pinRow, rect, screwTerminals, statusLed, text, type Raw } from './kit';
+import { COL, carrier, chip, circle, dip, ecap, halfBridge, header, heatsink, jumper, line, moduleBoard, pcb, pinLabels, pinRow, rect, screwTerminals, silk, smd, smdRow, sot23, statusLed, text, to220At, trimpot, type Raw } from './kit';
 
 /** logic HIGH (TTL-ish threshold) relative to a ground pin */
 const hi = (pin: string, gnd = 'GND', th = 2) => `(v(${pin}, ${gnd}) > ${th})`;
@@ -10,10 +10,10 @@ const pwrLed = (x: number, y: number, vcc: string, gnd = 'GND', th = 4) => statu
 const l298n: Raw = (() => {
   const ctrl = pinRow(['ENA', 'IN1', 'IN2', 'IN3', 'IN4', 'ENB'], { x0: 20, labels: { ENA: 'ENA (PWM speed A; jumper = full speed)', ENB: 'ENB (PWM speed B)', IN1: 'IN1 (direction A)', IN2: 'IN2', IN3: 'IN3 (direction B)', IN4: 'IN4' } });
   const pwr = pinRow(['V12', 'GND', 'V5'], { x0: 30, y: -110, kind: 'terminal', labels: { V12: '+12 V motor supply (5–35 V)', GND: 'GND', V5: '+5 V (out with the 5 V jumper fitted)' } });
-  const ma = pinRow(['OUT1', 'OUT2'], { x0: -30, y: -50, step: 12, kind: 'terminal', labels: { OUT1: 'Motor A', OUT2: 'Motor A' } }).map((p, i) => ({ ...p, x: -30, y: -70 + i * 14 }));
-  const mb = pinRow(['OUT3', 'OUT4'], { kind: 'terminal', labels: { OUT3: 'Motor B', OUT4: 'Motor B' } }).map((p, i) => ({ ...p, x: 100, y: -70 + i * 14 }));
+  const ma = pinRow(['OUT1', 'OUT2'], { x0: -30, y: -50, step: 12, kind: 'terminal', labels: { OUT1: 'Motor A', OUT2: 'Motor A' } }).map((p, i) => ({ ...p, x: -30, y: -70 + i * 20 }));
+  const mb = pinRow(['OUT3', 'OUT4'], { kind: 'terminal', labels: { OUT3: 'Motor B', OUT4: 'Motor B' } }).map((p, i) => ({ ...p, x: 100, y: -70 + i * 20 }));
   const enA = `(jumperA == 1 || ${hi('ENA')})`, enB = `(jumperB == 1 || ${hi('ENB')})`;
-  const led = pwrLed(10, -30, 'V12', 'GND', 4.5);
+  const led = pwrLed(-2, -22, 'V12', 'GND', 4.5);
   return {
     type: 'l298n', name: 'L298N dual motor driver', category: 'drivers',
     description: 'Two H-bridges (2 A each, 5–35 V) for two DC motors or one bipolar stepper. IN1/IN2 set motor A’s direction (HIGH/LOW = forward, LOW/HIGH = back, equal = brake); ENA enables it (PWM it for speed, or leave the jumper on). Its bipolar switches drop ~2 V. With the 5 V jumper on, the on-board regulator supplies 5 V out.',
@@ -25,11 +25,21 @@ const l298n: Raw = (() => {
       { key: 'reg', label: '5 V regulator jumper', type: 'select', default: 1, options: [{ value: 1, label: 'On (5 V out)' }, { value: 0, label: 'Off (feed 5 V in)' }] },
     ],
     shapes: [
-      rect(-40, -120, 150, 128, COL.pcbRed, { rx: 4, stroke: 'rgba(0,0,0,.35)', strokeWidth: 0.8 }),
-      rect(20, -100, 50, 44, '#23252a', { rx: 2 }), ...[0, 1, 2, 3, 4, 5, 6].map((i) => rect(22 + i * 7, -100, 4, 44, '#3a3d44')),
-      text(45, -48, 'L298N', 6, '#fff'),
-      ...screwTerminals(pwr), ...screwTerminals(ma.map((p) => ({ ...p, y: p.y }))), ...screwTerminals(mb),
-      rect(15, -5, 70, 9, COL.header, { rx: 1 }), ...ctrl.map((c) => text(c.x, -9, c.id, 3.4, '#fff')),
+      ...pcb(-40, -120, 150, 128, COL.pcbRed, { holes: 'corners', rx: 3 }),
+      // the Multiwatt L298N bolted to its black finned heatsink
+      ...heatsink(10, -100, 70, 34, 10, '#3b3e44'),
+      rect(16, -66, 58, 14, '#2a2c30', { rx: 1, grad: '#141517', shadow: 1 }),
+      text(45, -57, 'L298N', 5, '#c9ccd1', 'middle', { weight: 600 }),
+      ...Array.from({ length: 15 }, (_, i) => rect(19 + i * 3.7, -52, 1.3, 7, COL.metal, { grad: COL.metalDark, gradDir: 'h' })),
+      ...ecap(-18, -102, 8), ...ecap(88, -102, 8),
+      ...chip(-26, -38, 14, 10, { legs: 'none', label: '78M05' }), rect(-24, -41, 10, 3, COL.metal),
+      ...smdRow(-2, -38, 4, 6, false, 'dddd'), ...smdRow(62, -38, 4, 6, false, 'dddd'), ...smdRow(22, -34, 5, 6),
+      ...screwTerminals(pwr, '#2f7fd6', 'up'), ...screwTerminals(ma, '#2f7fd6', 'left'), ...screwTerminals(mb, '#2f7fd6', 'right'),
+      ...jumper(64, -106), silk(64, -99, '5V-EN', 2.6),
+      silk(-17, -69, 'OUT1', 2.6), silk(-17, -49, 'OUT2', 2.6), silk(87, -69, 'OUT3', 2.6), silk(87, -49, 'OUT4', 2.6),
+      ...pinRow(['12V', 'GND', '5V'], { x0: 30, y: -95 }).flatMap((p) => [silk(p.x, p.y, p.id, 3)]),
+      ...header(ctrl), ...pinLabels(ctrl, -9.5),
+      ...jumper(20, -21, true), ...jumper(70, -21, true),
       led.shape,
     ],
     indicators: [led.indicator],
@@ -79,8 +89,14 @@ function dualInBridge(prefix: string, o1: string, o2: string, in1: string, in2: 
 }
 
 const tb6612: Raw = (() => {
-  const d = dip(['PWMA', 'AIN2', 'AIN1', 'STBY', 'BIN1', 'BIN2', 'PWMB', 'GND1', 'GND2', 'BO1', 'BO2', 'AO2', 'AO1', 'GND3', 'VCC', 'VM'], {
-    label: 'TB6612FNG', sub: 'dual driver', color: COL.pcbRed, wide: true,
+  const d = carrier(['PWMA', 'AIN2', 'AIN1', 'STBY', 'BIN1', 'BIN2', 'PWMB', 'GND1', 'GND2', 'BO1', 'BO2', 'AO2', 'AO1', 'GND3', 'VCC', 'VM'], {
+    color: COL.pcbRed,
+    silk: { GND1: 'GND', GND2: 'GND', GND3: 'GND', BO1: 'B01', BO2: 'B02', AO1: 'A01', AO2: 'A02' },
+    detail: (b) => [
+      ...chip(b.x + b.w / 2 - 13, b.y + b.h / 2 - 6, 26, 12, { n: 12, label: 'TB6612FNG' }),
+      ...smdRow(b.x + 6, b.y + 4, 3, 5, false, 'ccc'), ...smdRow(b.x + b.w - 16, b.y + b.h - 4, 3, 5, false, 'ccc'),
+      silk(b.x + 4, b.y + b.h - 2, 'TB6612FNG', 2.6, 'start'),
+    ],
     labels: { VM: 'VM motor supply (≤ 15 V)', VCC: 'VCC logic 2.7–5.5 V', STBY: 'Standby (HIGH to run)', AO1: 'Motor A', AO2: 'Motor A', BO1: 'Motor B', BO2: 'Motor B' },
   });
   const h1 = (p: string) => hi(p, 'GND1');
@@ -111,7 +127,7 @@ const tb6612: Raw = (() => {
 })();
 
 const drv8833: Raw = (() => {
-  const b = moduleBoard(['IN1', 'IN2', 'IN3', 'IN4', 'SLP', 'GND', 'VM'], { h: 50, color: COL.pcbPurple, title: 'DRV8833', labels: { SLP: 'nSLEEP (HIGH/open = run)', VM: 'VM 2.7–10.8 V', IN1: 'AIN1', IN2: 'AIN2', IN3: 'BIN1', IN4: 'BIN2' } });
+  const b = moduleBoard(['IN1', 'IN2', 'IN3', 'IN4', 'SLP', 'GND', 'VM'], { h: 86, color: COL.pcbPurple, title: 'DRV8833', titleY: -24, titleSize: 3.6, labels: { SLP: 'nSLEEP (HIGH/open = run)', VM: 'VM 2.7–10.8 V', IN1: 'AIN1', IN2: 'AIN2', IN3: 'BIN1', IN4: 'BIN2' } });
   const out = pinRow(['OUT1', 'OUT2', 'OUT3', 'OUT4'], { x0: 10, y: -80, labels: { OUT1: 'AOUT1', OUT2: 'AOUT2', OUT3: 'BOUT1', OUT4: 'BOUT2' } });
   const en = `(v(SLP, GND) > 1.5 && v(VM, GND) > 2.7)`;
   return {
@@ -119,7 +135,11 @@ const drv8833: Raw = (() => {
     description: 'Tiny low-voltage dual H-bridge (1.5 A, 2.7–10.8 V) — great for small robots on batteries. Per motor: IN1 HIGH / IN2 LOW = forward, LOW/HIGH = reverse, both HIGH = brake, both LOW = coast. PWM an input for speed.',
     keywords: ['drv8833', 'motor driver', 'h-bridge', 'low voltage', 'dual motor'],
     pins: [...b.pins, ...out],
-    shapes: [...b.shapes, rect(0, -90, 50, 9, COL.header, { rx: 1 }), rect(20, -46, 14, 14, COL.ic, { rx: 1 })],
+    shapes: [
+      ...b.shapes, ...header(out), ...pinLabels(out, -71.5),
+      ...chip(17, -60, 16, 12, { n: 8, label: 'DRV8833', sub: 'TI' }),
+      ...smdRow(-2, -40, 4, 5, false, 'crcr'), ...smdRow(36, -40, 3, 5, false, 'ccr'), ...smd(4, -55, 'c', true), ...smd(46, -55, 'c', true),
+    ],
     model: {
       elements: [
         ...dualInBridge('A', 'OUT1', 'OUT2', 'IN1', 'IN2', en, 'VM', 0.36),
@@ -133,14 +153,19 @@ const drv8833: Raw = (() => {
 })();
 
 const mx1508: Raw = (() => {
-  const b = moduleBoard(['IN1', 'IN2', 'IN3', 'IN4', 'VCC', 'GND'], { h: 50, color: COL.pcbRed, title: 'MX1508', labels: { VCC: '+ (2–10 V motor supply)' } });
-  const out = pinRow(['OUT1', 'OUT2', 'OUT3', 'OUT4'], { x0: 5, y: -80, kind: 'terminal', labels: { OUT1: 'Motor A', OUT2: 'Motor A', OUT3: 'Motor B', OUT4: 'Motor B' } });
+  const b = moduleBoard(['IN1', 'IN2', 'IN3', 'IN4', 'VCC', 'GND'], { h: 88, color: COL.pcbRed, title: 'MX1508', titleY: -22, titleSize: 3.6, holes: 'none', labels: { VCC: '+ (2–10 V motor supply)' } });
+  const out = pinRow(['OUT1', 'OUT2', 'OUT3', 'OUT4'], { x0: 0, y: -80, kind: 'terminal', labels: { OUT1: 'Motor A', OUT2: 'Motor A', OUT3: 'Motor B', OUT4: 'Motor B' } });
   return {
     type: 'dual-hbridge', name: 'Dual H-bridge module (MX1508)', category: 'drivers',
     description: 'Cheap two-motor H-bridge board (1.5 A per channel, 2–10 V). IN1/IN2 control motor A and IN3/IN4 motor B: one input HIGH turns it one way, the other input the other way; both HIGH brakes. PWM the active input for speed.',
     keywords: ['dual h-bridge', 'mx1508', 'l9110', 'motor driver', 'two motors'],
     pins: [...b.pins, ...out],
-    shapes: [...b.shapes, ...screwTerminals(out)],
+    shapes: [
+      ...b.shapes, ...screwTerminals(out, '#2f7fd6', 'up'),
+      silk(5, -62, 'MOTOR-A', 2.6), silk(25, -62, 'MOTOR-B', 2.6),
+      ...chip(12, -54, 18, 12, { n: 8, label: 'MX1508' }),
+      ...smdRow(-4, -34, 4, 5, false, 'rrrr'), ...ecap(46, -44, 5),
+    ],
     model: {
       elements: [
         ...dualInBridge('A', 'OUT1', 'OUT2', 'IN1', 'IN2', '(v(VCC, GND) > 1.8)', 'VCC', 0.5),
@@ -152,14 +177,18 @@ const mx1508: Raw = (() => {
 })();
 
 const hbridge: Raw = (() => {
-  const b = moduleBoard(['IA', 'IB', 'VCC', 'GND'], { h: 44, color: COL.pcbGreen, title: 'L9110S', labels: { IA: 'A-IA', IB: 'A-IB', VCC: 'VCC 2.5–12 V' } });
+  const b = moduleBoard(['IA', 'IB', 'VCC', 'GND'], { h: 72, color: COL.pcbGreen, title: 'L9110S', titleY: -20, titleSize: 3.4, holes: 'none', labels: { IA: 'A-IA', IB: 'A-IB', VCC: 'VCC 2.5–12 V' } });
   const out = pinRow(['OA', 'OB'], { x0: 10, y: -64, kind: 'terminal', labels: { OA: 'Motor', OB: 'Motor' } });
   return {
     type: 'hbridge', name: 'H-bridge module (L9110S, single)', category: 'drivers',
     description: 'One small H-bridge (800 mA, 2.5–12 V) for one DC motor. IA HIGH + IB LOW spins one way, IA LOW + IB HIGH the other; both the same stops (both outputs LOW). PWM the HIGH input for speed.',
     keywords: ['h-bridge', 'l9110', 'l9110s', 'hg7881', 'motor driver', 'single motor'],
     pins: [...b.pins, ...out],
-    shapes: [...b.shapes, ...screwTerminals(out, '#1f9d55')],
+    shapes: [
+      ...b.shapes, ...screwTerminals(out, '#1f9d55', 'up'),
+      ...chip(1, -48, 13, 9, { n: 4, label: 'L9110S' }), ...chip(18, -48, 13, 9, { n: 4, label: 'L9110S' }),
+      ...smdRow(0, -30, 3, 5, false, 'ccr'), ...ecap(26, -30, 4),
+    ],
     model: {
       elements: [
         ...halfBridge('A', 'OA', 'VCC', 'GND', `${hi('IA')} && !${hi('IB')}`, `!(${hi('IA')} && !${hi('IB')}) && v(VCC, GND) > 2`, 0.8),
@@ -172,14 +201,20 @@ const hbridge: Raw = (() => {
 })();
 
 const bts7960: Raw = (() => {
-  const b = moduleBoard(['RPWM', 'LPWM', 'REN', 'LEN', 'RIS', 'LIS', 'VCC', 'GND'], { h: 70, w: 110, color: COL.pcbBlack, labels: { RPWM: 'RPWM (forward PWM)', LPWM: 'LPWM (reverse PWM)', REN: 'R_EN (HIGH to enable)', LEN: 'L_EN (HIGH to enable)', RIS: 'R_IS current sense', LIS: 'L_IS current sense', VCC: '+5 V logic' } });
-  const pw = pinRow(['BP', 'BN', 'MP', 'MN'], { x0: 5, y: -96, step: 20, kind: 'terminal', labels: { BP: 'B+ (6–27 V)', BN: 'B− (power GND)', MP: 'M+', MN: 'M−' } });
+  const b = moduleBoard(['RPWM', 'LPWM', 'REN', 'LEN', 'RIS', 'LIS', 'VCC', 'GND'], { h: 104, w: 110, color: COL.pcbBlack, holes: 'corners', labels: { RPWM: 'RPWM (forward PWM)', LPWM: 'LPWM (reverse PWM)', REN: 'R_EN (HIGH to enable)', LEN: 'L_EN (HIGH to enable)', RIS: 'R_IS current sense', LIS: 'L_IS current sense', VCC: '+5 V logic' } });
+  const pw = pinRow(['BP', 'BN', 'MP', 'MN'], { x0: 0, y: -96, step: 20, kind: 'terminal', labels: { BP: 'B+ (6–27 V)', BN: 'B− (power GND)', MP: 'M+', MN: 'M−' } });
   return {
     type: 'bts7960', name: 'BTS7960 43 A motor driver', category: 'drivers',
     description: 'High-current H-bridge (two BTS7960 half-bridges, 43 A, 6–27 V) for big DC motors. Enable both R_EN and L_EN, then PWM RPWM for one direction or LPWM for the other (keep the other LOW). R_IS/L_IS output a voltage proportional to the current.',
     keywords: ['bts7960', 'ibt-2', 'high current', 'motor driver', 'h-bridge', '43a'],
     pins: [...b.pins, ...pw],
-    shapes: [...b.shapes, ...screwTerminals(pw, '#2f7fd6'), rect(-2, -66, 64, 30, '#8a929b', { rx: 1 }), ...[0, 1, 2, 3, 4, 5, 6, 7].map((i) => rect(0 + i * 8, -66, 3, 30, '#6f777f'))],
+    shapes: [
+      ...b.shapes, ...screwTerminals(pw, '#2f7fd6', 'up'),
+      silk(0, -83, 'B+', 3), silk(20, -83, 'B-', 3), silk(40, -83, 'M+', 3), silk(60, -83, 'M-', 3),
+      ...heatsink(-6, -78, 82, 40, 12, '#c9ced4'),
+      ...chip(-12, -32, 16, 10, { n: 8, label: 'HC244' }), ...ecap(62, -28, 6.5), ...smdRow(12, -25, 6, 6),
+      silk(35, -16, 'BTS7960 43A', 3),
+    ],
     connections: [['GND', 'BN']],
     model: {
       elements: [
@@ -196,7 +231,7 @@ const bts7960: Raw = (() => {
 })();
 
 const vnh2sp30: Raw = (() => {
-  const b = moduleBoard(['INA', 'INB', 'PWM', 'EN', 'CS', 'VCC', 'GND'], { h: 60, w: 90, color: COL.pcbRed, title: 'VNH2SP30', labels: { INA: 'INA (direction)', INB: 'INB (direction)', PWM: 'PWM (speed)', EN: 'EN / DIAG (HIGH = enabled)', CS: 'Current sense (~0.13 V/A)', VCC: '+5 V logic' } });
+  const b = moduleBoard(['INA', 'INB', 'PWM', 'EN', 'CS', 'VCC', 'GND'], { h: 94, w: 90, color: COL.pcbRed, title: 'VNH2SP30', titleY: -20, titleSize: 3.6, holes: 'corners', labels: { INA: 'INA (direction)', INB: 'INB (direction)', PWM: 'PWM (speed)', EN: 'EN / DIAG (HIGH = enabled)', CS: 'Current sense (~0.13 V/A)', VCC: '+5 V logic' } });
   const pw = pinRow(['VIN', 'GNDP', 'OUTA', 'OUTB'], { x0: 0, y: -86, step: 20, kind: 'terminal', labels: { VIN: 'Motor supply + (5.5–16 V)', GNDP: 'Motor supply −', OUTA: 'Motor A', OUTB: 'Motor B' } });
   const en = `${hi('EN')} && v(VIN, GNDP) > 5.5`, a = hi('INA'), bb = hi('INB'), pwm = hi('PWM');
   return {
@@ -204,7 +239,13 @@ const vnh2sp30: Raw = (() => {
     description: 'Single high-power H-bridge (30 A, 5.5–16 V). INA HIGH + INB LOW = forward, LOW/HIGH = reverse, both equal = brake; PWM sets speed. EN has a pull-up (it also reports faults). CS gives ~0.13 V per amp.',
     keywords: ['vnh2sp30', 'monster moto', 'vnh5019', 'motor driver', 'high current'],
     pins: [...b.pins, ...pw],
-    shapes: [...b.shapes, ...screwTerminals(pw), rect(10, -52, 24, 20, COL.ic, { rx: 1 })],
+    shapes: [
+      ...b.shapes, ...screwTerminals(pw, '#2f7fd6', 'up'),
+      silk(0, -73, 'V+', 2.8), silk(20, -73, 'GND', 2.8), silk(40, -73, 'A', 2.8), silk(60, -73, 'B', 2.8),
+      ...Array.from({ length: 10 }, (_, i) => rect(12 + i * 3.4, -64, 1.5, 3, COL.metal)), ...Array.from({ length: 10 }, (_, i) => rect(12 + i * 3.4, -39, 1.5, 3, COL.metal)),
+      ...chip(10, -62, 36, 24, { legs: 'none', label: 'VNH2SP30', sub: 'MultiPowerSO-30' }),
+      ...ecap(-6, -50, 7), ...ecap(66, -50, 7), ...smdRow(48, -32, 3, 5), ...smdRow(-8, -32, 3, 5),
+    ],
     connections: [['GND', 'GNDP']],
     model: {
       elements: [
@@ -221,15 +262,20 @@ const vnh2sp30: Raw = (() => {
 // ---------------------------------------------------------------- switch modules
 
 const mosfetModule: Raw = (() => {
-  const b = moduleBoard(['SIG', 'VCC', 'GND'], { h: 50, w: 70, color: COL.pcbBlue, labels: { SIG: 'SIG (gate)', VCC: 'VCC (not used)', GND: 'GND' } });
-  const pw = pinRow(['VIN', 'GNDP', 'LP', 'LN'], { x0: -5, y: -76, step: 16, kind: 'terminal', labels: { VIN: 'VIN (load supply +)', GNDP: 'GND (load supply −)', LP: 'V+ (load +)', LN: 'V− (load −, switched)' } });
-  const led = statusLed(40, -30, '#ff3b30', 'v(G, GND) > 3 ? 1 : 0');
+  const b = moduleBoard(['SIG', 'VCC', 'GND'], { h: 82, w: 86, color: COL.pcbBlue, holes: 'none', labels: { SIG: 'SIG (gate)', VCC: 'VCC (not used)', GND: 'GND' } });
+  const pw = pinRow(['VIN', 'GNDP', 'LP', 'LN'], { x0: -10, y: -76, step: 20, kind: 'terminal', labels: { VIN: 'VIN (load supply +)', GNDP: 'GND (load supply −)', LP: 'V+ (load +)', LN: 'V− (load −, switched)' } });
+  const led = statusLed(40, -28, '#ff3b30', 'v(G, GND) > 3 ? 1 : 0');
   return {
     type: 'mosfet-switch', name: 'MOSFET switch module (IRF520)', category: 'drivers',
     description: 'IRF520 low-side switch board for motors, LED strips and solenoids up to 24 V. SIG HIGH switches V− to ground. Beware: the IRF520 is not logic-level — at 5 V on the gate it only passes ~1 A (it needs ~10 V for full current).',
     keywords: ['mosfet module', 'irf520', 'mosfet switch', 'motor switch', 'led strip driver', 'pwm driver'],
     pins: [...b.pins, ...pw],
-    shapes: [...b.shapes, ...screwTerminals(pw), rect(0, -46, 24, 16, COL.ic, { rx: 1 }), text(12, -36, 'IRF520', 3.4, '#ddd'), led.shape],
+    shapes: [
+      ...b.shapes, ...screwTerminals(pw, '#2f7fd6', 'up'),
+      silk(-10, -62, 'VIN', 2.6), silk(10, -62, 'GND', 2.6), silk(30, -62, 'V+', 2.6), silk(50, -62, 'V-', 2.6),
+      ...to220At(-2, -56, 'IRF520', -22), ...smdRow(30, -46, 3, 5), silk(36, -38, 'MOSFET', 2.6),
+      led.shape,
+    ],
     indicators: [led.indicator],
     connections: [['VIN', 'LP'], ['GND', 'GNDP']],
     model: {
@@ -245,15 +291,20 @@ const mosfetModule: Raw = (() => {
 })();
 
 const solenoidDriver: Raw = (() => {
-  const b = moduleBoard(['IN', 'VCC', 'GND'], { h: 46, w: 70, color: COL.pcbGreen, labels: { IN: 'IN (HIGH = on)', VCC: '+5 V (LED)', GND: 'GND' } });
-  const pw = pinRow(['VP', 'LN'], { x0: 5, y: -70, step: 20, kind: 'terminal', labels: { VP: 'Load supply + (to the solenoid)', LN: 'Solenoid − (switched to GND)' } });
+  const b = moduleBoard(['IN', 'VCC', 'GND'], { h: 76, w: 70, color: COL.pcbGreen, holes: 'none', labels: { IN: 'IN (HIGH = on)', VCC: '+5 V (LED)', GND: 'GND' } });
+  const pw = pinRow(['VP', 'LN'], { x0: 0, y: -70, step: 20, kind: 'terminal', labels: { VP: 'Load supply + (to the solenoid)', LN: 'Solenoid − (switched to GND)' } });
   const led = statusLed(40, -28, '#35d05a', 'v(IN, GND) > 1.5 ? 1 : 0');
   return {
     type: 'solenoid-driver', name: 'Solenoid driver module (TIP120)', category: 'drivers',
     description: 'Darlington low-side switch with a flyback diode already fitted — the easy, safe way to fire a solenoid, relay coil or small motor (≤ 3 A, ≤ 30 V) from a pin. Connect the load between VP and LN; tie the load supply’s − to GND.',
     keywords: ['solenoid driver', 'tip120', 'darlington', 'flyback', 'low side switch'],
     pins: [...b.pins, ...pw],
-    shapes: [...b.shapes, ...screwTerminals(pw), rect(0, -40, 20, 14, COL.ic, { rx: 1 }), led.shape],
+    shapes: [
+      ...b.shapes, ...screwTerminals(pw, '#1f9d55', 'up'),
+      ...to220At(-4, -54, 'TIP120', -20),
+      rect(24, -48, 14, 4, '#2a2b2e', { rx: 1.5 }), rect(34, -48, 1.8, 4, '#d9d9d9'), line(22, -46, 24, -46, COL.lead, 1), line(38, -46, 40, -46, COL.lead, 1),
+      ...smdRow(24, -38, 3, 5), led.shape,
+    ],
     indicators: [led.indicator],
     model: {
       nodes: ['BX'],
@@ -271,15 +322,27 @@ const esc: Raw = (() => {
   const pins = [
     ...pinRow(['SIG', 'BEC', 'GNDS'], { labels: { SIG: 'Signal (servo pulses, 1–2 ms)', BEC: '+5 V BEC out', GNDS: 'Signal GND' } }),
     ...pinRow(['VBAT', 'GND'], { x0: -30, y: -40, step: 10, kind: 'terminal', labels: { VBAT: 'Battery + (2–3S LiPo)', GND: 'Battery −' } }).map((p, i) => ({ ...p, x: -30, y: -50 + i * 20 })),
-    ...pinRow(['U', 'V', 'W'], { kind: 'terminal', labels: { U: 'Motor phase U', V: 'Motor phase V', W: 'Motor phase W' } }).map((p, i) => ({ ...p, x: 70, y: -60 + i * 15 })),
+    ...pinRow(['U', 'V', 'W'], { kind: 'terminal', labels: { U: 'Motor phase U', V: 'Motor phase V', W: 'Motor phase W' } }).map((p, i) => ({ ...p, x: 70, y: -60 + i * 20 })),
   ];
   return {
     type: 'esc', name: 'ESC (brushless speed controller, 30 A)', category: 'drivers',
     description: 'Hobby ESC for a brushless motor: takes RC servo pulses on SIG (1000 µs = stop … 2000 µs = full) — drive it with Servo.writeMicroseconds(). Arms when it first sees a low-throttle pulse. Its BEC supplies 5 V. (Simplified 3-phase drive.)',
     keywords: ['esc', 'speed controller', 'brushless', 'simonk', 'blheli', 'drone', 'rc'],
     pins,
-    shapes: [rect(-24, -66, 88, 58, '#2f6fd6', { rx: 6 }), rect(-18, -58, 76, 42, '#1f4f9f', { rx: 4 }), text(20, -34, 'ESC 30A', 7, '#fff'), rect(-5, -8, 30, 9, COL.header, { rx: 1 })],
-    readouts: [{ value: 'round(d * 100)', unit: '%', x: 20, y: -22, size: 4.5, color: '#fff' }],
+    shapes: [
+      // battery leads (red / black) and the three motor phase wires
+      line(-30, -50, -16, -50, '#d63c35', 3.2), line(-30, -30, -16, -30, '#1d1e21', 3.2),
+      line(56, -60, 70, -60, '#1d1e21', 3), line(56, -40, 70, -40, '#1d1e21', 3), line(56, -20, 70, -20, '#1d1e21', 3),
+      // servo lead: brown / red / orange into a black plug
+      line(4, -14, 0, -4, '#e8912d', 1.6), line(10, -14, 10, -4, '#d63c35', 1.6), line(16, -14, 20, -4, '#6b4226', 1.6),
+      rect(-5, -5, 30, 9, '#2a2b2f', { rx: 1, grad: '#111214', shadow: 0.8 }),
+      // blue heat-shrink wrapped body with a printed sticker
+      rect(-18, -68, 76, 56, '#3a86e8', { rx: 7, grad: '#1d4f9e', gradDir: 'h', shadow: 1, stroke: '#173f7e', strokeWidth: 0.6 }),
+      rect(-14, -64, 68, 3, '#ffffff', { rx: 1.5, opacity: 0.22 }),
+      rect(-8, -56, 56, 30, '#f4f6f8', { rx: 2, grad: '#d7dce2' }),
+      text(20, -45, '30A', 9, '#1d4f9e', 'middle', { weight: 800 }), text(20, -37, 'BRUSHLESS ESC', 3.8, '#333', 'middle', { weight: 700 }), text(20, -31, '2-3S LiPo · 5V/2A BEC', 2.6, '#666', 'middle', { weight: 500 }),
+    ],
+    readouts: [{ value: 'round(d * 100)', unit: '%', x: 20, y: -17, size: 4.5, color: '#fff' }],
     states: [
       { name: 'armed', init: 0, next: 'armed == 1 ? (v(VBAT, GND) > 3 ? 1 : 0) : ((servo(SIG) > 900 && servo(SIG) < 1100 && v(VBAT, GND) > 5) ? 1 : 0)' },
       { name: 'th', init: 0, next: 'armed == 1 ? clamp((servo(SIG) - 1050) / 900, 0, 1) : 0' },
@@ -302,14 +365,20 @@ const esc: Raw = (() => {
 })();
 
 const bldcController: Raw = (() => {
-  const b = moduleBoard(['SPEED', 'DIR', 'BRAKE', 'V5', 'GNDL'], { h: 70, w: 110, color: COL.pcbBlack, labels: { SPEED: 'Speed (0–5 V or PWM)', DIR: 'Direction', BRAKE: 'Brake (HIGH = brake)', V5: '+5 V out', GNDL: 'Logic GND' } });
-  const pw = pinRow(['VIN', 'GND', 'U', 'V', 'W'], { x0: -5, y: -96, step: 15, kind: 'terminal', labels: { VIN: 'Supply + (6–60 V)', GND: 'Supply −', U: 'Phase U', V: 'Phase V', W: 'Phase W' } });
+  const b = moduleBoard(['SPEED', 'DIR', 'BRAKE', 'V5', 'GNDL'], { h: 104, w: 110, color: '#1f5f9f', holes: 'corners', labels: { SPEED: 'Speed (0–5 V or PWM)', DIR: 'Direction', BRAKE: 'Brake (HIGH = brake)', V5: '+5 V out', GNDL: 'Logic GND' } });
+  const pw = pinRow(['VIN', 'GND', 'U', 'V', 'W'], { x0: -10, y: -96, step: 20, kind: 'terminal', labels: { VIN: 'Supply + (6–60 V)', GND: 'Supply −', U: 'Phase U', V: 'Phase V', W: 'Phase W' } });
   return {
     type: 'bldc-controller', name: 'BLDC motor controller (ZS-X11H)', category: 'drivers',
     description: 'Sensor/sensorless brushless controller board for bigger BLDC motors (6–60 V, 16 A). The SPEED pin sets the speed from a 0–5 V level or a PWM signal; DIR reverses; BRAKE HIGH shorts the windings. (Simplified 3-phase drive.)',
     keywords: ['bldc controller', 'zs-x11h', 'brushless driver', 'hub motor', 'scooter'],
     pins: [...b.pins, ...pw],
-    shapes: [...b.shapes, ...screwTerminals(pw, '#1f9d55'), rect(10, -66, 60, 26, '#8a929b', { rx: 1 })],
+    shapes: [
+      ...b.shapes, ...screwTerminals(pw, '#1f9d55', 'up'),
+      ...pw.map((p) => silk(p.x, -83, p.id === 'VIN' ? 'V+' : p.id === 'GND' ? 'V-' : p.id, 2.8)),
+      ...heatsink(-6, -76, 70, 30, 10, '#c9ced4'), ...ecap(74, -66, 9), ...ecap(74, -44, 7),
+      ...chip(4, -38, 18, 12, { n: 8, label: 'JY01' }), ...trimpot(34, -30, 10), ...smdRow(-12, -22, 5, 5), ...smdRow(50, -22, 4, 5),
+      silk(58, -14, 'ZS-X11H', 3.2),
+    ],
     connections: [['GND', 'GNDL']],
     model: {
       elements: [
@@ -326,11 +395,29 @@ const bldcController: Raw = (() => {
 
 // ---------------------------------------------------------------- step/dir stepper drivers
 
+/** The top side of a StepStick-format driver: chip (or heatsink), current-limit pot, sense resistors, caps. */
+function stepperLook(chipName: string, b: { x: number; y: number; w: number; h: number }): Raw[] {
+  const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+  const pot = [
+    circle(b.x + 11, cy, 5.2, '#e9ecef', { grad: '#8f979f', gradDir: 'r', stroke: '#6d757e', strokeWidth: 0.4, shadow: 0.8 }),
+    rect(b.x + 10.3, cy - 3.6, 1.4, 7.2, '#5f666e', { rx: 0.4 }), rect(b.x + 7.4, cy - 0.7, 7.2, 1.4, '#5f666e', { rx: 0.4 }),
+  ];
+  const sense = [...chip(b.x + b.w - 14, b.y + 3, 9, 4.5, { legs: 'none', label: 'R100' }), ...chip(b.x + b.w - 14, b.y + b.h - 7.5, 9, 4.5, { legs: 'none', label: 'R100' })];
+  const passives = [...smdRow(cx - 9, b.y + 2.5, 4, 5), ...smdRow(cx - 9, b.y + b.h - 2.5, 4, 5, false, 'crcr'), ...smdRow(b.x + b.w - 3, cy - 5, 3, 5, true, 'cc')];
+  if (chipName.startsWith('TMC')) {
+    // Trinamic sticks carry the chip underneath; the top is a big finned heatsink
+    return [...pot, ...passives, ...heatsink(cx - 12, b.y + 5, 26, b.h - 10, 7), silk(cx + 1, b.y + b.h + 2.4, chipName, 3, 'middle', COL.silk, { z: 2 })];
+  }
+  return [...pot, ...sense, ...passives, ...chip(cx - 7, cy - 7, 14, 14, { legs: 'qfn', label: chipName, sub: chipName === 'A4988' ? 'SETT' : 'TI 8825' })];
+}
+
 function stepperDriver(o: { type: string; name: string; chip: string; ms: string[]; micro: string; ilim: number; vmax: number; color: string; description: string; keywords: string[] }): Raw {
   const [m1, m2, m3] = o.ms;
   const names = ['EN', m1, m2, m3 ?? 'NC', 'RST', 'SLP', 'STEP', 'DIR', 'GND2', 'VDD', 'A2', 'A1', 'B1', 'B2', 'GND', 'VMOT'];
-  const d = dip(names, {
-    label: o.chip, color: o.color, wide: true,
+  const d = carrier(names, {
+    color: o.color,
+    silk: { GND2: 'GND', VDD: 'VDD', VMOT: 'VMOT', A2: '1B', A1: '1A', B1: '2A', B2: '2B', RST: 'RST', SLP: 'SLP', STEP: 'STEP', DIR: 'DIR', NC: 'NC' },
+    detail: (b) => stepperLook(o.chip, b),
     labels: { EN: 'ENABLE (LOW = on)', RST: 'RESET (tie to SLEEP)', SLP: 'SLEEP (HIGH = awake)', STEP: 'STEP (one microstep per rising edge)', DIR: 'DIR', VDD: 'Logic 3.3–5 V', VMOT: `Motor supply (8–${o.vmax} V, add 100 µF)`, A1: '1A (coil 1)', A2: '1B (coil 1)', B1: '2A (coil 2)', B2: '2B (coil 2)', NC: 'Not connected', GND2: 'GND' },
   });
   const hv = (p: string) => `(v(${p}, GND) > v(VDD, GND) / 2)`;
@@ -423,7 +510,12 @@ const levelShifter: Raw = (() => {
     description: 'Bidirectional 3.3 V ↔ 5 V level shifter: each channel is a BSS138 MOSFET with 10 kΩ pull-ups on both sides. Works for I2C, UART, SPI and plain GPIO. Power LV with 3.3 V and HV with 5 V and join the grounds.',
     keywords: ['level shifter', 'logic level converter', 'bss138', '3.3v 5v', 'voltage translator', 'bidirectional'],
     pins: [...top, ...bottom],
-    shapes: [...top.map((p) => ({ type: 'line', x1: p.x, y1: p.y, x2: p.x, y2: p.y + 6, stroke: COL.metal, strokeWidth: 2 })), ...bottom.map((p) => ({ type: 'line', x1: p.x, y1: p.y, x2: p.x, y2: p.y - 6, stroke: COL.metal, strokeWidth: 2 })), rect(-6, -44, 62, 38, '#b8322a', { rx: 2 }), text(25, -30, 'HV ⇅ LV', 5, '#fff'), ...[0, 1, 2, 3].map((i) => rect(4 + i * 12, -22, 6, 6, COL.ic, { rx: 0.5 }))],
+    shapes: [
+      ...pcb(-6, -56, 62, 62, '#c0392b', { holes: 'none', rx: 1.5 }),
+      ...header(top), ...header(bottom),
+      ...pinLabels(top, -41.5), ...pinLabels(bottom, -11.5),
+      ...[0, 1, 2, 3].flatMap((i) => [...sot23(5 + i * 13.3, -28, 'J1'), ...smd(1 + i * 13.3, -35, 'r', false), ...smd(9 + i * 13.3, -21, 'r', false)]),
+    ],
     connections: [['GND', 'GND2']],
     model: { elements: [1, 2, 3, 4].flatMap(ch) },
   };
@@ -434,7 +526,12 @@ const antenna: Raw = {
   description: 'Quarter-wave whip antenna for RF modules (433 MHz spring coil or 2.4 GHz whip). Connect ANT to the module’s antenna pin. Electrically it looks like a few pF here — radio links themselves are not simulated.',
   keywords: ['antenna', 'rf', '433mhz', '2.4ghz', 'whip', 'sma'],
   pins: pinRow(['ANT', 'GND'], { labels: { ANT: 'Antenna feed', GND: 'Ground plane' } }),
-  shapes: [{ type: 'line', x1: 0, y1: 0, x2: 0, y2: -12, stroke: COL.copper, strokeWidth: 1.6 }, { type: 'line', x1: 10, y1: 0, x2: 10, y2: -8, stroke: '#333', strokeWidth: 1.6 }, rect(-4, -18, 18, 8, '#c9a24a', { rx: 1 }), rect(2, -80, 6, 62, '#2b2d31', { rx: 3 }), circle(5, -80, 3.5, '#2b2d31')],
+  shapes: [
+    line(0, 0, 0, -12, COL.copper, 1.6), line(10, 0, 10, -8, '#333', 1.6),
+    rect(-4, -20, 18, 10, '#f1d98a', { rx: 1, grad: '#a8862e', gradDir: 'h', shadow: 0.8 }), rect(-2, -26, 14, 7, '#e6c86e', { rx: 0.8, grad: '#9c7b26', gradDir: 'h' }),
+    rect(1, -84, 8, 60, '#3a3c41', { rx: 4, grad: '#141517', gradDir: 'h', shadow: 1 }), rect(0, -32, 10, 8, '#2a2b2f', { rx: 2 }),
+    ...[0, 1, 2, 3].map((i) => rect(0.5, -40 - i * 2.2, 9, 1, '#4a4c52', { rx: 0.5 })), rect(2.6, -80, 1.4, 44, '#ffffff', { opacity: 0.15, rx: 0.7 }),
+  ],
   model: { elements: [{ id: 'C', kind: 'capacitor', a: 'ANT', b: 'GND', value: 3e-12 }, { id: 'R', kind: 'resistor', a: 'ANT', b: 'GND', value: 1e9 }] },
 };
 

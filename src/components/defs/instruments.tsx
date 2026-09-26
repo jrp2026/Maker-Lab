@@ -1,6 +1,6 @@
 import type { ComponentDef } from '../types';
 import { Avg } from '../../sim/builder';
-import { Label, SLine, SText, formatSI } from '../util';
+import { DropShadow, formatSI, Label, Sheen, SLine, SText } from '../util';
 
 // ------------------------------------------------------------------ Multimeter
 
@@ -53,7 +53,9 @@ export const multimeter: ComponentDef = {
     const knob = { V: -40, A: 0, R: 40 }[mode] ?? 0;
     return (
       <g>
+        <DropShadow x={0} y={0} w={70} h={110} rx={9} />
         <rect x={0} y={0} width={70} height={110} rx={9} fill="#f3c534" stroke="#c49a1b" strokeWidth={1} />
+        <Sheen x={0} y={0} w={70} h={110} rx={9} />
         <rect x={4} y={4} width={62} height={102} rx={7} fill="#2e3136" />
         <rect x={9} y={10} width={52} height={24} rx={3} fill={sim ? '#c8e6c0' : '#9fb39a'} stroke="#1a1c1f" strokeWidth={1} />
         <text x={57} y={27} fontSize={text.length > 9 ? 7 : 9} textAnchor="end" fontFamily="'JetBrains Mono', ui-monospace, monospace" fontWeight={700} fill="#1c2a1a" style={{ userSelect: 'none' }}>
@@ -153,7 +155,9 @@ export const oscilloscope: ComponentDef = {
     }
     return (
       <g>
+        <DropShadow x={0} y={0} w={SCOPE_W} h={SCOPE_H + 20} rx={8} />
         <rect x={0} y={0} width={SCOPE_W} height={SCOPE_H + 20} rx={8} fill="#d9dde2" stroke="#9aa3ad" strokeWidth={1} />
+        <Sheen x={0} y={0} w={SCOPE_W} h={SCOPE_H + 20} rx={8} />
         <rect x={SCREEN.x - 2} y={SCREEN.y - 2} width={SCREEN.w + 4} height={SCREEN.h + 4} rx={3} fill="#101a14" />
         {Array.from({ length: 11 }, (_, i) => (
           <line key={`v${i}`} x1={SCREEN.x + (i * SCREEN.w) / 10} x2={SCREEN.x + (i * SCREEN.w) / 10} y1={SCREEN.y} y2={SCREEN.y + SCREEN.h} stroke="#1f3b2a" strokeWidth={i === 5 ? 0.8 : 0.4} />

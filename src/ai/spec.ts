@@ -20,6 +20,22 @@ export interface PartShape {
   stroke?: string;
   strokeWidth?: number;
   opacity?: number;
+  /** second colour: the fill fades from `fill` to `grad` */
+  grad?: string;
+  /** gradient direction: vertical (default), horizontal, diagonal or radial (a lit dome) */
+  gradDir?: 'v' | 'h' | 'd' | 'r';
+  /** soft drop shadow under the shape (0..1 strength) */
+  shadow?: number;
+  /** rotation in degrees: text turns about (x, y), other shapes about their centre */
+  rotate?: number;
+  /** drawing order: shapes with a higher z are drawn later (on top) */
+  z?: number;
+  /** text weight (100–900, default 600) */
+  weight?: number;
+  /** text font: 'mono' for chip markings and silkscreen codes */
+  font?: 'sans' | 'mono';
+  /** dashed stroke with this dash length */
+  dash?: number;
 }
 
 export interface PartPin {
@@ -191,6 +207,20 @@ function cleanShape(raw: any, problems: string[], where: string): PartShape | nu
   if (sw !== undefined) s.strokeWidth = sw;
   const op = num(raw.opacity, 0, 1);
   if (op !== undefined) s.opacity = op;
+  const grad = color(raw.grad);
+  if (grad) s.grad = grad;
+  if (['v', 'h', 'd', 'r'].includes(raw.gradDir)) s.gradDir = raw.gradDir;
+  const shadow = num(raw.shadow, 0, 1);
+  if (shadow) s.shadow = shadow;
+  const rot = num(raw.rotate, -360, 360);
+  if (rot) s.rotate = rot;
+  const z = num(raw.z, -10, 10);
+  if (z) s.z = z;
+  const weight = num(raw.weight, 100, 900);
+  if (weight !== undefined && type === 'text') s.weight = Math.round(weight / 100) * 100;
+  if (raw.font === 'mono' || raw.font === 'sans') s.font = raw.font;
+  const dash = num(raw.dash, 0.2, 20);
+  if (dash !== undefined) s.dash = dash;
   return s;
 }
 

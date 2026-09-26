@@ -1,7 +1,7 @@
 /** Memory & timekeeping devices: 24LC256 EEPROM, W25Q32 flash, DS1307 / DS3231 RTCs, SD card modules. */
 import { bin2bcd, bcd2bin } from '../../mcu/devlibs/i2c';
 import type { SdCard } from '../../mcu/stdlib';
-import { COL, dip, moduleBoard, rect, text } from '../kit';
+import { COL, chip, circle, dip, line, moduleBoard, rect, smdRow, text } from '../kit';
 import { poweredFn, TextLines, type DevicePart } from './common';
 
 // ------------------------------------------------------------------ 24LC256
@@ -158,7 +158,7 @@ function rtcCore(state: Record<string, any>, now: () => number, startMode: numbe
 function rtcDevice(kind: 'ds1307' | 'ds3231'): DevicePart {
   const isModule = kind === 'ds3231';
   const shape = isModule
-    ? moduleBoard(['32K', 'SQW', 'SCL', 'SDA', 'VCC', 'GND'], { h: 60, w: 90, color: COL.pcbBlue, title: 'DS3231', labels: { '32K': '32 kHz out', SQW: 'Square wave / alarm', SCL: 'I2C clock', SDA: 'I2C data', VCC: '+3.3–5 V' } })
+    ? moduleBoard(['32K', 'SQW', 'SCL', 'SDA', 'VCC', 'GND'], { h: 64, w: 90, color: COL.pcbBlue, title: 'ZS-042 DS3231', titleY: -18, titleX: 44, titleSize: 3, holes: 'corners', labels: { '32K': '32 kHz out', SQW: 'Square wave / alarm', SCL: 'I2C clock', SDA: 'I2C data', VCC: '+3.3–5 V' } })
     : dip(['X1', 'X2', 'VBAT', 'GND', 'SDA', 'SCL', 'SQW', 'VCC'], { label: 'DS1307', sub: 'RTC', labels: { X1: 'Crystal', X2: 'Crystal', VBAT: 'Backup battery (+3 V)', SQW: 'Square wave out', SDA: 'I2C data', SCL: 'I2C clock', VCC: '+5 V' } });
   return [
     {
@@ -169,7 +169,15 @@ function rtcDevice(kind: 'ds1307' | 'ds3231'): DevicePart {
       keywords: ['rtc', 'real time clock', kind, 'clock', 'time', 'rtclib', 'date'],
       ...shape,
       props: [{ key: 'start', label: 'Clock at start', type: 'select', default: 0, options: [{ value: 0, label: 'Current time (set)' }, { value: 1, label: 'Lost power (2000-01-01)' }] }],
-      shapes: isModule ? [...shape.shapes, rect(-6, -52, 30, 30, COL.metal, { rx: 15 }), text(9, -34, 'CR2032', 3.4, '#555'), rect(40, -44, 20, 14, COL.ic, { rx: 1 })] : shape.shapes,
+      shapes: isModule
+        ? [
+            ...shape.shapes,
+            circle(4, -40, 18, '#2b2d31', { shadow: 1 }), circle(4, -40, 15.5, '#f1f3f5', { grad: '#8a929b', gradDir: 'd', stroke: '#6d757e', strokeWidth: 0.5 }),
+            text(4, -41, 'CR2032', 3.6, '#4a5058', 'middle', { weight: 800 }), text(4, -35.5, '3V', 3, '#4a5058', 'middle', { weight: 700 }), text(4, -47, '+', 5, '#4a5058', 'middle', { weight: 700 }),
+            ...chip(30, -56, 20, 14, { n: 8, label: 'DS3231SN' }), ...chip(56, -54, 12, 8, { n: 4, label: '24C32' }),
+            ...smdRow(30, -34, 6, 5, false, 'rrcrrc'), rect(56, -38, 5, 3, '#efe9d2', { rx: 0.4 }),
+          ]
+        : shape.shapes,
       model: { elements: [{ id: 'IQ', kind: 'resistor', a: 'VCC', b: 'GND', value: 2e4 }, { id: 'RSDA', kind: 'resistor', a: 'SDA', b: 'GND', value: 1e7 }, { id: 'RSCL', kind: 'resistor', a: 'SCL', b: 'GND', value: 1e7 }, { id: 'RSQ', kind: 'resistor', a: 'SQW', b: 'GND', value: 1e7 }] },
     },
     {
@@ -233,7 +241,13 @@ function sdModule(type: string, name: string, micro: boolean): DevicePart {
       pins: b.pins,
       props: [{ key: 'inserted', label: 'Card', type: 'select', default: 1, options: [{ value: 1, label: 'Inserted' }, { value: 0, label: 'Ejected' }] }],
       toggle: 'inserted',
-      shapes: [...b.shapes, rect(slot.x, slot.y, slot.w, slot.h, COL.metal, { rx: 2, stroke: COL.metalDark, strokeWidth: 0.6 })],
+      shapes: [
+        ...b.shapes,
+        rect(slot.x, slot.y, slot.w, slot.h, '#f1f3f5', { rx: 1.5, grad: '#8a929b', gradDir: 'd', stroke: '#6d757e', strokeWidth: 0.5, shadow: 1 }),
+        ...Array.from({ length: 5 }, (_, i) => line(slot.x + 4 + i * ((slot.w - 8) / 4), slot.y + 3, slot.x + 4 + i * ((slot.w - 8) / 4), slot.y + slot.h - 3, '#aeb5bd', 0.5)),
+        text(slot.x + slot.w / 2, slot.y + slot.h / 2 + 1.5, micro ? 'microSD' : 'SD', micro ? 4 : 6, '#5f666e', 'middle', { weight: 800 }),
+        ...chip(slot.x + 4, slot.y + slot.h + 4, 18, 8, { n: 7, label: 'LVC125A' }), ...chip(slot.x + 28, slot.y + slot.h + 5, 8, 5, { n: 3, label: '1117' }),
+      ],
       model: { elements: [{ id: 'IQ', kind: 'resistor', a: 'VCC', b: 'GND', value: 250 }, ...['MOSI', 'SCK', 'CS'].map((p) => ({ id: `R${p}`, kind: 'resistor', a: p, b: 'GND', value: 1e6 })), { id: 'RMISO', kind: 'resistor', a: 'MISO', b: 'GND', value: 1e6 }] },
     },
     {

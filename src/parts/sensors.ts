@@ -1,4 +1,4 @@
-import { COL, circle, contact, dout, legs, line, moduleBoard, pinRow, rect, screwTerminals, statusLed, text, to92, type Raw } from './kit';
+import { COL, chip, circle, contact, dout, fresnelDome, ldrFace, ledSide, legs, line, meshCan, micCapsule, moduleBoard, path, pinRow, rect, screwTerminals, silk, smd, smdRow, statusLed, to92, trimpot, type Raw } from './kit';
 
 const pwrLed = (x: number, y: number) => statusLed(x, y, '#ff3b30', 'v(VCC, GND) > 2.5 ? 1 : 0');
 
@@ -6,15 +6,24 @@ const pwrLed = (x: number, y: number) => statusLed(x, y, '#ff3b30', 'v(VCC, GND)
 function comparatorModule(o: {
   type: string; name: string; description: string; keywords: string[]; title: string;
   ao: string; /** AO voltage formula */ trip: string; /** DO active condition */ doActiveLow: boolean;
-  props: Raw[]; extraShapes?: Raw[]; states?: Raw[]; interactive?: 'press'; drag?: string; maxStep?: number; readouts?: Raw[]; pins?: string[];
+  props: Raw[]; extraShapes?: Raw[]; states?: Raw[]; interactive?: 'press'; drag?: string; maxStep?: number; readouts?: Raw[]; pins?: string[]; h?: number;
 }): Raw {
   const ids = o.pins ?? ['VCC', 'GND', 'DO', 'AO'];
-  const b = moduleBoard(ids, { h: 46, color: COL.pcbBlue, title: o.title, labels: { VCC: '+3.3–5 V', DO: 'Digital out (threshold pot)', AO: 'Analog out' } });
-  const p = pwrLed(b.box.x + 8, -14), d = statusLed(b.box.x + b.box.w - 8, -14, '#35d05a', o.doActiveLow ? `(${o.trip}) ? 1 : 0` : `(${o.trip}) ? 1 : 0`);
+  const h = o.h ?? 46;
+  const b = moduleBoard(ids, { h, color: COL.pcbBlue, title: o.title, titleY: -14.5, titleSize: 3, labels: { VCC: '+3.3–5 V', DO: 'Digital out (threshold pot)', AO: 'Analog out' } });
+  const p = pwrLed(b.box.x + 7, -15.5), d = statusLed(b.box.x + b.box.w - 7, -15.5, '#35d05a', o.doActiveLow ? `(${o.trip}) ? 1 : 0` : `(${o.trip}) ? 1 : 0`);
   return {
     type: o.type, name: o.name, category: 'sensors', description: o.description, keywords: o.keywords,
     pins: b.pins, props: o.props, interactive: o.interactive, drag: o.drag, states: o.states, maxStep: o.maxStep, readouts: o.readouts,
-    shapes: [...b.shapes, ...(o.extraShapes ?? []), p.shape, d.shape, rect(b.box.x + b.box.w / 2 - 6, -30, 9, 9, '#2f6fd6', { rx: 1, stroke: '#ddd', strokeWidth: 0.5 }), circle(b.box.x + b.box.w / 2 - 1.5, -25.5, 2.5, '#f4f2ec')],
+    shapes: [
+      ...b.shapes,
+      // blue multi-turn threshold pot, LM393 comparator and its resistors
+      ...trimpot(b.box.x + 10, -24, 10),
+      ...chip(b.box.x + b.box.w - 21, -29, 13, 8, { n: 4, label: 'LM393' }),
+      ...smdRow(b.box.x + b.box.w - 20, -18.5, 3, 5),
+      ...(o.extraShapes ?? []),
+      p.shape, d.shape,
+    ],
     indicators: [p.indicator, d.indicator],
     model: {
       elements: [
@@ -61,7 +70,7 @@ export const SENSORS: Raw[] = [
     ao: 'v(VCC, GND) * (50000 * pow(max(lux, 0.5) / 10, -0.7)) / (50000 * pow(max(lux, 0.5) / 10, -0.7) + 10000)',
     trip: 'v(AO, GND) < thr * v(VCC, GND)',
     doActiveLow: true,
-    extraShapes: [circle(-10, -40, 5, '#e8d9b0', { stroke: '#b89a5a', strokeWidth: 0.6 }), { type: 'path', d: 'M-13 -42 Q-10 -40 -13 -38 M-10 -43 Q-7 -40 -10 -37', fill: 'none', stroke: '#b5462f', strokeWidth: 0.6 }],
+    extraShapes: [line(12, -41, 12, -48, COL.lead, 0.9), line(18, -41, 18, -48, COL.lead, 0.9), ...ldrFace(15, -48, 5.5)],
   }),
   comparatorModule({
     type: 'ir-obstacle', name: 'IR proximity / obstacle sensor', title: 'FC-51',
@@ -76,10 +85,10 @@ export const SENSORS: Raw[] = [
     ao: '0',
     trip: 'dist < range',
     doActiveLow: true,
-    extraShapes: [circle(-2, -48, 4, '#e7eef9', { stroke: '#8aa', strokeWidth: 0.5 }), circle(22, -48, 4, '#1f2226')],
+    extraShapes: [...ledSide(-2, -58, '#cfe0f5', 12), ...ledSide(22, -58, '#2a2c30', 12), silk(10, -41, 'IR', 2.6)],
   }),
   (() => {
-    const b = moduleBoard(['VCC', 'OUT', 'GND'], { h: 44, color: COL.pcbGreen, labels: { VCC: '+5–20 V', OUT: 'OUT (3.3 V while motion)' } });
+    const b = moduleBoard(['VCC', 'OUT', 'GND'], { h: 50, w: 44, color: COL.pcbGreen, holes: 'none', labels: { VCC: '+5–20 V', OUT: 'OUT (3.3 V while motion)' } });
     return {
       type: 'pir', name: 'PIR motion sensor (HC-SR501)', category: 'sensors',
       description: 'Passive-infrared motion detector: OUT goes HIGH (3.3 V) when something warm moves and stays high for the hold time. Hold the dome (press while simulating) to wave a hand in front of it. Needs 5 V+.',
@@ -87,9 +96,9 @@ export const SENSORS: Raw[] = [
       pins: b.pins,
       props: [{ key: 'hold', label: 'Hold time', type: 'slider', default: 3, min: 0.3, max: 20, step: 0.1, unit: 's' }],
       interactive: 'press',
-      shapes: [...b.shapes, { type: 'path', d: 'M-6 -42 A16 16 0 0 1 26 -42 Z', fill: '#f2f1ec', stroke: '#c8c6be', strokeWidth: 0.8 }, ...[0, 1, 2].map((i) => line(-2 + i * 11, -44, 3 + i * 11, -52, '#d6d3c9', 0.8))],
+      shapes: [...b.shapes, ...fresnelDome(10, -32, 18.5)],
       states: [{ name: 'tm', init: -100, next: 'pressed == 1 ? t : tm' }],
-      indicators: [{ shape: { type: 'path', d: 'M-6 -42 A16 16 0 0 1 26 -42 Z', fill: '#ff9a3c' }, color: '#ff9a3c', level: '(t - tm < hold) ? 0.35 : 0' }],
+      indicators: [{ shape: circle(10, -32, 18.5, '#ff9a3c'), color: '#ff9a3c', level: '(t - tm < hold) ? 0.3 : 0' }],
       model: {
         elements: [
           { id: 'O', kind: 'vsource', p: 'OUT', n: 'GND', value: '(v(VCC, GND) > 4.5 && t - tm < hold) ? 3.3 : 0', r: 200 },
@@ -107,13 +116,13 @@ export const SENSORS: Raw[] = [
       ...pk,
       props: [{ key: 'field', label: 'Magnetic field', type: 'slider', default: 0, min: -50, max: 50, step: 1, unit: 'mT' }],
       interactive: 'press',
-      shapes: [...pk.shapes, rect(26, -26, 8, 16, '#d63c35', { rx: 1 }), rect(26, -18, 8, 8, '#2f6fd6', { rx: 1 })],
+      shapes: [...pk.shapes, rect(28, -28, 8, 18, '#e0453d', { rx: 1, grad: '#9e2721', gradDir: 'h', shadow: 0.8 }), rect(28, -19, 8, 9, '#3b7de0', { rx: 1, grad: '#1f4f9f', gradDir: 'h' }), silk(32, -22, 'S', 3.4), silk(32, -12.5, 'N', 3.4)],
       states: [{ name: 'on', init: 0, next: '(pressed == 1 ? 40 : field) > 18 ? 1 : ((pressed == 1 ? 40 : field) < 12 ? 0 : on)' }],
       model: { elements: [contact('Q', 'OUT', 'GND', 'on == 1 && v(VCC, GND) > 3.5', 25), { id: 'IQ', kind: 'resistor', a: 'VCC', b: 'GND', value: 1500 }, { id: 'LK', kind: 'resistor', a: 'OUT', b: 'GND', value: 1e8 }] },
     };
   })(),
   (() => {
-    const b = moduleBoard(['VCC', 'X', 'Y', 'Z', 'GND'], { h: 46, color: COL.pcbPurple, title: 'GY-61', labels: { VCC: '+3.3 V (1.8–3.6 V)', X: 'X out', Y: 'Y out', Z: 'Z out' } });
+    const b = moduleBoard(['VCC', 'X', 'Y', 'Z', 'GND'], { h: 46, color: COL.pcbPurple, title: 'GY-61', titleY: -40, titleX: 5, titleSize: 3.6, labels: { VCC: '+3.3 V (1.8–3.6 V)', X: 'X out', Y: 'Y out', Z: 'Z out' } });
     const out = (axis: string) => ({ id: `O${axis}`, kind: 'vsource', p: axis, n: 'GND', value: `v(VCC, GND) > 1.8 ? v(VCC, GND) / 2 + 0.1 * v(VCC, GND) * clamp(a${axis.toLowerCase()}, -3.6, 3.6) : 0`, r: 32000 });
     return {
       type: 'adxl335', name: 'Accelerometer (ADXL335)', category: 'sensors',
@@ -125,7 +134,13 @@ export const SENSORS: Raw[] = [
         { key: 'ay', label: 'Y', type: 'slider', default: 0, min: -3, max: 3, step: 0.05, unit: 'g' },
         { key: 'az', label: 'Z', type: 'slider', default: 1, min: -3, max: 3, step: 0.05, unit: 'g' },
       ],
-      shapes: [...b.shapes, rect(12, -38, 16, 16, COL.ic, { rx: 1 }), line(20, -30, 34, -30, '#e05050', 0.8), line(20, -30, 20, -44, '#50c050', 0.8)],
+      shapes: [
+        ...b.shapes,
+        ...chip(13, -35, 12, 12, { legs: 'qfn', label: 'ADXL', sub: '335' }),
+        ...smdRow(0, -22, 3, 5, false, 'ccc'), ...smd(34, -30, 'c', true), ...smd(34, -38, 'r', true),
+        line(-4, -26, 6, -26, COL.silk, 0.6), path('M 6 -27.5 L 9 -26 L 6 -24.5 Z', COL.silk), silk(8, -28.5, 'X', 2.6),
+        line(-4, -26, -4, -36, COL.silk, 0.6), path('M -5.5 -36 L -4 -39 L -2.5 -36 Z', COL.silk), silk(-1.5, -37, 'Y', 2.6),
+      ],
       warnings: [{ when: 'v(VCC, GND) > 3.7', level: 'error', message: 'The ADXL335 is a 3.3 V part (max 3.6 V).' }],
       model: { elements: [out('X'), out('Y'), out('Z'), { id: 'IQ', kind: 'resistor', a: 'VCC', b: 'GND', value: 10000 }] },
     };
@@ -142,7 +157,8 @@ export const SENSORS: Raw[] = [
     ao: 'v(VCC, GND) * 5000 / (5000 + 20000 * pow(max(ppm, 50) / 1000, -0.47))',
     trip: 'v(AO, GND) > thr',
     doActiveLow: true,
-    extraShapes: [circle(0, -36, 13, '#b8bec6', { stroke: '#7d858e', strokeWidth: 0.8 }), circle(0, -36, 9, '#9aa3ad', { opacity: 0.6 }), ...[-4, 0, 4].map((dx) => line(dx - 5, -36 + dx, dx + 5, -36 + dx, '#7d858e', 0.4))],
+    h: 70,
+    extraShapes: [...meshCan(15, -56, 12)],
   }),
   comparatorModule({
     type: 'sound-sensor', name: 'Sound sensor (KY-038)', title: 'KY-038',
@@ -157,17 +173,22 @@ export const SENSORS: Raw[] = [
     trip: 'v(AO, GND) - v(VCC, GND) / 2 > thr',
     doActiveLow: false,
     maxStep: 2e-4,
-    extraShapes: [circle(-2, -38, 9, '#2b2d31', { stroke: '#8a9098', strokeWidth: 1 }), circle(-2, -38, 5, '#555a61')],
+    extraShapes: [...micCapsule(15, -43, 6.5)],
   }),
   (() => {
-    const b = moduleBoard(['VCC', 'GND', 'DO'], { h: 40, color: COL.pcbBlue, title: 'SW-420', labels: { VCC: '+3.3–5 V', DO: 'DO (HIGH while shaking)' } });
-    const p = pwrLed(b.box.x + 6, -12), d = statusLed(b.box.x + b.box.w - 6, -12, '#35d05a', 'pressed');
+    const b = moduleBoard(['VCC', 'GND', 'DO'], { h: 40, color: COL.pcbBlue, title: 'SW-420', titleY: -14, titleSize: 3, labels: { VCC: '+3.3–5 V', DO: 'DO (HIGH while shaking)' } });
+    const p = pwrLed(b.box.x + 5, -17), d = statusLed(b.box.x + b.box.w - 5, -17, '#35d05a', 'pressed');
     return {
       type: 'vibration-sensor', name: 'Vibration sensor (SW-420)', category: 'sensors',
       description: 'Spring vibration switch + comparator: DO is LOW when still and goes HIGH while the module is shaken or knocked. Press it while simulating to shake it.',
       keywords: ['vibration', 'shock', 'knock', 'sw-420', 'tamper', 'earthquake'],
       pins: b.pins, interactive: 'press',
-      shapes: [...b.shapes, rect(-2, -38, 14, 8, '#c8cdd3', { rx: 3 }), p.shape, d.shape],
+      shapes: [
+        ...b.shapes,
+        rect(-4, -40, 18, 8, '#eef1f4', { rx: 4, grad: '#7f8891', shadow: 0.9 }), rect(-6, -37, 2.5, 2, COL.lead), rect(13.5, -37, 2.5, 2, COL.lead),
+        ...trimpot(24, -34, 9), ...chip(-2, -27, 12, 7, { n: 4, label: 'LM393' }), ...smdRow(14, -24, 3, 4.5),
+        p.shape, d.shape,
+      ],
       indicators: [p.indicator, d.indicator],
       model: { elements: [dout('DOUT', 'DO', 'pressed == 1 && v(VCC, GND) > 2.5', 'VCC', 'GND', 100), { id: 'IQ', kind: 'resistor', a: 'VCC', b: 'GND', value: 2000 }] },
     };
@@ -180,7 +201,7 @@ export const SENSORS: Raw[] = [
     props: [{ key: 'tilted', label: 'Tilted', type: 'select', default: 0, options: [{ value: 0, label: 'Upright (closed)' }, { value: 1, label: 'Tilted (open)' }] }],
     toggle: 'tilted',
     shapes: [...legs(pinRow(['1', '2']), -6)],
-    animations: [{ shape: rect(-3, -26, 16, 20, '#2f6fd6', { rx: 2, stroke: '#1f4f9f', strokeWidth: 0.6 }), rotate: 'tilted == 1 ? 50 : 0', cx: 5, cy: -6 }],
+    animations: [{ shape: rect(-2, -27, 14, 21, '#eef1f4', { rx: 2, grad: '#7f8891', gradDir: 'h', stroke: '#6b737c', strokeWidth: 0.5, shadow: 0.8 }), rotate: 'tilted == 1 ? 50 : 0', cx: 5, cy: -6 }],
     model: { elements: [contact('S', '1', '2', 'tilted == 0', 0.5)] },
   },
   {
@@ -190,21 +211,27 @@ export const SENSORS: Raw[] = [
     pins: pinRow(['1', '2'], { step: 40 }),
     props: [{ key: 'magnet', label: 'Magnet', type: 'select', default: 0, options: [{ value: 0, label: 'Away (open)' }, { value: 1, label: 'Near (closed)' }] }],
     toggle: 'magnet',
-    shapes: [line(0, 0, 40, 0), rect(6, -5, 28, 10, '#dfeef2', { rx: 5, stroke: '#9fb8c0', strokeWidth: 0.6, opacity: 0.8 }), line(8, 0, 21, 0, '#8a7a55', 1.2), line(19, 1.2, 32, 1.2, '#8a7a55', 1.2)],
-    animations: [{ shape: rect(8, -18, 24, 7, '#d63c35', { rx: 1 }), dy: 'magnet == 1 ? 4 : -8' }],
+    shapes: [line(0, 0, 40, 0, COL.lead, 1.4), rect(6, -4.5, 28, 9, '#f2fbfd', { rx: 4.5, grad: '#b9d6de', stroke: '#8fb0ba', strokeWidth: 0.5, opacity: 0.85, shadow: 0.5 }), line(8, 0, 22, 0.4, '#8a7a55', 1.1), line(18, 1.2, 32, 1.2, '#8a7a55', 1.1), rect(9, -3, 22, 1, '#ffffff', { opacity: 0.6, rx: 0.5 })],
+    animations: [{ shape: rect(8, -18, 24, 7, '#e0453d', { rx: 1, grad: '#2f6fd6', gradDir: 'h', shadow: 0.8 }), dy: 'magnet == 1 ? 4 : -8' }],
     model: { elements: [contact('S', '1', '2', 'magnet == 1', 0.1)] },
   },
   (() => {
-    const b = moduleBoard(['VCC', 'OUT', 'GND'], { h: 48, w: 70, color: COL.pcbRed, title: 'ACS712', labels: { VCC: '+5 V', OUT: 'OUT (VCC/2 at 0 A)' } });
-    const ip = pinRow(['IP1', 'IP2'], { x0: 5, y: -70, kind: 'terminal', labels: { IP1: 'IP+ (current in)', IP2: 'IP− (current out)' } });
+    const b = moduleBoard(['VCC', 'OUT', 'GND'], { h: 70, w: 50, color: COL.pcbRed, title: 'ACS712', titleY: -24, titleSize: 3.6, holes: 'none', labels: { VCC: '+5 V', OUT: 'OUT (VCC/2 at 0 A)' } });
+    const ip = pinRow(['IP1', 'IP2'], { x0: 0, y: -70, kind: 'terminal', labels: { IP1: 'IP+ (current in)', IP2: 'IP− (current out)' } });
     return {
       type: 'acs712', name: 'Current sensor (ACS712)', category: 'sensors',
       description: 'Hall-effect current sensor: put it in series with the load (IP+ → IP−, 1.2 mΩ, isolated from the logic side). OUT = VCC/2 + sensitivity × current: 185 mV/A (5 A), 100 mV/A (20 A) or 66 mV/A (30 A).',
       keywords: ['current sensor', 'acs712', 'ammeter', 'hall', 'power monitor'],
       pins: [...b.pins, ...ip],
       props: [{ key: 'sens', label: 'Version', type: 'select', default: 0.185, options: [{ value: 0.185, label: '5 A (185 mV/A)' }, { value: 0.1, label: '20 A (100 mV/A)' }, { value: 0.066, label: '30 A (66 mV/A)' }] }],
-      shapes: [...b.shapes, ...screwTerminals(ip), rect(0, -40, 12, 8, COL.ic, { rx: 1 })],
-      readouts: [{ value: 'i(RS)', unit: 'A', x: 38, y: -36, size: 4 }],
+      shapes: [
+        ...b.shapes, ...screwTerminals(ip),
+        // thick current path to the SOIC-8 Hall chip
+        rect(-2, -60, 4, 12, '#d8a24a', { rx: 1, opacity: 0.8 }), rect(8, -60, 4, 12, '#d8a24a', { rx: 1, opacity: 0.8 }),
+        ...chip(-4, -49, 18, 10, { n: 4, label: 'ACS712', sub: 'ELCTR-05B' }),
+        ...smdRow(-5, -33, 3, 5), ...smd(23, -45, 'c', true), ...smd(23, -37, 'r', true),
+      ],
+      readouts: [{ value: 'i(RS)', unit: 'A', x: 10, y: -16, size: 3.6, color: '#fff' }],
       model: {
         elements: [
           { id: 'RS', kind: 'resistor', a: 'IP1', b: 'IP2', value: 0.0012 },
@@ -218,13 +245,18 @@ export const SENSORS: Raw[] = [
   })(),
   (() => {
     const inp = pinRow(['VIN', 'GNDIN'], { y: -60, kind: 'terminal', labels: { VIN: 'Measured + (0–25 V)', GNDIN: 'Measured −' } });
-    const b = moduleBoard(['S', 'PLUS', 'MINUS'], { h: 44, color: COL.pcbRed, labels: { S: 'S (VIN / 5)', PLUS: '+ (not connected)', MINUS: '− (GND)' } });
+    const b = moduleBoard(['S', 'PLUS', 'MINUS'], { h: 64, color: COL.pcbRed, holes: 'none', labels: { S: 'S (VIN / 5)', PLUS: '+ (not connected)', MINUS: '− (GND)' } });
     return {
       type: 'voltage-sensor', name: 'Voltage sensor module (0–25 V)', category: 'sensors',
       description: 'A 30 kΩ / 7.5 kΩ divider: S = VIN ÷ 5, so a 5 V Arduino can measure up to 25 V (analogRead × 25 / 1023). The measured − and the module − are the same ground.',
       keywords: ['voltage sensor', 'divider', 'battery monitor', 'voltmeter', 'measure voltage'],
       pins: [...b.pins, ...inp],
-      shapes: [...b.shapes, ...screwTerminals(inp), text(10, -30, '0–25V', 4.5, '#fff')],
+      shapes: [
+        ...b.shapes, ...screwTerminals(inp),
+        silk(-3, -50, 'VCC', 2.4), silk(13, -50, 'GND', 2.4),
+        ...chip(-4, -42, 9, 4.5, { legs: 'none', label: '303' }), ...chip(11, -42, 9, 4.5, { legs: 'none', label: '752' }),
+        silk(10, -26, 'DC 0–25V', 3), silk(10, -19.5, 'S  +  −', 3.2),
+      ],
       connections: [['GNDIN', 'MINUS']],
       model: {
         elements: [
@@ -236,7 +268,7 @@ export const SENSORS: Raw[] = [
     };
   })(),
   (() => {
-    const b = moduleBoard(['GND', 'VCC', 'SW', 'DT', 'CLK'], { h: 46, color: COL.pcbBlue, title: 'KY-040', labels: { VCC: '+ (3.3–5 V)', SW: 'Push switch (LOW when pressed)', DT: 'DT (B)', CLK: 'CLK (A)' } });
+    const b = moduleBoard(['GND', 'VCC', 'SW', 'DT', 'CLK'], { h: 46, color: COL.pcbBlue, title: 'KY-040', titleY: -15, titleX: 27, titleSize: 3, labels: { VCC: '+ (3.3–5 V)', SW: 'Push switch (LOW when pressed)', DT: 'DT (B)', CLK: 'CLK (A)' } });
     const q = 'mod(ph, 4)';
     return {
       type: 'rotary-encoder', name: 'Rotary encoder (KY-040)', category: 'sensors',
@@ -246,8 +278,18 @@ export const SENSORS: Raw[] = [
       props: [{ key: 'pos', label: 'Position (clicks)', type: 'slider', default: 0, min: -40, max: 40, step: 1 }],
       drag: 'pos',
       interactive: 'press',
-      shapes: [...b.shapes, rect(8, -44, 24, 24, '#b8bec6', { rx: 2 }), circle(20, -32, 9, '#2b2d31')],
-      animations: [{ shape: rect(19, -40, 2, 7, '#e0e0e0', { rx: 1 }), rotate: 'ph * 4.5', cx: 20, cy: -32 }],
+      shapes: [
+        ...b.shapes,
+        rect(7, -46, 26, 26, '#e7eaee', { rx: 1.5, grad: '#8c949d', gradDir: 'd', shadow: 1, stroke: '#6d757e', strokeWidth: 0.5 }),
+        rect(9.5, -43.5, 21, 21, '#2b2d31', { rx: 1, grad: '#141517' }),
+        circle(20, -33, 8.6, '#d5d9de', { grad: '#7e878f', gradDir: 'r', stroke: '#5c636b', strokeWidth: 0.5 }),
+        ...Array.from({ length: 24 }, (_, i) => {
+          const a = (i / 24) * 6.28318;
+          return line(20 + Math.cos(a) * 6.6, -33 + Math.sin(a) * 6.6, 20 + Math.cos(a) * 8.4, -33 + Math.sin(a) * 8.4, '#6b737b', 0.45);
+        }),
+        ...smdRow(-6, -18, 3, 5, false, 'rrr'),
+      ],
+      animations: [{ shape: rect(19, -40.5, 2, 7.5, '#5c636b', { rx: 0.8 }), rotate: 'ph * 4.5', cx: 20, cy: -33 }],
       states: [
         { name: 'ph0', init: 0, next: 'ph' },
         { name: 'ph', init: 0, next: '(t - tl > 0.002 && ph != 4 * round(pos)) ? ph + sign(4 * round(pos) - ph) : ph' },
@@ -277,9 +319,9 @@ export const SENSORS: Raw[] = [
         { key: 'ppr', label: 'Pulses per revolution', type: 'select', default: 20, options: [{ value: 20, label: '20' }, { value: 100, label: '100' }, { value: 360, label: '360' }] },
       ],
       drag: 'rpm',
-      shapes: [...b.shapes, circle(15, -36, 20, '#3a3e44')],
-      animations: [{ shape: { type: 'path', d: 'M15 -54 L15 -18 M-3 -36 L33 -36', stroke: '#9aa3ad', strokeWidth: 1.2, fill: 'none' }, rotate: 'ph / (4 * ppr) * 360', cx: 15, cy: -36 }],
-      readouts: [{ value: 'rpm', unit: 'rpm', x: 15, y: -8, size: 4, color: '#ddd' }],
+      shapes: [...b.shapes, circle(15, -36, 21, '#4a4e55', { grad: '#1f2226', gradDir: 'd', shadow: 1 }), circle(15, -36, 16, '#2c2f34', { stroke: '#555a61', strokeWidth: 0.6 }), circle(15, -36, 4.5, '#e3e7eb', { grad: '#7e878f', gradDir: 'r' })],
+      animations: [{ shape: circle(15, -36, 12, 'none', { stroke: '#8e959d', strokeWidth: 5, dash: 1.2, opacity: 0.8 }), rotate: 'ph / (4 * ppr) * 360', cx: 15, cy: -36 }],
+      readouts: [{ value: 'rpm', unit: 'rpm', x: 15, y: -60, size: 4, color: '#ddd' }],
       states: [{ name: 'ph', init: 0, next: 'mod(ph + rpm / 60 * ppr * 4 * dt, 4 * ppr)' }],
       model: {
         elements: [
@@ -300,8 +342,13 @@ export const SENSORS: Raw[] = [
       pins: b.pins,
       props: [{ key: 'rpm', label: 'Wheel speed', type: 'slider', default: 0, min: 0, max: 600, step: 1, unit: 'rpm' }],
       drag: 'rpm',
-      shapes: [...b.shapes, rect(0, -44, 8, 18, '#1f2226', { rx: 1 }), rect(14, -44, 8, 18, '#1f2226', { rx: 1 })],
-      animations: [{ shape: { type: 'path', d: 'M11 -66 L11 -24 M-10 -45 L32 -45 M-4 -60 L26 -30 M26 -60 L-4 -30', stroke: '#e8c547', strokeWidth: 2, fill: 'none' }, rotate: 'ph / 20 * 360', cx: 11, cy: -45 }],
+      shapes: [
+        ...b.shapes,
+        circle(11, -45, 20, '#2b2d31', { opacity: 0.92, shadow: 1 }), circle(11, -45, 5, '#d8dce0', { grad: '#7e878f', gradDir: 'r' }),
+        rect(-1, -42, 9, 20, '#34363b', { rx: 1, grad: '#141517', gradDir: 'h', shadow: 0.9 }), rect(14, -42, 9, 20, '#34363b', { rx: 1, grad: '#141517', gradDir: 'h', shadow: 0.9 }),
+        ...chip(-6, -19.5, 10, 5, { n: 4, label: 'LM393' }), ...smdRow(12, -17, 3, 4.5),
+      ],
+      animations: [{ shape: circle(11, -45, 16.5, 'none', { stroke: '#101113', strokeWidth: 6, dash: 2.6 }), rotate: 'ph / 20 * 360', cx: 11, cy: -45 }],
       states: [{ name: 'ph', init: 0, next: 'mod(ph + rpm / 60 * 20 * dt, 20)' }],
       model: {
         elements: [

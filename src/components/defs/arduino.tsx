@@ -2,6 +2,35 @@ import type { ComponentDef, PinDef } from '../types';
 import { Label, SLine, SText } from '../util';
 import { UNO } from '../../mcu/boards';
 import { buildBoard } from './board';
+import { Shapes } from '../../ai/customPart';
+import type { PartShape } from '../../ai/spec';
+import { chip, circle, crystalCan, ecap, epoxy, mountHole, path, rect, shade, COL } from '../../parts/kit';
+
+/** The Uno's physical parts, drawn with the part kit (gradients, packages). */
+const UNO_ART = [
+  path('M0 6 Q0 0 6 0 L262 0 L270 8 L280 8 L280 204 Q280 210 274 210 L6 210 Q0 210 0 204 Z', '#0aa0a6', { grad: '#007a80', gradDir: 'd', stroke: '#005c61', strokeWidth: 1.1, shadow: 1 }),
+  ...[[15, 190], [265, 190], [80, 30], [250, 45]].flatMap(([x, y]) => mountHole(x, y, 4)),
+  // USB-B socket and the DC barrel jack
+  rect(-14, 26, 46, 40, '#eef1f4', { rx: 2, grad: '#7f8891', stroke: '#5f666e', strokeWidth: 0.8, shadow: 1 }),
+  rect(-10, 32, 30, 28, '#c9ced4', { rx: 1, grad: '#9aa2ab', gradDir: 'h' }), rect(-6, 40, 22, 12, '#3a3d42', { rx: 1 }),
+  rect(-10, 140, 42, 34, '#3a3c41', { rx: 3, grad: '#111214', shadow: 1 }), circle(6, 157, 7, '#0c0d0f', { stroke: '#4a4d53', strokeWidth: 1 }), circle(6, 157, 2, '#c9ced4'),
+  // reset button, USB chip, crystal, supply caps and the 5 V regulator
+  rect(42, 16, 16, 16, '#eef1f4', { rx: 1.5, grad: '#7f8891', gradDir: 'd', shadow: 0.9 }), circle(50, 24, 5, '#e0453d', { grad: '#8f1f1a', gradDir: 'r' }),
+  ...chip(42, 62, 14, 14, { legs: 'qfp', n: 5, label: '16U2' }),
+  ...crystalCan(80, 90, 24, 10, '16.000'),
+  ...ecap(48, 152, 7), ...ecap(66, 152, 7),
+  rect(56, 168, 12, 3, COL.metal), ...chip(52, 171, 20, 12, { legs: 'none', label: 'NCP1117' }),
+  // the ATmega328P in its DIP socket
+  rect(116, 119, 148, 44, '#2a2b2f', { rx: 1.5, grad: '#141517', shadow: 0.8 }),
+  ...Array.from({ length: 14 }, (_, i) => [rect(124 + i * 9.6, 121, 4, 6, COL.metal, { grad: COL.metalDark, gradDir: 'h' }), rect(124 + i * 9.6, 154, 4, 6, COL.metal, { grad: COL.metalDark, gradDir: 'h' })]).flat(),
+  ...epoxy(120, 126, 140, 30, '#26282c', 1.4),
+  path('M 120 137 A 4 4 0 0 1 120 145 Z', '#0c0d0f'), circle(126, 150, 1.8, '#1b1c1f', { stroke: 'rgba(255,255,255,0.12)', strokeWidth: 0.4 }),
+  // ICSP header by the chip
+  rect(264, 110, 12, 22, '#2a2b2f', { rx: 0.8, grad: '#111214', shadow: 0.8 }),
+  ...[0, 1, 2].flatMap((r) => [rect(265.8, 112.5 + r * 7, 3, 3, '#e3c25e', { grad: '#9c7b26', gradDir: 'd' }), rect(271.2, 112.5 + r * 7, 3, 3, '#e3c25e', { grad: '#9c7b26', gradDir: 'd' })]),
+] as unknown as PartShape[];
+
+const SOCKET = shade('#1b1c1f', 0.08);
 
 export const BLINK_SKETCH = `// Blink: toggles the on-board LED (pin 13) once per second.
 // Wire an LED + 220 Ω resistor from pin 13 to GND to see it on the breadboard too.
@@ -52,7 +81,11 @@ function Header({ pins, y }: { pins: [string, number, string][]; y: number }) {
   return (
     <g>
       {runs.map(([a, b], i) => (
-        <rect key={i} x={a - 5} y={y - 5} width={b - a + 10} height={10} rx={1} fill="#1b1c1f" />
+        <g key={i}>
+          <rect x={a - 4.2} y={y - 3.6} width={b - a + 10} height={10} rx={1} fill="#000" opacity={0.25} />
+          <rect x={a - 5} y={y - 5} width={b - a + 10} height={10} rx={1} fill={SOCKET} stroke="#0c0d0f" strokeWidth={0.4} />
+          <rect x={a - 4.4} y={y - 4.4} width={b - a + 8.8} height={1.4} rx={0.6} fill="#fff" opacity={0.08} />
+        </g>
       ))}
       {pins.map(([id, x]) => (
         <rect key={id} x={x - 2.2} y={y - 2.2} width={4.4} height={4.4} fill="#050506" stroke="#3a3c41" strokeWidth={0.4} />
@@ -88,33 +121,9 @@ export const arduinoUno: ComponentDef = {
     const running = !!sim;
     return (
       <g>
-        <path d="M0 6 Q0 0 6 0 L262 0 L270 8 L280 8 L280 204 Q280 210 274 210 L6 210 Q0 210 0 204 Z" fill="#008f95" stroke="#006a6f" strokeWidth={1.2} />
-        <path d="M4 10 L276 10" stroke="#00a4ab" strokeWidth={0.6} />
-        {/* mounting holes */}
-        {[[15, 190], [265, 190], [80, 30], [250, 45]].map(([x, y], i) => (
-          <circle key={i} cx={x} cy={y} r={4} fill="#f4f2ec" stroke="#c9c3a8" strokeWidth={1.5} />
-        ))}
-        {/* USB-B and barrel jack */}
-        <rect x={-14} y={26} width={46} height={40} rx={2} fill="#c6ccd2" stroke="#8d949c" strokeWidth={1} />
-        <rect x={-10} y={32} width={30} height={28} rx={1} fill="#aab1b9" />
-        <rect x={-10} y={140} width={42} height={34} rx={3} fill="#1d1e21" />
-        <circle cx={6} cy={157} r={6} fill="#333" />
-        {/* reset button */}
-        <rect x={42} y={16} width={16} height={16} rx={2} fill="#c6ccd2" />
-        <circle cx={50} cy={24} r={5} fill="#d93b30" />
+        <Shapes shapes={UNO_ART} />
         <Label x={50} y={42} size={4.4} fill="#e8f3f3">RESET</Label>
-        {/* MCU chip */}
-        <rect x={120} y={126} width={140} height={30} rx={2} fill="#1d1e21" />
-        {Array.from({ length: 14 }, (_, i) => (
-          <g key={i}>
-            <rect x={124 + i * 9.6} y={122} width={4} height={5} fill="#c9ced4" />
-            <rect x={124 + i * 9.6} y={155} width={4} height={5} fill="#c9ced4" />
-          </g>
-        ))}
-        <circle cx={126} cy={141} r={3} fill="#2c2d31" />
-        <Label x={190} y={143} size={6} fill="#9aa0a8">ATMEGA328P</Label>
-        {/* crystal */}
-        <rect x={80} y={90} width={24} height={10} rx={5} fill="#c9ced4" stroke="#8d949c" strokeWidth={0.6} />
+        <Label x={190} y={143} size={5.6} fill="#b9bdc3" weight={500}>ATMEGA328P-PU</Label>
         {/* branding */}
         <Label x={150} y={82} size={16} fill="#ffffff" weight={800}>UNO</Label>
         <Label x={210} y={82} size={8} fill="#e8f3f3" weight={700}>ARDUINO</Label>

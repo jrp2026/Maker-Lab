@@ -1,9 +1,9 @@
 /** Tools: the ISP programmer. */
-import { COL, moduleBoard, rect, text } from '../kit';
+import { chip, crystalCan, moduleBoard, rect, silk, smdRow, usbPort } from '../kit';
 import { poweredFn, TextLines, type DevicePart } from './common';
 
 const programmer: DevicePart = (() => {
-  const b = moduleBoard(['VCC', 'MOSI', 'MISO', 'SCK', 'RST', 'GND'], { h: 50, w: 100, color: '#2b5fae', title: 'USBasp', labels: { VCC: '+5 V out (target power)', MOSI: 'MOSI → target MOSI', MISO: 'MISO ← target MISO', SCK: 'SCK → target SCK', RST: 'RESET → target RESET', GND: 'GND' } });
+  const b = moduleBoard(['VCC', 'MOSI', 'MISO', 'SCK', 'RST', 'GND'], { h: 50, w: 100, color: '#2b5fae', title: 'USBasp', titleY: -48 + 4, titleX: 44, titleSize: 3.2, labels: { VCC: '+5 V out (target power)', MOSI: 'MOSI → target MOSI', MISO: 'MISO ← target MISO', SCK: 'SCK → target SCK', RST: 'RESET → target RESET', GND: 'GND' } });
   return [
     {
       type: 'isp-programmer', name: 'Microcontroller programmer (USBasp ISP)', category: 'mcu',
@@ -11,7 +11,7 @@ const programmer: DevicePart = (() => {
       keywords: ['programmer', 'usbasp', 'isp', 'avrisp', 'debugger', 'st-link', 'flash', 'upload'],
       pins: b.pins,
       props: [{ key: 'power', label: 'Target power', type: 'select', default: 1, options: [{ value: 1, label: '5 V to target' }, { value: 0, label: 'Off (target self-powered)' }] }],
-      shapes: [...b.shapes, rect(-20, -58, 28, 18, COL.metal, { rx: 2 }), text(40, -12, 'ISP', 4, '#fff')],
+      shapes: [...b.shapes, ...usbPort(-26, -34, 'a'), ...chip(0, -44, 18, 18, { legs: 'qfp', n: 6, label: 'MEGA8' }), ...crystalCan(24, -44, 16, 6, '12.000'), ...smdRow(24, -30, 5, 5, false, 'rcrcr'), rect(56, -44, 5, 3, '#efe9d2', { rx: 0.4 }), rect(64, -44, 5, 3, '#efe9d2', { rx: 0.4 }), silk(46, -18, 'ISP', 3)],
       model: {
         elements: [
           { id: 'P', kind: 'vsource', p: 'VCC', n: 'GND', value: 'power == 1 ? 5 : 0', r: 0.5 },

@@ -1,4 +1,4 @@
-import { COL, axial, circle, dip, hiz, legs, line, pinRow, rect, text, type Raw } from './kit';
+import { COL, axial, circle, dip, hiz, legs, line, path, pinRow, rect, text, type Raw } from './kit';
 
 const radial = (ids: [string, string], body: Raw[], labels: Record<string, string> = {}) => {
   const pins = pinRow(ids, { labels });
@@ -16,8 +16,12 @@ export const PASSIVE: Raw[] = [
       { key: 'pos', label: 'Position', type: 'slider', default: 0.5, min: 0, max: 1 },
     ],
     drag: 'pos',
-    shapes: [...legs(pinRow(['1', 'W', '2']), -6), rect(-5, -24, 30, 19, '#2f6fb7', { rx: 2 }), circle(10, -15, 7, '#f2f4f6', { stroke: '#9aa3ad', strokeWidth: 0.6 })],
-    animations: [{ shape: rect(9, -21, 2, 12, '#39424c', { rx: 1 }), rotate: '-135 + pos * 270', cx: 10, cy: -15 }],
+    shapes: [
+      ...legs(pinRow(['1', 'W', '2']), -6),
+      rect(-5, -26, 30, 21, '#3b82e0', { rx: 2, grad: '#1f4f9f', shadow: 1, stroke: '#173f7e', strokeWidth: 0.4 }),
+      circle(10, -15.5, 8, '#f7f8fa', { grad: '#b9c0c8', gradDir: 'r', stroke: '#8a929b', strokeWidth: 0.5 }),
+    ],
+    animations: [{ shape: path('M 8.8 -22 L 11.2 -22 L 11.2 -9 L 8.8 -9 Z M 4 -16.7 L 16 -16.7 L 16 -14.3 L 4 -14.3 Z', '#8a929b'), rotate: '-135 + pos * 270', cx: 10, cy: -15.5 }],
     model: { elements: [{ id: 'RA', kind: 'rvar', a: '1', b: 'W', value: 'max(0.5, r * pos)' }, { id: 'RB', kind: 'rvar', a: 'W', b: '2', value: 'max(0.5, r * (1 - pos))' }] },
     summary: 'Adjustable preset resistor',
   },
@@ -31,8 +35,12 @@ export const PASSIVE: Raw[] = [
       { key: 'pos', label: 'Setting', type: 'slider', default: 0.5, min: 0, max: 1 },
     ],
     drag: 'pos',
-    shapes: [...legs(pinRow(['1', '2'], { step: 20 }), -8), rect(-6, -26, 32, 18, '#e4cfa4', { rx: 3, stroke: '#b79a64', strokeWidth: 0.6 }), line(-2, -17, 22, -17, '#8a4b22', 1.2)],
-    animations: [{ shape: { type: 'path', d: 'M0 -30 L0 -22 L-3 -25 M0 -22 L3 -25', fill: 'none', stroke: '#222', strokeWidth: 1.2 }, dx: 'pos * 20' }],
+    shapes: [
+      ...legs(pinRow(['1', '2'], { step: 20 }), -8),
+      rect(-7, -27, 34, 19, '#f1e2bf', { rx: 3, grad: '#c9ad6a', shadow: 1, stroke: '#a78a48', strokeWidth: 0.5 }),
+      ...Array.from({ length: 14 }, (_, i) => line(-3 + i * 2, -22, -3 + i * 2, -12, '#b8702e', 0.7)),
+    ],
+    animations: [{ shape: path('M -2 -31 L 2 -31 L 2 -24 L 0 -21 L -2 -24 Z', '#34373c', { stroke: '#111', strokeWidth: 0.4 }), dx: 'pos * 20' }],
     model: { elements: [{ id: 'R', kind: 'rvar', a: '1', b: '2', value: 'max(0.5, r * pos)' }] },
   },
   {
@@ -47,7 +55,7 @@ export const PASSIVE: Raw[] = [
     ],
     drag: 'temp',
     ...(() => {
-      const r = radial(['1', '2'], [{ type: 'ellipse', cx: 5, cy: -14, rx: 7, ry: 6, fill: '#1d1d1f' }, text(5, -12, 'NTC', 3.6, '#ddd')]);
+      const r = radial(['1', '2'], [{ type: 'ellipse', cx: 5, cy: -14, rx: 7.5, ry: 6.5, fill: '#3a3c41', grad: '#0f1012', gradDir: 'r', shadow: 0.8 }, text(5, -12.5, '103', 3.4, '#c9ccd1', 'middle', { weight: 600 })]);
       return { shapes: r.shapes };
     })(),
     indicators: [{ shape: { type: 'ellipse', cx: 5, cy: -14, rx: 7, ry: 6 }, color: '#ff5a1a', level: 'clamp((temp - 40) / 80, 0, 0.8)' }],
@@ -60,7 +68,13 @@ export const PASSIVE: Raw[] = [
     keywords: ['supercapacitor', 'ultracapacitor', 'edlc', 'gold cap'],
     pins: pinRow(['P', 'N'], { labels: { P: 'Positive (+)', N: 'Negative (−)' } }),
     props: [{ key: 'c', label: 'Capacitance', type: 'number', default: 1, unit: 'F', min: 0.01 }],
-    shapes: [...legs(pinRow(['P', 'N']), -6), rect(-6, -34, 22, 28, '#2a2d33', { rx: 3 }), rect(8, -34, 8, 28, '#c9a13b', { rx: 2 }), text(5, -22, '1F', 5, '#eee'), text(5, -14, '5.5V', 3.8, '#aaa')],
+    shapes: [
+      ...legs(pinRow(['P', 'N']), -6),
+      rect(-7, -36, 24, 30, '#3a3d44', { rx: 3, grad: '#15171a', gradDir: 'h', shadow: 1 }),
+      rect(9, -36, 7, 30, '#e3c25e', { rx: 1, grad: '#9c7b26', gradDir: 'h' }),
+      rect(-7, -36, 24, 3, '#c5cbd2', { rx: 1.5 }), rect(-4, -32, 2, 22, '#ffffff', { opacity: 0.18, rx: 1 }),
+      text(3, -22, '1F', 5, '#eee', 'middle', { weight: 700 }), text(3, -14, '5.5V', 3.6, '#bbb', 'middle', { weight: 600 }),
+    ],
     model: { elements: [{ id: 'C', kind: 'capacitor', a: 'P', b: 'N', value: 'c' }, { id: 'ESR', kind: 'resistor', a: 'P', b: 'N', value: 1e6 }] },
     warnings: [
       { when: 'v(P, N) > 5.6', level: 'error', message: 'Above the 5.5 V rating — supercaps fail (and vent) when overcharged.' },
@@ -72,7 +86,7 @@ export const PASSIVE: Raw[] = [
     type: 'inductor', name: 'Inductor', category: 'passive',
     description: 'Wire-wound inductor (with its small DC resistance). Stores energy in its magnetic field; current through it can’t change instantly.',
     keywords: ['coil', 'choke', 'henry', 'l'],
-    ...axial(['1', '2'], [rect(9, -5, 22, 10, '#3d6b3a', { rx: 4 }), ...[12, 16, 20, 24, 28].map((x) => line(x, -5, x, 5, '#c98a3c', 1.2))]),
+    ...axial(['1', '2'], [rect(8, -5.5, 24, 11, '#5a8f4e', { rx: 5, grad: '#274a22', shadow: 0.8 }), ...[['#8b5a2b', 13], ['#1d1d1d', 17], ['#d63c35', 21], ['#d9b44a', 27]].map(([c, x]) => rect(Number(x), -5.4, 2.2, 10.8, String(c))), rect(10, -4.2, 20, 1.6, '#ffffff', { opacity: 0.22, rx: 0.8 })]),
     props: [
       { key: 'l', label: 'Inductance', type: 'number', default: 0.01, unit: 'H', min: 1e-9 },
       { key: 'dcr', label: 'DC resistance', type: 'number', default: 1, unit: 'Ω', min: 0.001 },
@@ -85,7 +99,7 @@ export const PASSIVE: Raw[] = [
     type: 'ferrite', name: 'Ferrite bead', category: 'passive',
     description: 'Ferrite bead: near-zero resistance at DC, lossy at high frequency — used to keep noise off power lines.',
     keywords: ['ferrite', 'emi', 'filter', 'bead'],
-    ...axial(['1', '2'], [rect(12, -5, 16, 10, '#4a4d52', { rx: 2 })]),
+    ...axial(['1', '2'], [rect(11, -5.5, 18, 11, '#5f636a', { rx: 2.5, grad: '#26282c', shadow: 0.8 }), rect(13, -4.3, 14, 1.4, '#ffffff', { opacity: 0.18, rx: 0.7 })]),
     model: { nodes: ['M'], elements: [{ id: 'L', kind: 'inductor', a: '1', b: 'M', value: 1e-6 }, { id: 'R', kind: 'resistor', a: 'M', b: '2', value: 0.05 }] },
   },
   {
@@ -100,10 +114,13 @@ export const PASSIVE: Raw[] = [
     ],
     props: [{ key: 'ratio', label: 'Turns ratio', type: 'select', default: 10, options: [{ value: 2, label: '2 : 1' }, { value: 5, label: '5 : 1' }, { value: 10, label: '10 : 1' }, { value: 19, label: '230 V → 12 V' }, { value: 1, label: '1 : 1 isolation' }] }],
     shapes: [
-      rect(8, -10, 44, 50, '#5f666e', { rx: 2 }), rect(12, -6, 36, 42, '#8a929b', { rx: 1 }),
-      rect(14, -2, 12, 34, '#c98a3c', { rx: 2 }), rect(34, -2, 12, 34, '#c98a3c', { rx: 2 }),
       line(0, 0, 14, 4, '#c98a3c', 1.2), line(0, 30, 14, 28, '#c98a3c', 1.2), line(60, 0, 46, 4, '#c98a3c', 1.2), line(60, 30, 46, 28, '#c98a3c', 1.2),
-      text(30, 48, 'TRANSFORMER', 4, '#444'),
+      rect(6, -12, 48, 54, '#8a929b', { rx: 1.5, grad: '#3f454c', gradDir: 'd', shadow: 1 }),
+      ...Array.from({ length: 9 }, (_, i) => line(7, -10 + i * 6, 53, -10 + i * 6, '#5f666e', 0.4)),
+      rect(13, -4, 34, 38, '#2b2d31', { rx: 1 }),
+      rect(14, -2, 14, 34, '#e0a257', { rx: 2, grad: '#9a5a1e', gradDir: 'h' }), rect(32, -2, 14, 34, '#e0a257', { rx: 2, grad: '#9a5a1e', gradDir: 'h' }),
+      rect(14, 12, 14, 5, '#f2d24a', { opacity: 0.9 }), rect(32, 12, 14, 5, '#f2d24a', { opacity: 0.9 }),
+      text(30, 50, 'TRANSFORMER', 4, '#444', 'middle', { weight: 700 }),
     ],
     symbol: [
       { type: 'path', d: 'M0 0 L14 0 A3 3 0 0 1 14 7.5 A3 3 0 0 1 14 15 A3 3 0 0 1 14 22.5 A3 3 0 0 1 14 30 L0 30', fill: 'none', strokeWidth: 1.3 },
@@ -133,7 +150,13 @@ export const PASSIVE: Raw[] = [
       { key: 'vpk', label: 'Peak voltage', type: 'number', default: 12, unit: 'V', min: 0, max: 400 },
       { key: 'f', label: 'Frequency', type: 'number', default: 50, unit: 'Hz', min: 0.1, max: 1000 },
     ],
-    shapes: [rect(-10, -46, 50, 40, '#e9ecef', { rx: 4, stroke: '#9aa3ad', strokeWidth: 0.8 }), circle(15, -28, 12, '#fff', { stroke: '#444', strokeWidth: 1 }), { type: 'path', d: 'M5 -28 Q10 -40 15 -28 T25 -28', fill: 'none', stroke: '#1e88e5', strokeWidth: 1.4 }, circle(0, 0, 3.4, '#d63c35'), circle(30, 0, 3.4, '#2b2d31'), text(15, -10, 'AC', 4.5, '#333')],
+    shapes: [
+      rect(-11, -48, 52, 44, '#f4f6f8', { rx: 4, grad: '#c5ccd4', shadow: 1, stroke: '#9aa3ad', strokeWidth: 0.6 }),
+      rect(-6, -43, 42, 22, '#1d2f24', { rx: 2, grad: '#0f1a13' }),
+      path('M -3 -32 Q 2 -43 7 -32 T 17 -32 T 27 -32 T 33 -34', 'none', { stroke: '#4cff8a', strokeWidth: 1 }),
+      circle(0, 0, 3.8, '#e0453d', { grad: '#8f1f1a', gradDir: 'r', shadow: 0.8 }), circle(30, 0, 3.8, '#3a3c41', { grad: '#111214', gradDir: 'r', shadow: 0.8 }),
+      text(15, -11, 'AC SOURCE', 3.6, '#333', 'middle', { weight: 700 }),
+    ],
     readouts: [{ value: 'f', unit: 'Hz', x: 15, y: -50, size: 4.5 }],
     model: { elements: [{ id: 'SRC', kind: 'vsource', p: 'L', n: 'N', value: 'vpk * sin(6.28318 * f * t)', r: 0.5 }] },
     maxStep: 2e-4,
@@ -144,7 +167,7 @@ export const PASSIVE: Raw[] = [
     keywords: ['crystal', 'xtal', 'quartz', '16mhz', 'clock'],
     pins: pinRow(['1', '2'], { step: 20 }),
     props: [{ key: 'f', label: 'Frequency', type: 'select', default: 16, options: [{ value: 16, label: '16 MHz' }, { value: 8, label: '8 MHz' }, { value: 32.768e-3, label: '32.768 kHz' }, { value: 12, label: '12 MHz' }] }],
-    shapes: [...legs(pinRow(['1', '2'], { step: 20 }), -6), { type: 'path', d: 'M-4 -6 L-4 -14 A6 6 0 0 1 2 -20 L18 -20 A6 6 0 0 1 24 -14 L24 -6 Z', fill: COL.metal, stroke: COL.metalDark, strokeWidth: 0.6 }, text(10, -10, '16.000', 3.6, '#444')],
+    shapes: [...legs(pinRow(['1', '2'], { step: 20 }), -6), { type: 'path', d: 'M-4 -6 L-4 -14 A6 6 0 0 1 2 -20 L18 -20 A6 6 0 0 1 24 -14 L24 -6 Z', fill: '#f1f3f5', grad: '#8a929b', gradDir: 'h', stroke: COL.metalDark, strokeWidth: 0.5, shadow: 0.9 }, rect(-5, -7.5, 30, 2.5, '#c5cbd2', { rx: 1 }), text(10, -10.5, '16.000', 3.6, '#4a5058', 'middle', { weight: 700 })],
     model: { elements: [{ id: 'R', kind: 'resistor', a: '1', b: '2', value: 1e9 }, { id: 'C', kind: 'capacitor', a: '1', b: '2', value: 5e-12 }] },
   },
   {
@@ -152,7 +175,7 @@ export const PASSIVE: Raw[] = [
     description: 'Three-pin ceramic resonator with built-in load capacitors (middle pin to GND). Clock source for microcontrollers; not oscillated in this simulator.',
     keywords: ['resonator', 'ceramic', 'clock', 'cstce'],
     pins: pinRow(['1', 'GND', '2']),
-    shapes: [...legs(pinRow(['1', 'GND', '2']), -6), rect(-4, -18, 28, 12, '#3a79c9', { rx: 5 }), text(10, -10, '16.00', 3.8, '#fff')],
+    shapes: [...legs(pinRow(['1', 'GND', '2']), -6), rect(-5, -19, 30, 13, '#4f8fe0', { rx: 5.5, grad: '#1f4f9f', shadow: 0.9 }), rect(-1, -17.5, 22, 2, '#ffffff', { opacity: 0.3, rx: 1 }), text(10, -10.5, '16.00', 3.8, '#fff', 'middle', { weight: 700 })],
     model: { elements: [{ id: 'C1', kind: 'capacitor', a: '1', b: 'GND', value: 15e-12 }, { id: 'C2', kind: 'capacitor', a: '2', b: 'GND', value: 15e-12 }, { id: 'R', kind: 'resistor', a: '1', b: '2', value: 1e9 }] },
   },
   (() => {

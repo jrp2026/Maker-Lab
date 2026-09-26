@@ -1,6 +1,6 @@
 import type { ComponentDef } from '../types';
 import { Avg, type SimWarning } from '../../sim/builder';
-import { Label, PinTip, SLine, SText, formatSI } from '../util';
+import { DropShadow, Label, PinTip, SLine, SText, Sheen, formatSI } from '../util';
 
 const MODELS: Record<string, { label: string; speed: number; continuous: boolean; moveAmps: number; minV: number; body: string }> = {
   sg90: { label: 'SG90 micro (180°)', speed: 600, continuous: false, moveAmps: 0.25, minV: 4, body: '#2f6fd6' },
@@ -36,8 +36,12 @@ export const servo: ComponentDef = {
         <path d="M21 -4 C21 -18 16 -26 16 -38" stroke="#f08a24" strokeWidth={2.4} fill="none" />
         <rect x={-4} y={-6} width={28} height={8} rx={1.5} fill="#1d1e21" />
         {/* body */}
+        <DropShadow x={big ? -26 : -20} y={-84} w={big ? 82 : 70} h={46} rx={4} />
         <rect x={big ? -26 : -20} y={-84} width={big ? 82 : 70} height={46} rx={4} fill={m.body} stroke="rgba(0,0,0,.35)" strokeWidth={0.8} />
+        <Sheen x={big ? -26 : -20} y={-84} w={big ? 82 : 70} h={46} rx={4} />
+        <DropShadow x={big ? -34 : -28} y={-66} w={big ? 98 : 86} h={10} rx={2} />
         <rect x={big ? -34 : -28} y={-66} width={big ? 98 : 86} height={10} rx={2} fill={m.body} stroke="rgba(0,0,0,.35)" strokeWidth={0.8} />
+        <Sheen x={big ? -34 : -28} y={-66} w={big ? 98 : 86} h={10} rx={2} strength={1.3} />
         <circle cx={big ? -30 : -24} cy={-61} r={2.2} fill="#f4f2ec" />
         <circle cx={big ? 60 : 54} cy={-61} r={2.2} fill="#f4f2ec" />
         <Label x={20} y={-44} size={5.5} fill="rgba(255,255,255,.85)">{props.model === 'fs90r' ? 'FS90R 360°' : big ? 'MG996R' : 'SG90'}</Label>
