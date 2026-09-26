@@ -3,7 +3,7 @@ import { COL, chip, circle, contact, dout, fresnelDome, ldrFace, ledSide, legs, 
 const pwrLed = (x: number, y: number) => statusLed(x, y, '#ff3b30', 'v(VCC, GND) > 2.5 ? 1 : 0');
 
 /** Sensor module with an LM393 comparator: DO goes `activeHigh` when AO crosses the threshold pot. */
-function comparatorModule(o: {
+export function comparatorModule(o: {
   type: string; name: string; description: string; keywords: string[]; title: string;
   ao: string; /** AO voltage formula */ trip: string; /** DO active condition */ doActiveLow: boolean;
   props: Raw[]; extraShapes?: Raw[]; states?: Raw[]; interactive?: 'press'; drag?: string; maxStep?: number; readouts?: Raw[]; pins?: string[]; h?: number;

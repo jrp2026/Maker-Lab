@@ -15,10 +15,12 @@ import { MOTORS } from './motors';
 import { COMMS_PASSIVE, DRIVERS } from './drivers';
 import { BATTERY_MGMT, CONVERTERS, DISTRIBUTION, POWER_SOURCES, REGULATORS } from './power';
 
+import { EXTRA_ICS } from './extra-ics';
+import { EXTRA_IO } from './extra-io';
 import { DEVICE_PARTS } from './devices';
 export type { PartExt };
 
-export const RAW_PARTS = [...PASSIVE, ...SEMIS, ...SWITCHES, ...RELAYS, ...ANALOG_ICS, ...LOGIC_ICS, ...SENSORS, ...DISPLAYS, KEYPAD, ...MOTORS, ...DRIVERS, ...COMMS_PASSIVE, ...POWER_SOURCES, ...REGULATORS, ...CONVERTERS, ...BATTERY_MGMT, ...DISTRIBUTION];
+export const RAW_PARTS = [...PASSIVE, ...SEMIS, ...SWITCHES, ...RELAYS, ...ANALOG_ICS, ...LOGIC_ICS, ...SENSORS, ...DISPLAYS, KEYPAD, ...MOTORS, ...DRIVERS, ...COMMS_PASSIVE, ...POWER_SOURCES, ...REGULATORS, ...CONVERTERS, ...BATTERY_MGMT, ...DISTRIBUTION, ...EXTRA_ICS, ...EXTRA_IO];
 
 export function buildSpecParts(): ComponentDef[] {
   const out: ComponentDef[] = [];

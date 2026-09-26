@@ -34,12 +34,12 @@ export const CATALOG: CatalogCategory[] = [
   {
     id: 'passive', name: 'Passive components', icon: 'Ω',
     entries: [
-      ...all('resistor', 'potentiometer', 'trimmer', 'rheostat', 'photoresistor', 'thermistor', 'capacitor', 'electrolytic', 'supercap', 'inductor', 'ferrite', 'transformer', 'crystal', 'resonator', 'digipot'),
+      ...all('resistor', 'potentiometer', 'trimmer', 'rheostat', 'photoresistor', 'thermistor', 'capacitor', 'electrolytic', 'supercap', 'inductor', 'ferrite', 'transformer', 'crystal', 'resonator', 'digipot', 'varistor', 'power-resistor', 'slide-pot'),
     ],
   },
   {
     id: 'diodes', name: 'Diodes & optoelectronics', icon: '▷|',
-    entries: all('led', 'rgb-led', 'diode', 'zener', 'schottky', 'schottky-power', 'tvs', 'ir-led', 'photodiode', 'laser', 'neopixel-stick', 'neopixel-ring', 'neopixel-strip'),
+    entries: all('led', 'rgb-led', 'diode', 'zener', 'schottky', 'schottky-power', 'tvs', 'ir-led', 'photodiode', 'phototransistor', 'bicolor-led', 'rgb-led-module', 'led-bargraph', 'laser', 'neopixel-stick', 'neopixel-ring', 'neopixel-strip'),
   },
   {
     id: 'transistors', name: 'Transistors & switching', icon: '⊳',
@@ -47,19 +47,19 @@ export const CATALOG: CatalogCategory[] = [
   },
   {
     id: 'switches', name: 'Switches & inputs', icon: '⏻',
-    entries: all('pushbutton', 'slide-switch', 'toggle-switch', 'dip-switch', 'keypad', 'joystick', 'rotary-switch', 'rotary-encoder'),
+    entries: all('pushbutton', 'slide-switch', 'toggle-switch', 'dip-switch', 'keypad', 'joystick', 'rotary-switch', 'rotary-encoder', 'limit-switch', 'touch-sensor', 'rocker-switch', 'slide-pot', 'keypad-1x4'),
   },
   {
     id: 'power', name: 'Power & connectors', icon: '⚡',
     entries: all(
       'battery', 'battery-holder', 'battery-snap', 'lipo', 'battery-18650', 'barrel-jack', 'usb-breakout', 'usbc-power', 'ac-source',
-      'reg-78xx', 'lm317', 'ams1117', 'bridge-rectifier', 'buck-converter', 'boost-converter', 'buck-boost',
+      'coin-cell', 'reg-78xx', 'reg-79xx', 'lm317', 'ams1117', 'reg-3v3-module', 'tl431', 'bridge-rectifier', 'buck-converter', 'boost-converter', 'buck-boost',
       'liion-protect', 'bms-3s', 'tp4056', 'solar-panel', 'solar-controller', 'power-distribution', 'fuse', 'polyfuse', 'terminal-block', 'pin-header',
     ),
   },
   {
     id: 'output', name: 'Motors, audio & actuators', icon: '⟳',
-    entries: all('dc-motor', 'gear-motor', 'n20-motor', 'planetary-motor', 'coreless-motor', 'bldc-motor', 'servo', 'stepper-nema17', 'stepper-28byj48', 'linear-actuator', 'solenoid', 'piezo', 'speaker', 'mic-module'),
+    entries: all('dc-motor', 'gear-motor', 'n20-motor', 'planetary-motor', 'coreless-motor', 'bldc-motor', 'servo', 'stepper-nema17', 'stepper-28byj48', 'linear-actuator', 'solenoid', 'electromagnet', 'vibration-motor', 'dc-fan', 'water-pump', 'piezo', 'active-buzzer', 'speaker', 'mic-module', 'lm386', 'light-bulb', 'traffic-light'),
   },
   {
     id: 'drivers', name: 'Motor & driver modules', icon: '⇉',
@@ -74,7 +74,7 @@ export const CATALOG: CatalogCategory[] = [
   },
   {
     id: 'instruments', name: 'Instruments', icon: '◔',
-    entries: all('multimeter', 'oscilloscope', 'spi-monitor', 'usb-ttl'),
+    entries: all('multimeter', 'oscilloscope', 'panel-voltmeter', 'spi-monitor', 'usb-ttl'),
   },
   {
     id: 'mcu', name: 'Microcontrollers & boards', icon: '⌗',
@@ -86,11 +86,11 @@ export const CATALOG: CatalogCategory[] = [
   },
   {
     id: 'ics', name: 'Analog & timer ICs', icon: '▭',
-    entries: all('ne555', 'lm358', 'ua741', 'lm393'),
+    entries: all('ne555', 'lm358', 'lm324', 'ua741', 'tl072', 'lm386', 'lm393', 'lm339', 'tl431', 'cd4066'),
   },
   {
     id: 'logic', name: 'Digital logic & conversion ICs', icon: '&',
-    entries: all('74hc00', '74hc08', '74hc32', '74hc86', '74hc04', '74hc595', 'cd4017', '74hc4051', '74hc138', 'ads1115', 'mcp4725', 'pcf8574', 'adum1201'),
+    entries: all('74hc00', '74hc08', '74hc32', '74hc86', '74hc02', '74hc04', '74hc14', '74hc74', '74hc125', 'cd4011', 'cd4066', '74hc595', 'cd4017', '74hc4051', '74hc138', 'ads1115', 'mcp4725', 'pcf8574', 'adum1201'),
   },
   {
     id: 'memory', name: 'Memory & timekeeping', icon: '▤',
@@ -102,11 +102,13 @@ export const CATALOG: CatalogCategory[] = [
       T('tmp36'), T('dht', 'Temperature & humidity (DHT11 / DHT22)'), T('bmp280'), T('ldr-module'), T('ir-obstacle'), T('hc-sr04'), T('pir'), T('hall-a3144'),
       T('mpu6050', 'Accelerometer & gyroscope (MPU6050)'), T('adxl335'), T('qmc5883l'), T('mq2'), T('sound-sensor'), T('vibration-sensor'), T('tilt-switch'), T('reed-switch'),
       T('ina219'), T('acs712'), T('voltage-sensor'), T('rotary-encoder'), T('quadrature-encoder'), T('speed-sensor'), T('touch-panel'),
+      T('hall-49e'), T('hall-module'), T('phototransistor'), T('fsr'), T('flex-sensor'), T('soil-moisture'), T('rain-sensor'), T('water-level'), T('water-flow'), T('flame-sensor'),
+      T('line-tracker'), T('mq135'), T('mq3'), T('pulse-sensor'), T('uv-sensor'), T('ntc-module'), T('knock-sensor'), T('touch-sensor'),
     ],
   },
   {
     id: 'displays', name: 'Displays', icon: '▣',
-    entries: all('lcd', 'lcd-i2c', 'oled-128x64', 'oled-128x32', 'seven-seg-cc', 'seven-seg-ca', 'led-matrix', 'max7219-matrix', 'touch-panel'),
+    entries: all('lcd', 'lcd-i2c', 'oled-128x64', 'oled-128x32', 'seven-seg-cc', 'seven-seg-ca', 'seven-seg-4digit', 'led-bargraph', 'led-matrix', 'max7219-matrix', 'touch-panel'),
   },
   {
     id: 'wireless', name: 'Communication & wireless', icon: '((·))',

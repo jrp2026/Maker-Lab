@@ -85,7 +85,7 @@ export const SEMIS: Raw[] = [
     })(),
     props: [{ key: 'light', label: 'Light', type: 'slider', default: 0.5, min: 0, max: 1 }],
     drag: 'light',
-    model: { elements: [{ id: 'D', kind: 'diode', a: 'A', k: 'K', model: 'silicon' }, { id: 'IPH', kind: 'isource', p: 'A', n: 'K', value: '-light * 100e-6' }] },
+    model: { elements: [{ id: 'D', kind: 'diode', a: 'A', k: 'K', model: 'silicon' }, { id: 'IPH', kind: 'isource', p: 'A', n: 'K', value: 'light * 100e-6' }] },
     readouts: [{ value: 'light * 100', unit: '%', x: 5, y: -28, size: 4.5 }],
   },
   {

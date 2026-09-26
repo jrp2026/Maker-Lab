@@ -173,7 +173,7 @@ export const POWER_SOURCES: Raw[] = [
 // ---------------------------------------------------------------- regulators & conversion
 
 /** Linear regulator: NPN pass transistor driven from a reference so OUT = min(vout, IN − dropout). */
-function linearReg(ref: string, beta = 1000): Raw[] {
+export function linearReg(ref: string, beta = 1000): Raw[] {
   return [
     { id: 'Q', kind: 'npn', c: 'IN', b: 'B', e: 'OUT', beta },
     { id: 'REF', kind: 'vsource', p: 'B', n: 'GND', value: ref, r: 50 },

@@ -1,7 +1,7 @@
 <h1 align="center">MakerLab</h1>
 
 <p align="center">
-  <b>A browser electronics &amp; Arduino simulator</b> — build circuits from 197 realistic parts, write a sketch, press Run.
+  <b>A browser electronics &amp; Arduino simulator</b> — build circuits from 247 realistic parts, write a sketch, press Run.
 </p>
 
 <p align="center">
@@ -48,28 +48,33 @@ npm run build      # static site in dist/
   end to reconnect.
 - **Editing** – rotate `R`, flip `F`, delete `Del`, undo/redo `Ctrl+Z` / `Ctrl+Shift+Z`,
   copy/paste/duplicate `Ctrl+C/V/D`, shift-click or shift-drag to multi-select.
-- **Parts (200+)** – the whole component library from the brief, every entry placeable:
+- **Parts (247)** – the whole component library from the brief, every entry placeable:
   - *surfaces*: half/full breadboard, perfboard, stripboard, DIP IC sockets
-  - *passives*: resistors, pots, trimmers, rheostat, LDR, NTC thermistor, ceramic/electrolytic/super
-    capacitors, inductor, ferrite, transformer, crystal, resonator, X9C103 digital pot
-  - *diodes & opto*: LED, RGB, diode, zener, Schottky, TVS, IR LED, photodiode, laser, NeoPixel
-    stick/ring/strip
+  - *passives*: resistors, pots, trimmers, rheostat, slide pot, LDR, NTC thermistor, ceramic/electrolytic/super
+    capacitors, inductor, ferrite, transformer, crystal, resonator, X9C103 digital pot, varistor, 5 W power resistor
+  - *diodes & opto*: LED, RGB, diode, zener, Schottky, TVS, IR LED, photodiode, phototransistor, bi-colour LED,
+    RGB module, 10-segment bar graph, laser, NeoPixel stick/ring/strip
   - *transistors*: NPN/PNP, N/P MOSFETs, MOSFET module, Darlington, optocoupler, JFET, IGBT, TRIAC, SCR
-  - *switches & inputs*: button, slide/toggle/DIP/rotary switches, 4×4 keypad, joystick, rotary encoder
+  - *switches & inputs*: button, slide/toggle/DIP/rotary switches, rocker switch, limit switch,
+    TTP223 touch pad, 4×4 and 1×4 keypads, joystick, rotary encoder
   - *power*: batteries & holders, LiPo/18650 (state of charge), barrel jack, USB/USB-C, AC source,
-    78xx/LM317/AMS1117 regulators, bridge rectifier, buck/boost/buck-boost converters, TP4056 charger,
+    CR2032 coin cell, 78xx/79xx/LM317/AMS1117 regulators, 3.3 V module, TL431 reference, bridge rectifier, buck/boost/buck-boost converters, TP4056 charger,
     protection board, 3S BMS, solar panel & charge controller, fuses, polyfuse, terminal blocks, headers
   - *motors & audio*: DC, TT/N20/planetary/coreless gear motors, BLDC, servo, NEMA 17 and 28BYJ-48
-    steppers, linear actuator, solenoid, piezo, speaker, microphone
+    steppers, linear actuator, solenoid, electromagnet, vibration motor, 5 V fan,
+    water pump, piezo, active buzzer, speaker, microphone, light bulb, traffic-light module
   - *drivers*: L298N, L293D, TB6612FNG, DRV8833, L9110S, MX1508, BTS7960, VNH2SP30, IRF520 and TIP120
     modules, A4988/DRV8825/TMC2208/TMC2209 step-dir drivers, ULN2003, ESC, BLDC controller, PCA9685
-  - *ICs*: 555, LM358, µA741, LM393, 74HC00/08/32/86/04, 74HC595, CD4017, 74HC4051, 74HC138,
+  - *ICs*: 555, LM358, LM324, µA741, TL072, LM386, LM393, LM339, 74HC00/02/04/08/14/32/74/86/125,
+    CD4011, CD4066, 74HC595, CD4017, 74HC4051, 74HC138,
     ADS1115 ADC, MCP4725 DAC, PCF8574 expander, ADuM1201 isolator
   - *memory & time*: 24LC256 EEPROM, W25Q32 flash, DS1307/DS3231 RTCs, SD / microSD modules
   - *sensors*: TMP36/LM35, DHT11/22, BMP280, LDR, IR obstacle, HC-SR04, PIR, Hall, MPU6050,
     ADXL335, QMC5883L, MQ-2, sound, vibration, tilt, reed, INA219, ACS712, voltage divider,
-    rotary/quadrature/wheel encoders, resistive touch panel
-  - *displays*: 16×2/20×4 LCD (parallel & I2C), SSD1306 OLED 128×64/128×32, seven-segment, 8×8 matrix,
+    rotary/quadrature/wheel encoders, resistive touch panel, SS49E linear Hall, KY-003, FSR, flex,
+    soil moisture, rain, water level, YF-S201 flow, flame, TCRT5000 line tracker, MQ-135, MQ-3,
+    pulse, GUVA UV, KY-013 NTC, piezo knock
+  - *displays*: 16×2/20×4 LCD (parallel & I2C), SSD1306 OLED 128×64/128×32, seven-segment (1 and 4 digits), 8×8 matrix,
     MAX7219 matrix module
   - *communication*: HC-05 Bluetooth, ESP-01 (AT Wi-Fi), NEO-6M GPS, nRF24L01, SIM800L GSM, RC522 RFID,
     PN532 NFC, MCP2515 CAN, MAX485 RS-485, USB-TTL / CH340 adapters, logic-level converter, SPI monitor
