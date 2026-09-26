@@ -1704,7 +1704,7 @@ function bitMacro(op: 'set' | 'clear' | 'write'): BuiltinGen {
 
 function esp32Only(g: BuiltinGen): BuiltinGen {
   return (c, args, tok) => {
-    if (c.board.id !== 'esp32') c.err(`this function is only available on ESP32 boards (you're programming an ${c.board.name})`, tok);
+    if (c.board.family !== 'esp32') c.err(`this function is only available on ESP32 boards (you're programming an ${c.board.name})`, tok);
     return g(c, args, tok);
   };
 }

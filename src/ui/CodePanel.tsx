@@ -40,7 +40,7 @@ function SerialMonitor({ target }: { target: string }) {
     <div className="serial">
       <div className="serial-head">
         <span>Serial Monitor</span>
-        <span className="muted small">{running ? (mcu?.spec.id === 'esp32' ? '115200 baud' : '9600 baud') : 'start the simulation to see output'}</span>
+        <span className="muted small">{running ? `${mcu?.spec.baud ?? 9600} baud` : 'start the simulation to see output'}</span>
         <button className="link" onClick={() => setCleared(mcu?.serialOut.length ?? 0)}>Clear</button>
       </div>
       <pre ref={boxRef} className="serial-out">{text || (running ? '' : ' ')}</pre>

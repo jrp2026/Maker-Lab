@@ -108,6 +108,11 @@ export class Simulator {
       now: () => this.time * 1e6,
       netOf: (k) => this.netOfKey(k),
       boardDriven: (k) => this.boardPinsOnNet(this.netOfKey(k)).some(([m, idx]) => m.pins[idx].mode === 'output'),
+      boardAt: (k) => {
+        const net = this.netOfKey(k);
+        for (const [id, m] of this.mcus) for (const idx of m.spec.pins) if (this.netOfKey(`${id}:${m.spec.pinId(idx)}`) === net) return { board: id, name: m.spec.name, pin: idx, spi: m.spec.spi };
+        return null;
+      },
     };
     const builders: SimBuilder[] = [];
     for (const c of doc.components) {

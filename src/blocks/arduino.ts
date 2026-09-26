@@ -16,7 +16,9 @@ export function setBlocksBoard(b: BoardSpec) {
 }
 
 function analogOptions(): [string, string][] {
-  if (!board || board.id === 'uno') return ['A0', 'A1', 'A2', 'A3', 'A4', 'A5'].map((a) => [a, a]);
+  if (!board || board.id === 'uno' || board.id === 'atmega328p') return ['A0', 'A1', 'A2', 'A3', 'A4', 'A5'].map((a) => [a, a]);
+  if (board.analogNames) return board.analogNames;
+  if (board.analogChannelBase !== null) return board.adcPins.map((_, i) => [`A${i}`, `A${i}`]);
   return board.adcPins.map((p) => [`GPIO${p}`, String(p)]);
 }
 
@@ -129,13 +131,13 @@ F.io_analog_write = (b, gen) => {
 F.io_tone = (b, gen) => `tone(${b.getFieldValue('PIN')}, ${gen.value(b, 'FREQ', O.NONE, '440')}, ${gen.value(b, 'MS', O.NONE, '500')});\n`;
 F.io_notone = (b) => `noTone(${b.getFieldValue('PIN')});\n`;
 F.serial_print = (b, gen) => {
-  gen.setups.set('serial', `Serial.begin(${gen.spec.id === 'esp32' ? 115200 : 9600});`);
+  gen.setups.set('serial', `Serial.begin(${gen.spec.baud});`);
   const text = gen.value(b, 'TEXT', O.NONE, '""');
   return `Serial.${b.getFieldValue('NL') === 'LN' ? 'println' : 'print'}(${text});\n`;
 };
 F.servo_write = (b, gen) => {
   const pin = b.getFieldValue('PIN');
-  gen.includes.add(gen.spec.id === 'esp32' ? '#include <ESP32Servo.h>' : '#include <Servo.h>');
+  gen.includes.add(gen.spec.family === 'esp32' ? '#include <ESP32Servo.h>' : '#include <Servo.h>');
   gen.globals.set(`servo${pin}`, `Servo servo_${pin};`);
   gen.setups.set(`servo${pin}`, `servo_${pin}.attach(${pin});`);
   return `servo_${pin}.write(${gen.value(b, 'ANGLE', O.NONE, '90')});\n`;
@@ -284,7 +286,7 @@ export function toolbox(spec: BoardSpec) {
       {
         kind: 'category', name: 'Devices', colour: C.device,
         contents: [
-          { kind: 'block', type: 'servo_write', fields: { PIN: spec.id === 'esp32' ? 18 : 9 }, inputs: { ANGLE: shadow(90) } },
+          { kind: 'block', type: 'servo_write', fields: { PIN: spec.family === 'esp32' ? 18 : spec.pwmPins === 'all' ? spec.pins[2] : spec.pwmPins[Math.min(3, spec.pwmPins.length - 1)] }, inputs: { ANGLE: shadow(90) } },
           { kind: 'block', type: 'lcd_print', inputs: { TEXT: txt('Hello!') } },
           { kind: 'block', type: 'lcd_cursor', inputs: { COL: shadow(0), ROW: shadow(1) } },
           { kind: 'block', type: 'lcd_clear' },

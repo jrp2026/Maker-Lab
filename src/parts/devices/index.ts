@@ -4,5 +4,6 @@ import { DISPLAY_DEVICES } from './displays';
 import { SENSOR_DEVICES } from './sensors';
 import { MEMORY_DEVICES } from './memory';
 import { COMM_DEVICES } from './comm';
+import { TOOL_DEVICES } from './tools';
 
-export const DEVICE_PARTS: DevicePart[] = [...DISPLAY_DEVICES, ...SENSOR_DEVICES, ...MEMORY_DEVICES, ...COMM_DEVICES];
+export const DEVICE_PARTS: DevicePart[] = [...DISPLAY_DEVICES, ...SENSOR_DEVICES, ...MEMORY_DEVICES, ...COMM_DEVICES, ...TOOL_DEVICES];

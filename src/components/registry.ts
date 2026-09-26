@@ -8,6 +8,7 @@ import { dcMotor, piezo } from './defs/output';
 import { multimeter, oscilloscope } from './defs/instruments';
 import { arduinoUno } from './defs/arduino';
 import { esp32 } from './defs/esp32';
+import { MORE_BOARDS } from './defs/boards2';
 import { servo } from './defs/servo';
 import { lcdI2C, lcdParallel } from './defs/lcd';
 import { buildSpecParts } from '../parts';
@@ -22,7 +23,7 @@ export const DEFS: ComponentDef[] = [
   dcMotor, piezo, servo,
   lcdParallel, lcdI2C,
   multimeter, oscilloscope,
-  arduinoUno, esp32,
+  arduinoUno, esp32, ...MORE_BOARDS,
   ...buildSpecParts(),
 ];
 

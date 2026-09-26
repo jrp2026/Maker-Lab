@@ -114,6 +114,8 @@ export interface BuildEnv {
   netOf(pinKey: string): number | undefined;
   /** is this net driven by a board output pin? */
   boardDriven(pinKey: string): boolean;
+  /** the board (and pin number) wired to this pin's net, if any */
+  boardAt(pinKey: string): { board: string; name: string; pin: number; spi: { mosi: number; miso: number; sck: number } } | null;
 }
 
 export class SimBuilder {
@@ -167,6 +169,11 @@ export class SimBuilder {
   /** microcontroller time in µs */
   now(): number {
     return this.env.now();
+  }
+
+  /** which board pin is wired to one of this part's pins */
+  boardAt(pin: string) {
+    return this.env.boardAt(`${this.compId}:${pin}`);
   }
 
   /** is one of this part's pins wired to a board output pin? */

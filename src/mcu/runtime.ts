@@ -67,6 +67,10 @@ export class McuRuntime {
   /** called on every digitalWrite of an output (devices that clock data on edges listen here) */
   pinListeners = new Set<(pin: number, value: 0 | 1, t: number) => void>();
   private gen: Generator<number, void, unknown> | null = null;
+  private prog: ReturnType<typeof compileSketch> | null = null;
+  /** supply present (bare chips power from their VCC pin); false = halted */
+  powerOk = true;
+  private wasOff = false;
   private seed = 12345;
   private isrs = new Map<number, Isr>();
   private pendingIsrs: Isr['fn'][] = [];
@@ -94,6 +98,7 @@ export class McuRuntime {
   load(code: string): McuError | null {
     try {
       const prog = compileSketch(code, this.spec);
+      this.prog = prog;
       this.gen = prog.create(this);
       return null;
     } catch (e) {
@@ -105,6 +110,15 @@ export class McuRuntime {
 
   /** Run the sketch until virtual time reaches `us`. */
   runUntil(us: number) {
+    if (!this.powerOk) {
+      this.t = Math.max(this.t, us);
+      this.wasOff = true;
+      return;
+    }
+    if (this.wasOff) {
+      this.wasOff = false;
+      this.reset();
+    }
     if (!this.gen || this.done || this.error) {
       this.t = Math.max(this.t, us);
       return;
@@ -123,6 +137,18 @@ export class McuRuntime {
       this.error = { kind: 'runtime', message: friendlyError(e) };
     }
     if (this.t < us) this.t = us;
+  }
+
+  /** Power-on reset: the sketch starts again from setup(). */
+  reset() {
+    if (!this.prog || this.error?.kind === 'compile') return;
+    for (const p of this.pins) Object.assign(p, { mode: 'input', value: 0, pwm: null, tone: null, servo: null, dac: null, level: 0 });
+    this.isrs.clear();
+    this.pendingIsrs = [];
+    this.intEnabled = true;
+    this.done = false;
+    this.error = null;
+    this.gen = this.prog.create(this);
   }
 
   /** Electrical drive of a pin over [t0, t0+h] seconds: Thevenin volts + resistance relative to GND. */
@@ -309,6 +335,7 @@ export class McuRuntime {
     p = Math.trunc(p);
     const base = this.spec.analogChannelBase;
     if (base !== null && p < this.spec.adcPins.length) p += base;
+    else if (this.spec.analogChannels && p < this.spec.analogChannels.length && !this.spec.adcPins.includes(p)) p = this.spec.analogChannels[p];
     if (!this.spec.adcPins.includes(p)) throw new Error(`analogRead: pin ${p} is not an analog input on ${this.spec.name}`);
     this.t += this.spec.adcBits > 10 ? 10 : 100; // conversion time
     const full = 1 << this.spec.adcBits;
