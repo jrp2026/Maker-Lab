@@ -629,15 +629,6 @@ export function Canvas() {
           <button className="hint-cancel" onClick={() => setDraft(null)}>✕ Cancel</button>
         </div>
       )}
-      {!doc.components.length && (
-        <div className="empty-state">
-          <div className="empty-card">
-            <h2>Start building</h2>
-            <p>Drag parts from the <b>Components</b> panel onto the canvas, or open an example from the <b>Examples</b> menu.</p>
-            <p className="muted">Click a pin to start a wire, click another pin to finish it. Press <kbd>R</kbd> to rotate.</p>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

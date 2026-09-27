@@ -46,7 +46,12 @@ npm run build      # static site in dist/
 
 ## Features
 
-- **Canvas** – pan (drag background), zoom (wheel), breadboard and schematic views.
+- **First steps** – a welcome card on the first visit (*Try this first* loads and runs the Blink
+  circuit), a 7-step guided tour of the parts list, wiring, code, Run button and examples, and
+  quick starts on an empty canvas. The **?** button brings them back.
+- **Canvas** – pan (drag background), zoom (wheel), breadboard and schematic views. The
+  schematic names every part (R1, C1, U1…), draws ground and supply nets as symbols, and labels
+  IC pins.
   Parts snap to the 0.1" grid; a leg sitting on a breadboard hole or Uno header plugs in
   (green outline). Hover a pin to see its connected strip and, while simulating, its voltage.
 - **Phones & tablets** – the toolbar wraps to fit, **＋ Parts** opens the parts library as a
@@ -142,7 +147,7 @@ npm run build      # static site in dist/
   links that carry the whole circuit in the URL.
 - **Examples** (40, in five groups):
   - *getting started*: blink, button, dimmer, RC charging, motor, melody, servo, LCD, ESP32, interrupts,
-    and an AI-made regulator
+    and an AI-made Morse telegraph key
   - *modules & ICs*: OLED, NeoPixel rainbow, weather station, parking sensor, stepper, RFID lock,
     555 blinker, 74HC595 chaser, two-board nRF24 remote
   - *advanced projects*: thermostat with hysteresis (relay + heater + LCD), traffic intersection

@@ -13,6 +13,8 @@ import { EXAMPLES } from './examples';
 import { zoomToFit } from './ui/viewport';
 import { toggleSimulation } from './sim/controller';
 import { loadSavedParts } from './ai/library';
+import { SimClock } from './ui/SimClock';
+import { EmptyCanvas, maybeWelcome, Tour, Welcome } from './ui/Onboarding';
 
 loadSavedParts();
 
@@ -41,6 +43,7 @@ export function App() {
       doc ??= EXAMPLES[0].build();
       loadDoc(doc);
       requestAnimationFrame(() => zoomToFit(doc!));
+      maybeWelcome();
     })();
   }, []);
 
@@ -105,6 +108,8 @@ export function App() {
       <main className="workspace">
         <div className="stage">
           <Canvas />
+          <EmptyCanvas />
+          <SimClock />
           <div className="overlay-right"><Inspector /></div>
           <IssuesBar />
           {/* phones: the parts library opens as a bottom sheet */}
@@ -117,6 +122,8 @@ export function App() {
         {libraryOpen && !codeOpen && <div className="sheet-backdrop" onClick={() => useEditor.setState({ libraryOpen: false })} />}
         {codeOpen ? <CodePanel /> : <LibraryPanel />}
       </main>
+      <Welcome />
+      <Tour />
       {toast && <div className={`toast ${toast.kind}`}>{toast.text}</div>}
     </div>
   );

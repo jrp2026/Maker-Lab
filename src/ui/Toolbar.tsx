@@ -2,13 +2,14 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 import {
   deleteSelection, flipSelection, loadDoc, redo, rotateSelection, showToast, undo, updateDoc, useEditor,
 } from '../model/store';
-import { toggleSimulation, useSimView } from '../sim/controller';
+import { toggleSimulation } from '../sim/controller';
 import { EXAMPLES } from '../examples';
+import { openWelcome } from './Onboarding';
 import { deleteProject, exportJson, exportPng, importJson, listProjects, saveProject, shareLink } from '../model/persistence';
 import { emptyDoc } from '../model/types';
 import { docBounds, zoomBy, zoomToFit } from './viewport';
 
-function Menu({ label, children, icon }: { label: string; icon?: string; children: (close: () => void) => React.ReactNode }) {
+function Menu({ label, children, icon, tour }: { label: string; icon?: string; tour?: string; children: (close: () => void) => React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -20,26 +21,13 @@ function Menu({ label, children, icon }: { label: string; icon?: string; childre
     return () => window.removeEventListener('pointerdown', h);
   }, [open]);
   return (
-    <div className="menu" ref={ref}>
+    <div className="menu" ref={ref} data-tour={tour}>
       <button className={`btn${open ? ' active' : ''}`} onClick={() => setOpen(!open)}>
         {icon && <span className="ico">{icon}</span>}
         {label} <span className="caret">▾</span>
       </button>
       {open && <div className="menu-pop">{children(() => setOpen(false))}</div>}
     </div>
-  );
-}
-
-/** Always rendered (hidden while stopped) so starting the simulation doesn't shift the toolbar. */
-function SimClock({ running }: { running: boolean }) {
-  const t = useSimView((s) => (running ? s.snap?.time ?? 0 : 0));
-  const slow = useSimView((s) => running && s.snap?.slow);
-  const m = Math.floor(t / 60);
-  const sec = (t % 60).toFixed(1).padStart(4, '0');
-  return (
-    <span className={`sim-clock${slow ? ' slow' : ''}${running ? '' : ' idle'}`} aria-hidden={!running} title={slow ? 'Simulation is running slower than real time' : 'Simulated time'}>
-      {String(m).padStart(2, '0')}:{sec}
-    </span>
   );
 }
 
@@ -89,9 +77,9 @@ export function Toolbar() {
         <button className="icon-btn" title="Flip (F)" disabled={!hasSel} onClick={flipSelection}>⇋</button>
         <button className="icon-btn" title="Delete (Del)" disabled={!hasSel} onClick={deleteSelection}>🗑</button>
         <span className="sep" />
-        <button className="icon-btn" title="Zoom out" onClick={() => zoomBy(1 / 1.25)}>−</button>
-        <button className="icon-btn" title="Zoom to fit" onClick={() => zoomToFit(doc)}>⤢</button>
-        <button className="icon-btn" title="Zoom in" onClick={() => zoomBy(1.25)}>+</button>
+        <button className="icon-btn zoom-btn" title="Zoom out" onClick={() => zoomBy(1 / 1.25)}>−</button>
+        <button className="icon-btn zoom-btn" title="Zoom to fit" onClick={() => zoomToFit(doc)}>⤢</button>
+        <button className="icon-btn zoom-btn" title="Zoom in" onClick={() => zoomBy(1.25)}>+</button>
       </div>
 
       <div className="view-toggle" role="tablist">
@@ -101,7 +89,7 @@ export function Toolbar() {
 
       <span className="grow" />
 
-      <Menu label="Examples" icon="✦">
+      <Menu label="Examples" icon="✦" tour="examples">
         {(close) => (
           <>
             {EXAMPLES.map((ex, i) => {
@@ -161,13 +149,13 @@ export function Toolbar() {
         } catch {
           window.prompt('Copy this link:', url);
         }
-      }} title="Copy a link that contains this whole circuit">⤴ Share</button>
+      }} title="Copy a link that contains this whole circuit" aria-label="Share">⤴ <span className="lbl-share">Share</span></button>
 
+      <button className="icon-btn help-btn" data-tour="help" title="Help: welcome screen and tour" aria-label="Help" onClick={openWelcome}>?</button>
       <button className={`icon-btn${muted ? '' : ' on'}`} title={muted ? 'Sound off' : 'Sound on'} onClick={() => useEditor.setState({ muted: !muted })}>{muted ? '🔇' : '🔊'}</button>
 
-      <button className={`btn${codeOpen ? ' active' : ''}`} onClick={() => useEditor.setState({ codeOpen: !codeOpen })}>{'</>'} Code</button>
+      <button className={`btn${codeOpen ? ' active' : ''}`} data-tour="code" onClick={() => useEditor.setState({ codeOpen: !codeOpen })}>{'</>'} Code</button>
 
-      <SimClock running={running} />
       <button className={`btn sim-btn${running ? ' running' : ''}`} onClick={toggleSimulation} aria-label={running ? 'Stop Simulation' : 'Start Simulation'}>
         {running ? '■' : '▶'} <span className="lbl-lg">{running ? 'Stop Simulation' : 'Start Simulation'}</span>
         <span className="lbl-sm">{running ? 'Stop' : 'Run'}</span>
