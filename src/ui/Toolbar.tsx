@@ -30,13 +30,14 @@ function Menu({ label, children, icon }: { label: string; icon?: string; childre
   );
 }
 
-function SimClock() {
-  const t = useSimView((s) => s.snap?.time ?? 0);
-  const slow = useSimView((s) => s.snap?.slow);
+/** Always rendered (hidden while stopped) so starting the simulation doesn't shift the toolbar. */
+function SimClock({ running }: { running: boolean }) {
+  const t = useSimView((s) => (running ? s.snap?.time ?? 0 : 0));
+  const slow = useSimView((s) => running && s.snap?.slow);
   const m = Math.floor(t / 60);
   const sec = (t % 60).toFixed(1).padStart(4, '0');
   return (
-    <span className={`sim-clock${slow ? ' slow' : ''}`} title={slow ? 'Simulation is running slower than real time' : 'Simulated time'}>
+    <span className={`sim-clock${slow ? ' slow' : ''}${running ? '' : ' idle'}`} aria-hidden={!running} title={slow ? 'Simulation is running slower than real time' : 'Simulated time'}>
       {String(m).padStart(2, '0')}:{sec}
     </span>
   );
@@ -166,7 +167,7 @@ export function Toolbar() {
 
       <button className={`btn${codeOpen ? ' active' : ''}`} onClick={() => useEditor.setState({ codeOpen: !codeOpen })}>{'</>'} Code</button>
 
-      {running && <SimClock />}
+      <SimClock running={running} />
       <button className={`btn sim-btn${running ? ' running' : ''}`} onClick={toggleSimulation} aria-label={running ? 'Stop Simulation' : 'Start Simulation'}>
         {running ? '■' : '▶'} <span className="lbl-lg">{running ? 'Stop Simulation' : 'Start Simulation'}</span>
         <span className="lbl-sm">{running ? 'Stop' : 'Run'}</span>

@@ -70,11 +70,12 @@ kbd { background: #f1f4f7; border: 1px solid var(--line); border-bottom-width: 2
 .btn .ico { opacity: 0.7; }
 .caret { font-size: 10px; opacity: 0.6; }
 
-.sim-btn { background: #2fb36d; border-color: #2fb36d; color: #fff; padding: 0 16px; height: 34px; box-shadow: 0 2px 6px rgba(47, 179, 109, 0.35); }
+.sim-btn { background: #2fb36d; border-color: #2fb36d; color: #fff; padding: 0 16px; height: 34px; min-width: 172px; justify-content: center; box-shadow: 0 2px 6px rgba(47, 179, 109, 0.35); }
 .sim-btn:hover:not(:disabled) { background: #27a060; border-color: #27a060; }
 .sim-btn.running { background: #ef6c4a; border-color: #ef6c4a; box-shadow: 0 2px 6px rgba(239, 108, 74, 0.35); }
 .sim-btn.running:hover:not(:disabled) { background: #e05a38; border-color: #e05a38; }
-.sim-clock { font-family: 'JetBrains Mono', monospace; font-weight: 600; color: #2fb36d; background: #eaf8f0; padding: 5px 9px; border-radius: 7px; }
+.sim-clock { font-family: 'JetBrains Mono', monospace; font-weight: 600; font-variant-numeric: tabular-nums; color: #2fb36d; background: #eaf8f0; padding: 5px 9px; border-radius: 7px; }
+.sim-clock.idle { visibility: hidden; }
 .sim-clock.slow { color: #b7791f; background: #fff6e5; }
 
 .view-toggle { display: flex; background: #f0f3f6; border-radius: 9px; padding: 3px; }
@@ -337,6 +338,7 @@ kbd { background: #f1f4f7; border: 1px solid var(--line); border-bottom-width: 2
 @media (max-width: 1100px) {
   .lbl-lg { display: none; }
   .lbl-sm { display: inline; }
+  .sim-btn { min-width: 84px; }
 }
 
 @media (max-width: 760px) {
