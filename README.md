@@ -122,8 +122,8 @@ npm run build      # static site in dist/
 - **Block coding** – Tinkercad-style blocks (Blockly) with *Blocks*, *Blocks + Text* (live
   generated code) and *Text* modes: pins, PWM, tone, servo, I2C LCD, inputs, waits, loops,
   conditions, math, text and variables. Generated code targets the selected board.
-- **✨ AI part generator** – describe a part (“7805 voltage regulator”, “12 V relay module”,
-  “LM35 temperature sensor”) and a model designs it: pins, Tinkercad-style art, schematic symbol,
+- **✨ AI part generator** – describe a part that isn't in the library (“Morse telegraph key”,
+  “Nixie tube”, “5 V reed relay”) and a model designs it: pins, Tinkercad-style art, schematic symbol,
   editable properties, and an electrical model built from the simulator's primitives plus
   formula-driven sources (`v(IN,GND)`, `i(REG)`, props, time). Parts can be refined in plain
   language, edited as JSON, saved to *My AI parts*, and they travel inside project files and

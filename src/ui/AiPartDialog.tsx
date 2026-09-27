@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { PROVIDERS, baseOf, listModels, loadSettings, modelOf, saveSettings, type AiSettings, type ProviderId } from '../ai/providers';
-import { EXAMPLE_7805, generatePart } from '../ai/prompt';
+import { generatePart } from '../ai/prompt';
+import { TELEGRAPH_KEY_SPEC } from '../ai/samplePart';
 import { SpecError, validateSpec, type CustomPartSpec } from '../ai/spec';
 import { defFromSpec } from '../ai/customPart';
 import { registerSpec, savePart } from '../ai/library';
@@ -8,7 +9,7 @@ import { addComponent, showToast } from '../model/store';
 import { getCanvasSize, useViewport } from './viewport';
 import type { ComponentInstance } from '../model/types';
 
-const IDEAS = ['7805 voltage regulator', 'LM35 temperature sensor with a temperature slider', 'incandescent 6 V light bulb that glows', '5 V relay module with LED', 'TL431 shunt reference', 'NTC 10k thermistor', 'IR obstacle sensor module', 'MOSFET IRLZ44N'];
+const IDEAS = ['Morse telegraph key', 'Nixie tube showing one digit', '5 V reed relay', 'K-type thermocouple with a temperature slider', 'small wind turbine generator', 'doorbell chime (ding-dong)', 'Geiger counter module that clicks', 'BH1750 light sensor module'];
 
 function Preview({ spec, view }: { spec: CustomPartSpec; view: 'breadboard' | 'schematic' }) {
   const def = useMemo(() => defFromSpec(spec), [spec]);
@@ -164,7 +165,7 @@ export function AiPartDialog({ onClose }: { onClose: () => void }) {
             <textarea
               value={request}
               onChange={(e) => setRequest(e.target.value)}
-              placeholder="e.g. 7805 voltage regulator, LM35 temperature sensor, 12 V relay module…"
+              placeholder="e.g. Morse telegraph key, Nixie tube, 5 V reed relay…"
               rows={3}
               onKeyDown={(e) => e.key === 'Enter' && (e.metaKey || e.ctrlKey) && run(request)}
               disabled={!!busy}
@@ -182,8 +183,8 @@ export function AiPartDialog({ onClose }: { onClose: () => void }) {
                 <>
                   <button className="btn primary" onClick={() => run(request)} disabled={!request.trim()}>✨ Generate</button>
                   <button className="link" onClick={() => {
-                    const s = validateSpec(EXAMPLE_7805);
-                    s.prompt = '7805 voltage regulator (built-in example)';
+                    const s = validateSpec(TELEGRAPH_KEY_SPEC);
+                    s.prompt = 'Morse telegraph key (sample)';
                     setSpec(s);
                     setJsonText(JSON.stringify(s, null, 2));
                     setError(null);

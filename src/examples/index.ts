@@ -1,7 +1,7 @@
 import type { CircuitDoc, ComponentInstance, Point, PropValue, Rotation, Wire } from '../model/types';
 import { getDef } from '../components/registry';
 import { localToWorld } from '../model/geometry';
-import { EXAMPLE_7805 } from '../ai/prompt';
+import { TELEGRAPH_KEY_SPEC } from '../ai/samplePart';
 import { validateSpec } from '../ai/spec';
 import { registerSpec } from '../ai/library';
 import { DEVICE_EXAMPLES } from './devices';
@@ -592,31 +592,32 @@ export const EXAMPLES: Example[] = [
     },
   },
   {
-    id: 'ai-regulator',
-    name: 'AI part: 7805 regulator',
-    description: 'A 7805 made by the AI part generator: 9 V in, 5 V out to an LED, with a multimeter on the output.',
+    id: 'ai-morse-key',
+    name: 'AI part: Morse telegraph key',
+    description: 'A telegraph key made by the AI part generator (MakerLab has no built-in one): hold it down to sound the buzzer and light the LED — tap out SOS.',
     build: () => {
-      const spec = validateSpec(EXAMPLE_7805);
-      spec.type = 'ai-7805-voltage-regulator-demo';
+      const spec = validateSpec(TELEGRAPH_KEY_SPEC);
+      spec.type = 'ai-morse-telegraph-key-demo';
       registerSpec(spec);
-      const bat = place('battery', '+', { x: -80, y: 0 }, { kind: '9V' });
-      const reg = place(spec.type, 'IN', hole(5, 'e'));
-      const r = place('resistor', '1', hole(7, 'b'), { resistance: 220 });
-      const led = place('led', 'A', hole(11, 'c'), { color: 'green' });
-      const mm = place('multimeter', 'COM', { x: 200, y: -40 }, { mode: 'V' });
+      const bat = place('battery', '+', { x: -80, y: 0 }, { kind: 'AA2' });
+      const key = place(spec.type, 'A', { x: -100, y: 150 });
+      const bz = place('active-buzzer', 'P', hole(16, 'c'));
+      const r = place('resistor', '1', hole(9, 'c'), { resistance: 47 });
+      const led = place('led', 'A', hole(13, 'd'), { color: 'yellow' });
       return {
         version: 1,
-        name: 'AI 7805 regulator',
+        name: 'AI Morse telegraph key',
         customParts: [spec],
-        components: [breadboard(), bat, reg, r, led, mm],
+        components: [breadboard(), bat, key, bz, r, led],
         wires: [
-          wire([bat.id, '+'], ['bb', railId('tp', 2)], RED, [{ x: -60, y: -12 }, { x: railX(railId('tp', 2)), y: -12 }]),
-          wire([bat.id, '-'], ['bb', railId('tn', 2)], BLACK, [{ x: -40, y: 30 }]),
-          wire(['bb', holeId(5, 'a')], ['bb', railId('tp', 5)], RED),
-          wire(['bb', holeId(6, 'a')], ['bb', railId('tn', 6)], BLACK),
-          wire(['bb', holeId(12, 'b')], ['bb', railId('tn', 13)], BLACK),
-          wire([mm.id, '+'], ['bb', holeId(7, 'a')], RED, [{ x: 230, y: 45 }, { x: hole(7, 'a').x, y: 45 }]),
-          wire([mm.id, 'COM'], ['bb', holeId(6, 'd')], BLACK, [{ x: 200, y: 110 }, { x: hole(6, 'd').x + 4, y: 110 }, { x: hole(6, 'd').x + 4, y: 90 }]),
+          // battery + → key → + rail: the key switches the supply to the buzzer and the LED
+          wire([bat.id, '+'], [key.id, 'A'], RED, [{ x: -80, y: -12 }, { x: -122, y: -12 }, { x: -122, y: 166 }, { x: -100, y: 166 }]),
+          wire([key.id, 'B'], ['bb', railId('tp', 2)], RED, [{ x: -60, y: 166 }, { x: -30, y: 166 }, { x: -30, y: -12 }, { x: railX(railId('tp', 2)), y: -12 }]),
+          wire([bat.id, '-'], ['bb', railId('tn', 2)], BLACK, [{ x: -60, y: 20 }, { x: -40, y: 30 }]),
+          wire(['bb', holeId(9, 'a')], ['bb', railId('tp', 9)], RED),
+          wire(['bb', holeId(16, 'a')], ['bb', railId('tp', 16)], RED),
+          wire(['bb', holeId(17, 'a')], ['bb', railId('tn', 18)], BLACK),
+          wire(['bb', holeId(14, 'a')], ['bb', railId('tn', 14)], BLACK),
         ],
       };
     },

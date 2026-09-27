@@ -197,7 +197,7 @@ export function LibraryPanel() {
       <div className="lib-scroll">
         {results && !results.length && <p className="muted small pad">No components match “{q}”. <button className="link" onClick={() => setAiOpen(true)}>Ask AI to make it ✨</button></p>}
         {!results && cat === 'ai' && !aiEntries.length && (
-          <p className="muted small pad">No AI parts yet. Click <b>Make a part with AI</b> above — e.g. “7805 voltage regulator”.</p>
+          <p className="muted small pad">No AI parts yet. Click <b>Make a part with AI</b> above — e.g. “Morse telegraph key”.</p>
         )}
         {showAll ? (
           <>

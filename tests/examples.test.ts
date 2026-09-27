@@ -63,6 +63,18 @@ describe('device examples do what they say', () => {
     return snap.comps[id]!;
   };
 
+  it('the AI Morse key sounds the buzzer and lights the LED only while held', () => {
+    let r = run('ai-morse-key', 0.2);
+    expect(Number(comp(r.snap, 'active-buzzer', r.sim).freq ?? 0)).toBe(0);
+    expect(Number(comp(r.snap, 'led', r.sim).brightness ?? 0)).toBeLessThan(0.05);
+    const key = (r.sim as any).doc.components.find((c: any) => c.type.startsWith('ai-morse')).id;
+    r.sim.input(key).pressed = true;
+    for (let i = 0; i < 10; i++) r.sim.advance(0.02);
+    const snap = r.sim.snapshot();
+    expect(comp(snap, 'active-buzzer', r.sim).freq).toBe(2300);
+    expect(Number(comp(snap, 'led', r.sim).brightness)).toBeGreaterThan(0.2);
+  });
+
   it('OLED shows pixels, NeoPixels light up, the LCD shows the weather', () => {
     let r = run('oled', 1);
     expect([...(comp(r.snap, 'oled-128x64', r.sim).oled as { gram: Uint8Array }).gram].some((x) => x)).toBe(true);
