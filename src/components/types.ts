@@ -27,7 +27,7 @@ export interface PinDef {
 
 export type PropField =
   | { key: string; label: string; kind: 'number'; unit?: string; min?: number; max?: number; step?: number; si?: boolean; live?: boolean }
-  | { key: string; label: string; kind: 'select'; options: { value: PropValue; label: string }[]; live?: boolean }
+  | { key: string; label: string; kind: 'select'; options: { value: PropValue; label: string }[]; live?: boolean; columns?: number }
   | { key: string; label: string; kind: 'slider'; min: number; max: number; step: number; unit?: string; live?: boolean }
   | { key: string; label: string; kind: 'text' }
   | { key: string; label: string; kind: 'bool'; live?: boolean }

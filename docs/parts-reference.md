@@ -695,7 +695,7 @@ Pins: `1`, `2`
 Pins: `R1` (Row 1), `R2` (Row 2), `R3` (Row 3), `R4` (Row 4), `C1` (Column 1), `C2` (Column 2), `C3` (Column 3), `C4` (Column 4)
 
 Props:
-- `key` = 1 — Key; one of 1 (1), 2 (2), 3 (3), 4 (A), 5 (4), 6 (5), 7 (6), 8 (B), 9 (7), 10 (8), 11 (9), 12 (C)
+- `key` = 1 — Key; one of 1 (1), 2 (2), 3 (3), 4 (A), 5 (4), 6 (5), 7 (6), 8 (B), 9 (7), 10 (8), 11 (9), 12 (C), 13 (*), 14 (0), 15 (#), 16 (D)
 - `hold` = 0 — Mode; one of 0 (Pressed while you hold t), 1 (Held down)
 
 #### `keypad-1x4` — Membrane keypad (1×4)

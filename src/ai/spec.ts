@@ -56,6 +56,8 @@ export interface PartProp {
   max?: number;
   step?: number;
   options?: { value: number; label: string }[];
+  /** show a select as a grid of buttons with this many columns (e.g. a keypad) */
+  columns?: number;
 }
 
 export type PartElement =
@@ -284,8 +286,9 @@ export function validateSpec(raw: any, opts: { keepType?: boolean; builtin?: boo
       prop.step ??= (prop.max - prop.min) / 100;
     }
     if (type === 'select') {
-      prop.options = (Array.isArray(p?.options) ? p.options : []).slice(0, 12).map((o: any) => ({ value: num(o?.value, -1e9, 1e9) ?? 0, label: str(o?.label, 24) ?? String(o?.value) }));
+      prop.options = (Array.isArray(p?.options) ? p.options : []).slice(0, 64).map((o: any) => ({ value: num(o?.value, -1e9, 1e9) ?? 0, label: str(o?.label, 24) ?? String(o?.value) }));
       if (!prop.options!.length) problems.push(`prop '${key}': select needs options`);
+      if (Number.isInteger(p?.columns) && p.columns >= 2 && p.columns <= 8) prop.columns = p.columns;
     }
     props.push(prop);
   }

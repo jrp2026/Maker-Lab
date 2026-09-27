@@ -224,7 +224,7 @@ export function defFromSpec(spec: CustomPartSpec, ext?: PartExt): ComponentDef {
     p.type === 'slider'
       ? { key: p.key, label: p.label, kind: 'slider', min: p.min ?? 0, max: p.max ?? 1, step: p.step ?? 0.01, unit: p.unit, live: true }
       : p.type === 'select'
-        ? { key: p.key, label: p.label, kind: 'select', options: p.options ?? [], live: true }
+        ? { key: p.key, label: p.label, kind: 'select', options: p.options ?? [], live: true, columns: p.columns }
         : { key: p.key, label: p.label, kind: 'number', unit: p.unit, min: p.min, max: p.max, si: true, live: true },
   );
   if (ext?.fields) fields.push(...ext.fields);

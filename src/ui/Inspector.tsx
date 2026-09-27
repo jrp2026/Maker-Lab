@@ -54,6 +54,16 @@ function Field({ comp, f }: { comp: ComponentInstance; f: PropField }) {
     case 'number':
       return <NumberField comp={comp} f={f} />;
     case 'select':
+      if (f.columns)
+        return (
+          <div className="choice-grid" style={{ gridTemplateColumns: `repeat(${f.columns}, 1fr)` }} role="radiogroup" aria-label={f.label}>
+            {f.options.map((o) => (
+              <button key={String(o.value)} type="button" role="radio" aria-checked={String(o.value) === String(v)} className={String(o.value) === String(v) ? 'on' : ''} onClick={() => setProp(comp.id, f.key, o.value)}>
+                {o.label}
+              </button>
+            ))}
+          </div>
+        );
       return (
         <select value={String(v)} onChange={(e) => {
           const opt = f.options.find((o) => String(o.value) === e.target.value);

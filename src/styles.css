@@ -199,6 +199,13 @@ kbd { background: #f1f4f7; border: 1px solid var(--line); border-bottom-width: 2
 .search:focus-within { border-color: var(--accent); }
 .search input { border: none; outline: none; background: transparent; height: 34px; flex: 1; color: var(--text); }
 .search .clear { border: none; background: none; font-size: 16px; color: var(--muted); }
+.choice-grid { display: grid; gap: 5px; }
+.choice-grid button {
+  height: 34px; border: 1px solid var(--line); border-radius: 7px; background: #fff; font-weight: 700; font-size: 14px; color: #33414e;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.06);
+}
+.choice-grid button:hover { border-color: #9edbd6; background: #f3fbfa; }
+.choice-grid button.on { background: var(--accent); border-color: var(--accent-dark); color: #fff; }
 .cat-select { margin: 8px 12px 0; height: 34px; border: 1px solid var(--line); border-radius: 9px; padding: 0 9px; font-weight: 600; background: #fff; }
 .lib-scroll { flex: 1; overflow: auto; padding: 10px 12px 16px; }
 .lib-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }

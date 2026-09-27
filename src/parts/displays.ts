@@ -126,7 +126,7 @@ export const KEYPAD: Raw = (() => {
     keywords: ['keypad', 'matrix keypad', '4x4', 'membrane', 'keyboard', 'pin code', 'keypad matrix'],
     pins,
     props: [
-      { key: 'key', label: 'Key', type: 'select', default: 1, options: KEYS.map((k, i) => ({ value: i + 1, label: k })) },
+      { key: 'key', label: 'Key', type: 'select', default: 1, options: KEYS.map((k, i) => ({ value: i + 1, label: k })), columns: 4 },
       { key: 'hold', label: 'Mode', type: 'select', default: 0, options: [{ value: 0, label: 'Pressed while you hold the keypad' }, { value: 1, label: 'Held down' }] },
     ],
     interactive: 'press',
