@@ -16,7 +16,8 @@ part definitions (`npm run docs`); do not edit it by hand.
 - **Outputs (motors, sound, lights)**: `active-buzzer`, `bldc-motor`, `coreless-motor`, `dc-fan`, `dc-motor`, `electromagnet`, `gear-motor`, `heater-pad`, `lcd`, `lcd-i2c`, `light-bulb`, `linear-actuator`, `mic-module`, `n20-motor`, `neon-lamp`, `panel-led`, `peltier`, `piezo`, `planetary-motor`, `servo`, `siren`, `solenoid`, `solenoid-valve`, `speaker`, `stepper-28byj48`, `stepper-nema17`, `traffic-light`, `vibration-motor`, `water-pump`
 - **Motor & driver modules**: `a4988`, `bldc-controller`, `bts7960`, `drv8825`, `drv8833`, `dual-hbridge`, `esc`, `hbridge`, `l293d`, `l298n`, `mosfet-switch`, `pca9685`, `solenoid-driver`, `tb6612fng`, `tmc2208`, `tmc2209`, `uln2003`, `uln2803`, `vnh2sp30`
 - **Analog & timer ICs**: `lm311`, `lm324`, `lm339`, `lm358`, `lm386`, `lm393`, `mcp6002`, `ne555`, `tl072`, `ua741`
-- **Logic ICs**: `74hc00`, `74hc02`, `74hc04`, `74hc08`, `74hc10`, `74hc11`, `74hc125`, `74hc138`, `74hc14`, `74hc157`, `74hc20`, `74hc245`, `74hc27`, `74hc283`, `74hc32`, `74hc393`, `74hc4051`, `74hc595`, `74hc74`, `74hc86`, `ads1115`, `adum1201`, `cd4011`, `cd4017`, `cd4066`, `cd4511`, `gate-and`, `gate-and3`, `gate-buffer`, `gate-nand`, `gate-nor`, `gate-not`, `gate-or`, `gate-or3`, `gate-xnor`, `gate-xor`, `logic-input`, `logic-probe`, `mcp4725`, `pcf8574`
+- **Logic gates**: `gate-and`, `gate-and3`, `gate-buffer`, `gate-nand`, `gate-nor`, `gate-not`, `gate-or`, `gate-or3`, `gate-xnor`, `gate-xor`, `logic-input`, `logic-probe`
+- **Logic ICs**: `74hc00`, `74hc02`, `74hc04`, `74hc08`, `74hc10`, `74hc11`, `74hc125`, `74hc138`, `74hc14`, `74hc157`, `74hc20`, `74hc245`, `74hc27`, `74hc283`, `74hc32`, `74hc393`, `74hc4051`, `74hc595`, `74hc74`, `74hc86`, `ads1115`, `adum1201`, `cd4011`, `cd4017`, `cd4066`, `cd4511`, `mcp4725`, `pcf8574`
 - **Memory & time**: `24lc256`, `ds1307`, `ds3231`, `microsd-module`, `sd-module`, `w25q32`
 - **Sensors**: `acs712`, `adxl335`, `anemometer`, `bmp280`, `capacitive-soil`, `dht`, `flame-sensor`, `flex-sensor`, `fsr`, `hall-49e`, `hall-a3144`, `hall-module`, `hc-sr04`, `ina219`, `ir-obstacle`, `knock-sensor`, `laser-receiver`, `ldr-module`, `line-tracker`, `load-cell`, `mpu6050`, `mpx5010`, `mq135`, `mq2`, `mq3`, `mq4`, `mq7`, `ntc-module`, `photo-interrupter`, `pir`, `pulse-sensor`, `qmc5883l`, `quadrature-encoder`, `rain-sensor`, `rcwl-0516`, `reed-switch`, `rotary-encoder`, `sct013`, `sharp-ir`, `soil-moisture`, `sound-sensor`, `speed-sensor`, `temt6000`, `tilt-switch`, `tmp36`, `uv-sensor`, `vibration-sensor`, `voltage-sensor`, `water-flow`, `water-level`
 - **Displays**: `led-matrix`, `max7219-matrix`, `oled-128x32`, `oled-128x64`, `seven-seg-4digit`, `seven-seg-ca`, `seven-seg-cc`, `touch-panel`
@@ -1531,6 +1532,83 @@ The textbook op-amp. Needs a split supply (e.g. ±9 V) — inputs must stay 2 V 
 
 Pins: `NULL1` (1: Offset null), `INN` (2: Inverting input −), `INP` (3: Non-inverting input +), `VEE` (4: V− (negative supply)), `NULL2` (5: Offset null), `OUT` (6: Output), `VCC` (7: V+), `NC` (8: Not connected)
 
+## Logic gates
+
+#### `gate-and` — AND gate (2-input)
+
+Y is 1 only when A AND B are both 1. Power it from VCC/GND (3.3–5 V); an input counts as HIGH above half of VCC. The red dot shows the output. (Four-in-a-chip version: 74HC08.)
+
+Pins: `A` (Input A), `B` (Input B), `Y` (Output Y), `VCC` (VCC (+3.3–5 V)), `GND`
+
+#### `gate-and3` — AND gate (3-input)
+
+Y is 1 only when A, B and C are all 1. Power it from VCC/GND (3.3–5 V); an input counts as HIGH above half of VCC. The red dot shows the output. (Three-in-a-chip version: 74HC11.)
+
+Pins: `A` (Input A), `B` (Input B), `C` (Input C), `Y` (Output Y), `VCC` (VCC (+3.3–5 V)), `GND`
+
+#### `gate-buffer` — Buffer gate
+
+Y simply copies A — used to clean up a slow or weak signal or drive more inputs. Power it from VCC/GND (3.3–5 V); an input counts as HIGH above half of VCC. The red dot shows the output.
+
+Pins: `A` (Input A), `Y` (Output Y), `VCC` (VCC (+3.3–5 V)), `GND`
+
+#### `gate-nand` — NAND gate (2-input)
+
+NOT-AND: Y is 0 only when A and B are both 1. The "universal" gate — any logic can be built from NANDs alone. Power it from VCC/GND (3.3–5 V); an input counts as HIGH above half of VCC. The red dot shows the output. (Four-in-a-chip version: 74HC00.)
+
+Pins: `A` (Input A), `B` (Input B), `Y` (Output Y), `VCC` (VCC (+3.3–5 V)), `GND`
+
+#### `gate-nor` — NOR gate (2-input)
+
+NOT-OR: Y is 1 only when A and B are both 0. Also a universal gate; two cross-coupled NORs make an SR latch. Power it from VCC/GND (3.3–5 V); an input counts as HIGH above half of VCC. The red dot shows the output. (Four-in-a-chip version: 74HC02.)
+
+Pins: `A` (Input A), `B` (Input B), `Y` (Output Y), `VCC` (VCC (+3.3–5 V)), `GND`
+
+#### `gate-not` — NOT gate (inverter)
+
+One inverter: Y is the opposite of A. Power it from VCC/GND (3.3–5 V); an input counts as HIGH above half of VCC. The red dot shows the output. (Six-in-a-chip version: 74HC04.)
+
+Pins: `A` (Input A), `Y` (Output Y), `VCC` (VCC (+3.3–5 V)), `GND`
+
+#### `gate-or` — OR gate (2-input)
+
+Y is 1 when A OR B (or both) is 1. Power it from VCC/GND (3.3–5 V); an input counts as HIGH above half of VCC. The red dot shows the output. (Four-in-a-chip version: 74HC32.)
+
+Pins: `A` (Input A), `B` (Input B), `Y` (Output Y), `VCC` (VCC (+3.3–5 V)), `GND`
+
+#### `gate-or3` — OR gate (3-input)
+
+Y is 1 when any of A, B or C is 1. Power it from VCC/GND (3.3–5 V); an input counts as HIGH above half of VCC. The red dot shows the output.
+
+Pins: `A` (Input A), `B` (Input B), `C` (Input C), `Y` (Output Y), `VCC` (VCC (+3.3–5 V)), `GND`
+
+#### `gate-xnor` — XNOR gate (2-input)
+
+Exclusive NOR (equality): Y is 1 when A and B are the same. Power it from VCC/GND (3.3–5 V); an input counts as HIGH above half of VCC. The red dot shows the output.
+
+Pins: `A` (Input A), `B` (Input B), `Y` (Output Y), `VCC` (VCC (+3.3–5 V)), `GND`
+
+#### `gate-xor` — XOR gate (2-input)
+
+Exclusive OR: Y is 1 when A and B are different. It is the "sum" bit of a half adder and a controllable inverter. Power it from VCC/GND (3.3–5 V); an input counts as HIGH above half of VCC. The red dot shows the output. (Four-in-a-chip version: 74HC86.)
+
+Pins: `A` (Input A), `B` (Input B), `Y` (Output Y), `VCC` (VCC (+3.3–5 V)), `GND`
+
+#### `logic-input` — Logic input (click for 1 / 0)
+
+A switch that drives its OUT pin to a clean logic level: click it while simulating to flip between 1 (= VCC) and 0 (= GND). Connect VCC and GND to your supply. Perfect for feeding gates without pull-up resistors.
+
+Pins: `OUT` (OUT (1 = VCC, 0 = GND)), `VCC`, `GND`
+
+Props:
+- `on` = 0 — Output; one of 0 (0 (LOW)), 1 (1 (HIGH))
+
+#### `logic-probe` — Logic probe (shows 1 / 0)
+
+A lamp that lights when its IN pin is a logic 1 (above half of VCC) and shows the value, 1 or 0. It draws almost no current, so it can watch any gate output. Connect VCC and GND to your supply.
+
+Pins: `IN`, `VCC`, `GND`
+
 ## Logic ICs
 
 #### `74hc00` — 74HC00 quad NAND gate
@@ -1688,81 +1766,6 @@ Pins: `A1` (1: Switch 1 in/out), `B1` (2: Switch 1 out/in), `B2` (3: Switch 2 ou
 Turns a 4-bit number (D C B A = 8 4 2 1) into the segment pattern of that digit and drives a common-cathode display directly (through 220–470 Ω resistors) — one digit from only four Arduino pins. Codes above 9 blank the display. Tie LT and BI HIGH and LE LOW for normal use.
 
 Pins: `B` (1: BCD input B (2)), `C` (2: BCD input C (4)), `LT` (3: Lamp test (LOW = all segments on)), `BI` (4: Blanking (LOW = all off)), `LE` (5: Latch enable (HIGH = hold)), `D` (6: BCD input D (8)), `A` (7: BCD input A (1)), `GND` (8: VSS), `SE` (9: Segment e), `SD` (10: Segment d), `SC` (11: Segment c), `SB` (12: Segment b), `SA` (13: Segment a), `SG` (14: Segment g), `SF` (15: Segment f), `VCC` (16: VDD (3–15 V))
-
-#### `gate-and` — AND gate (2-input)
-
-Y is 1 only when A AND B are both 1. Power it from VCC/GND (3.3–5 V); an input counts as HIGH above half of VCC. The red dot shows the output. (Four-in-a-chip version: 74HC08.)
-
-Pins: `A` (Input A), `B` (Input B), `Y` (Output Y), `VCC` (VCC (+3.3–5 V)), `GND`
-
-#### `gate-and3` — AND gate (3-input)
-
-Y is 1 only when A, B and C are all 1. Power it from VCC/GND (3.3–5 V); an input counts as HIGH above half of VCC. The red dot shows the output. (Three-in-a-chip version: 74HC11.)
-
-Pins: `A` (Input A), `B` (Input B), `C` (Input C), `Y` (Output Y), `VCC` (VCC (+3.3–5 V)), `GND`
-
-#### `gate-buffer` — Buffer gate
-
-Y simply copies A — used to clean up a slow or weak signal or drive more inputs. Power it from VCC/GND (3.3–5 V); an input counts as HIGH above half of VCC. The red dot shows the output.
-
-Pins: `A` (Input A), `Y` (Output Y), `VCC` (VCC (+3.3–5 V)), `GND`
-
-#### `gate-nand` — NAND gate (2-input)
-
-NOT-AND: Y is 0 only when A and B are both 1. The "universal" gate — any logic can be built from NANDs alone. Power it from VCC/GND (3.3–5 V); an input counts as HIGH above half of VCC. The red dot shows the output. (Four-in-a-chip version: 74HC00.)
-
-Pins: `A` (Input A), `B` (Input B), `Y` (Output Y), `VCC` (VCC (+3.3–5 V)), `GND`
-
-#### `gate-nor` — NOR gate (2-input)
-
-NOT-OR: Y is 1 only when A and B are both 0. Also a universal gate; two cross-coupled NORs make an SR latch. Power it from VCC/GND (3.3–5 V); an input counts as HIGH above half of VCC. The red dot shows the output. (Four-in-a-chip version: 74HC02.)
-
-Pins: `A` (Input A), `B` (Input B), `Y` (Output Y), `VCC` (VCC (+3.3–5 V)), `GND`
-
-#### `gate-not` — NOT gate (inverter)
-
-One inverter: Y is the opposite of A. Power it from VCC/GND (3.3–5 V); an input counts as HIGH above half of VCC. The red dot shows the output. (Six-in-a-chip version: 74HC04.)
-
-Pins: `A` (Input A), `Y` (Output Y), `VCC` (VCC (+3.3–5 V)), `GND`
-
-#### `gate-or` — OR gate (2-input)
-
-Y is 1 when A OR B (or both) is 1. Power it from VCC/GND (3.3–5 V); an input counts as HIGH above half of VCC. The red dot shows the output. (Four-in-a-chip version: 74HC32.)
-
-Pins: `A` (Input A), `B` (Input B), `Y` (Output Y), `VCC` (VCC (+3.3–5 V)), `GND`
-
-#### `gate-or3` — OR gate (3-input)
-
-Y is 1 when any of A, B or C is 1. Power it from VCC/GND (3.3–5 V); an input counts as HIGH above half of VCC. The red dot shows the output.
-
-Pins: `A` (Input A), `B` (Input B), `C` (Input C), `Y` (Output Y), `VCC` (VCC (+3.3–5 V)), `GND`
-
-#### `gate-xnor` — XNOR gate (2-input)
-
-Exclusive NOR (equality): Y is 1 when A and B are the same. Power it from VCC/GND (3.3–5 V); an input counts as HIGH above half of VCC. The red dot shows the output.
-
-Pins: `A` (Input A), `B` (Input B), `Y` (Output Y), `VCC` (VCC (+3.3–5 V)), `GND`
-
-#### `gate-xor` — XOR gate (2-input)
-
-Exclusive OR: Y is 1 when A and B are different. It is the "sum" bit of a half adder and a controllable inverter. Power it from VCC/GND (3.3–5 V); an input counts as HIGH above half of VCC. The red dot shows the output. (Four-in-a-chip version: 74HC86.)
-
-Pins: `A` (Input A), `B` (Input B), `Y` (Output Y), `VCC` (VCC (+3.3–5 V)), `GND`
-
-#### `logic-input` — Logic input (click for 1 / 0)
-
-A switch that drives its OUT pin to a clean logic level: click it while simulating to flip between 1 (= VCC) and 0 (= GND). Connect VCC and GND to your supply. Perfect for feeding gates without pull-up resistors.
-
-Pins: `OUT` (OUT (1 = VCC, 0 = GND)), `VCC`, `GND`
-
-Props:
-- `on` = 0 — Output; one of 0 (0 (LOW)), 1 (1 (HIGH))
-
-#### `logic-probe` — Logic probe (shows 1 / 0)
-
-A lamp that lights when its IN pin is a logic 1 (above half of VCC) and shows the value, 1 or 0. It draws almost no current, so it can watch any gate output. Connect VCC and GND to your supply.
-
-Pins: `IN`, `VCC`, `GND`
 
 #### `mcp4725` — DAC 12-bit (MCP4725)
 

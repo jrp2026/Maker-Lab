@@ -89,8 +89,12 @@ export const CATALOG: CatalogCategory[] = [
     entries: all('ne555', 'lm358', 'lm324', 'ua741', 'tl072', 'lm386', 'lm393', 'lm339', 'lm311', 'mcp6002', 'tl431', 'cd4066', 'icl7660', 'uln2803'),
   },
   {
+    id: 'gates', name: 'Logic gates', icon: '≥1',
+    entries: all('gate-not', 'gate-buffer', 'gate-and', 'gate-or', 'gate-nand', 'gate-nor', 'gate-xor', 'gate-xnor', 'gate-and3', 'gate-or3', 'logic-input', 'logic-probe'),
+  },
+  {
     id: 'logic', name: 'Digital logic & conversion ICs', icon: '&',
-    entries: all('logic-input', 'logic-probe', 'gate-buffer', 'gate-not', 'gate-and', 'gate-or', 'gate-nand', 'gate-nor', 'gate-xor', 'gate-xnor', 'gate-and3', 'gate-or3', '74hc00', '74hc08', '74hc32', '74hc86', '74hc02', '74hc04', '74hc10', '74hc11', '74hc14', '74hc20', '74hc27', '74hc74', '74hc125', '74hc157', '74hc245', '74hc283', '74hc393', 'cd4511', 'cd4011', 'cd4066', '74hc595', 'cd4017', '74hc4051', '74hc138', 'ads1115', 'mcp4725', 'pcf8574', 'adum1201'),
+    entries: all('74hc00', '74hc08', '74hc32', '74hc86', '74hc02', '74hc04', '74hc10', '74hc11', '74hc14', '74hc20', '74hc27', '74hc74', '74hc125', '74hc157', '74hc245', '74hc283', '74hc393', 'cd4511', 'cd4011', 'cd4066', '74hc595', 'cd4017', '74hc4051', '74hc138', 'ads1115', 'mcp4725', 'pcf8574', 'adum1201'),
   },
   {
     id: 'memory', name: 'Memory & timekeeping', icon: '▤',

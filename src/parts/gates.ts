@@ -41,7 +41,7 @@ function gate(o: GateOpts): Raw {
   const size = Math.min(6, 26 / (0.62 * o.label.length));
   const title = text(lx, 23.5, o.label, size, EDGE, 'middle', { weight: 800 });
   return {
-    type: o.type, name: o.name, category: 'logic', description: o.description, keywords: o.keywords,
+    type: o.type, name: o.name, category: 'gates', description: o.description, keywords: o.keywords,
     pins,
     shapes: [
       lead(30, 0, 30, 6), lead(30, 34, 30, 40),
@@ -60,7 +60,7 @@ const POWER = 'Power it from VCC/GND (3.3–5 V); an input counts as HIGH above 
 const A = H('A'), B = H('B'), C = H('C');
 
 const logicInput: Raw = {
-  type: 'logic-input', name: 'Logic input (click for 1 / 0)', category: 'logic',
+  type: 'logic-input', name: 'Logic input (click for 1 / 0)', category: 'gates',
   description: 'A switch that drives its OUT pin to a clean logic level: click it while simulating to flip between 1 (= VCC) and 0 (= GND). Connect VCC and GND to your supply. Perfect for feeding gates without pull-up resistors.',
   keywords: ['logic input', 'logic switch', 'input switch', 'toggle', 'high low', 'logic level', 'digital input'],
   pins: [
@@ -82,7 +82,7 @@ const logicInput: Raw = {
 };
 
 const logicProbe: Raw = {
-  type: 'logic-probe', name: 'Logic probe (shows 1 / 0)', category: 'logic',
+  type: 'logic-probe', name: 'Logic probe (shows 1 / 0)', category: 'gates',
   description: 'A lamp that lights when its IN pin is a logic 1 (above half of VCC) and shows the value, 1 or 0. It draws almost no current, so it can watch any gate output. Connect VCC and GND to your supply.',
   keywords: ['logic probe', 'logic output', 'indicator', 'lamp', 'high low', 'logic level', 'digital output'],
   pins: [

@@ -10,7 +10,7 @@ import type { PropValue } from './types';
 const CATEGORY_TITLES: Record<string, string> = {
   boards: 'Prototyping surfaces', mcu: 'Microcontroller boards', passive: 'Passive components', diodes: 'Diodes & LEDs',
   transistors: 'Transistors', switches: 'Switches & inputs', power: 'Power', output: 'Outputs (motors, sound, lights)',
-  drivers: 'Motor & driver modules', ics: 'Analog & timer ICs', logic: 'Logic ICs', memory: 'Memory & time', sensors: 'Sensors',
+  drivers: 'Motor & driver modules', ics: 'Analog & timer ICs', gates: 'Logic gates', logic: 'Logic ICs', memory: 'Memory & time', sensors: 'Sensors',
   displays: 'Displays', comms: 'Communication modules', instruments: 'Instruments',
 };
 const ORDER = Object.keys(CATEGORY_TITLES);

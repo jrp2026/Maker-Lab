@@ -54,6 +54,7 @@ export type CategoryId =
   | 'drivers'
   | 'ics'
   | 'logic'
+  | 'gates'
   | 'memory'
   | 'sensors'
   | 'displays'
