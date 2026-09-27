@@ -9,7 +9,8 @@ function run(id: string, seconds: number, props: Record<string, Record<string, n
   const sim = new Simulator(doc);
   expect([...sim.start().values()]).toEqual([]);
   let snap = sim.snapshot();
-  for (let i = 0; i < seconds / 0.02; i++) { sim.advance(0.02); snap = sim.snapshot(); }
+  // run to the requested *simulated* time: advance() stops at a CPU budget, so slow machines need more calls
+  while (sim.time < seconds - 1e-6) { sim.advance(0.02); snap = sim.snapshot(); }
   expect(sim.mcus.get('esp')!.error?.message).toBeUndefined();
   expect(snap.solverFailed).toBe(false);
   const motors = doc.components.filter((c) => c.type === 'gear-motor').map((c) => snap.comps[c.id]!.readouts![0] as number);
@@ -37,9 +38,9 @@ describe('robot car examples', () => {
     const sim = new Simulator(doc);
     sim.start();
     const cell = doc.components.find((c) => c.type === 'battery-18650')!.id;
-    for (let i = 0; i < 5; i++) sim.advance(0.02);
+    while (sim.time < 0.1) sim.advance(0.02);
     const before = (sim.snapshot().comps[cell]!.vars as Record<string, number>).soc;
-    for (let i = 0; i < 25; i++) sim.advance(0.02);
+    while (sim.time < 0.6) sim.advance(0.02);
     expect((sim.snapshot().comps[cell]!.vars as Record<string, number>).soc).toBeGreaterThan(before);
   });
 

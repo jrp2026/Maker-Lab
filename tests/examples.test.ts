@@ -51,7 +51,7 @@ describe('device examples do what they say', () => {
     const sim = new Simulator(EXAMPLES.find((e) => e.id === id)!.build());
     sim.start();
     let snap = sim.snapshot();
-    for (let i = 0; i < seconds / 0.02; i++) {
+    while (sim.time < seconds - 1e-6) {
       sim.advance(0.02);
       snap = sim.snapshot();
       each?.(sim, snap);

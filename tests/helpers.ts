@@ -20,9 +20,11 @@ export function simulate(components: ComponentInstance[], wires: Wire[], seconds
   const errs = sim.start();
   if (errs.size) throw new Error([...errs.values()].map((e) => `${e.message} @${e.line}`).join());
   let snap = sim.snapshot();
-  const frames = Math.max(1, Math.round(seconds / 0.02));
-  for (let i = 0; i < frames; i++) {
-    each?.(sim, i * 0.02);
+  // run to the requested *simulated* time: advance() stops at a CPU budget per call, so a slow
+  // machine (CI) needs more calls to get as far
+  const target = Math.max(1, Math.round(seconds / 0.02)) * 0.02;
+  while (sim.time < target - 1e-6) {
+    each?.(sim, sim.time);
     sim.advance(0.02);
     snap = sim.snapshot();
   }

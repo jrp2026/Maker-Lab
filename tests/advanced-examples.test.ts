@@ -12,10 +12,10 @@ function run(id: string, seconds: number, props: Record<string, Record<string, n
   const sim = new Simulator(doc);
   expect([...sim.start().values()]).toEqual([]);
   let snap = sim.snapshot();
-  for (let i = 0; i < seconds / 0.02; i++) {
+  while (sim.time < seconds - 1e-6) {
     sim.advance(0.02);
     snap = sim.snapshot();
-    each?.(sim, snap, (i + 1) * 0.02);
+    each?.(sim, snap, snap.time);
   }
   for (const [mid, m] of sim.mcus) expect(m.error?.message, mid).toBeUndefined();
   const idOf = (type: string, nth = 0) => doc.components.filter((c) => c.type === type)[nth].id;
