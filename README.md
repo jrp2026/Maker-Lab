@@ -140,7 +140,7 @@ npm run build      # static site in dist/
   to ChatGPT, Claude, Gemini… and ask for a project; import the JSON it writes with File → Import.
 - **Projects** – autosave, save/open in the browser, JSON import/export, PNG export, and share
   links that carry the whole circuit in the URL.
-- **Examples** (38, in four groups):
+- **Examples** (40, in five groups):
   - *getting started*: blink, button, dimmer, RC charging, motor, melody, servo, LCD, ESP32, interrupts,
     and an AI-made regulator
   - *modules & ICs*: OLED, NeoPixel rainbow, weather station, parking sensor, stepper, RFID lock,
@@ -150,6 +150,9 @@ npm run build      # static site in dist/
     stopwatch on a multiplexed 4-digit display, keypad door lock (Keypad, Servo, String), PWM fan
     controller (NTC beta equation), two-LDR solar tracker, reaction-time game (EEPROM high score),
     and two no-code logic circuits — a DIP-switch binary adder and a 555 → 74HC393 → CD4511 decimal counter
+  - *robot cars*: an autonomous obstacle-avoiding ESP32 4WD car (servo-scanned HC-SR04) and a 3-sensor line
+    follower, both with 2 × L298N, 4 TT motors, 2 × 18650 + TP4056 USB-C charger, power switch and boost
+    converter, motor soft-start and battery monitoring
   - *logic gates* (no code): gates playground, half adder, full adder, SR latch (1 bit of memory from two
     NORs), 2-to-1 multiplexer, 3-input majority vote, XOR built only from NANDs, burglar-alarm logic
 

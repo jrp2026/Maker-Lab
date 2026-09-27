@@ -286,7 +286,9 @@ function dcdc(o: { type: string; name: string; title: string; description: strin
         { id: 'IQ', kind: 'resistor', a: 'INP', b: 'INN', value: 5000 },
       ],
     },
-    warnings: [{ when: `-i(VO) > ${o.iMax}`, level: 'error', message: `Output current above ${o.iMax} A.` }],
+    // the output capacitor supplies short peaks (PWM loads), so the limit applies to the average current
+    states: [{ name: 'iavg', init: 0, next: 'iavg + (max(0, -i(VO)) - iavg) * min(1, dt / 0.05)' }],
+    warnings: [{ when: `iavg > ${o.iMax}`, level: 'error', message: `Output current above ${o.iMax} A.` }],
   };
 }
 
