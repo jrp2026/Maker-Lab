@@ -14,6 +14,7 @@ import { zoomToFit } from './ui/viewport';
 import { toggleSimulation } from './sim/controller';
 import { loadSavedParts } from './ai/library';
 import { SimClock } from './ui/SimClock';
+import { openProjects, ProjectsPage } from './ui/ProjectsPage';
 import { EmptyCanvas, maybeWelcome, Tour, Welcome } from './ui/Onboarding';
 
 loadSavedParts();
@@ -60,6 +61,11 @@ export function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const mod = e.ctrlKey || e.metaKey;
+      if (mod && e.key.toLowerCase() === 'o') {
+        e.preventDefault();
+        openProjects();
+        return;
+      }
       if (mod && e.key.toLowerCase() === 's') {
         e.preventDefault();
         saveProject(useEditor.getState().doc);
@@ -122,6 +128,7 @@ export function App() {
         {libraryOpen && !codeOpen && <div className="sheet-backdrop" onClick={() => useEditor.setState({ libraryOpen: false })} />}
         {codeOpen ? <CodePanel /> : <LibraryPanel />}
       </main>
+      <ProjectsPage />
       <Welcome />
       <Tour />
       {toast && <div className={`toast ${toast.kind}`}>{toast.text}</div>}

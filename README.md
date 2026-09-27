@@ -159,8 +159,11 @@ npm run build      # static site in dist/
 - **Let an LLM build circuits** – hand [docs/llm-project-json.md](docs/llm-project-json.md) and the
   generated [docs/parts-reference.md](docs/parts-reference.md) (every part's exact pins and settings)
   to ChatGPT, Claude, Gemini… and ask for a project; import the JSON it writes with File → Import.
-- **Projects** – autosave, save/open in the browser, JSON import/export, PNG export, and share
-  links that carry the whole circuit in the URL.
+- **Your projects** – a projects page (click the MakerLab logo, File → Your projects, or
+  `Ctrl+O`) shows every circuit saved in this browser as a card with a live preview, its board,
+  part count and when it was saved: search, sort, open, rename, duplicate, download or delete
+  them, import a `.json`, start a new circuit or begin from an example. Autosave, `Ctrl+S`,
+  JSON import/export, PNG export and share links (the whole circuit in the URL) as before.
 - **Examples** (40, in five groups):
   - *getting started*: blink, button, dimmer, RC charging, motor, melody, servo, LCD, ESP32, interrupts,
     and an AI-made Morse telegraph key

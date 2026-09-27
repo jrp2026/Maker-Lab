@@ -108,6 +108,44 @@ export function saveProject(doc: CircuitDoc) {
   safeSet(PROJECTS_KEY, JSON.stringify(all));
 }
 
+function readProjects(): Record<string, SavedProject> {
+  try {
+    return JSON.parse(safeGet(PROJECTS_KEY) ?? '{}');
+  } catch {
+    return {};
+  }
+}
+
+/** "Robot (2)" if "Robot" is taken */
+export function uniqueProjectName(base: string): string {
+  const all = readProjects();
+  if (!all[base]) return base;
+  const stem = base.replace(/ \(\d+\)$/, '');
+  for (let n = 2; ; n++) if (!all[`${stem} (${n})`]) return `${stem} (${n})`;
+}
+
+/** Rename a saved project; false if the new name is taken. */
+export function renameProject(from: string, to: string): boolean {
+  const all = readProjects();
+  if (!all[from] || (to !== from && all[to])) return false;
+  const p = all[from];
+  delete all[from];
+  all[to] = { ...p, name: to, doc: { ...p.doc, name: to } };
+  safeSet(PROJECTS_KEY, JSON.stringify(all));
+  return true;
+}
+
+/** Copy a saved project under a new name; returns the copy's name. */
+export function duplicateProject(name: string): string | null {
+  const all = readProjects();
+  const p = all[name];
+  if (!p) return null;
+  const copy = uniqueProjectName(`${name} (copy)`);
+  all[copy] = { name: copy, savedAt: Date.now(), doc: { ...structuredClone(p.doc), name: copy } };
+  safeSet(PROJECTS_KEY, JSON.stringify(all));
+  return copy;
+}
+
 export function deleteProject(name: string) {
   try {
     const all = JSON.parse(safeGet(PROJECTS_KEY) ?? '{}');

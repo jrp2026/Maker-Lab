@@ -5,7 +5,8 @@ import {
 import { toggleSimulation } from '../sim/controller';
 import { EXAMPLES } from '../examples';
 import { openWelcome } from './Onboarding';
-import { deleteProject, exportJson, exportPng, importJson, listProjects, saveProject, shareLink } from '../model/persistence';
+import { openProjects } from './ProjectsPage';
+import { exportJson, exportPng, importJson, listProjects, saveProject, shareLink } from '../model/persistence';
 import { emptyDoc } from '../model/types';
 import { docBounds, zoomBy, zoomToFit } from './viewport';
 
@@ -62,10 +63,12 @@ export function Toolbar() {
   return (
     <header className="toolbar" ref={headerRef}>
       <div className="brand">
-        <div className="logo" aria-hidden>
-          <svg viewBox="0 0 32 32" width="26" height="26"><rect width="32" height="32" rx="8" fill="#00a39a" /><path d="M6 16h6l2-6 4 12 2-6h6" stroke="#fff" strokeWidth="2.6" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>
-        </div>
-        <span className="brand-name">MakerLab</span>
+        <button className="brand-home" onClick={openProjects} title="Your projects (Ctrl+O)" aria-label="Your projects">
+          <span className="logo" aria-hidden>
+            <svg viewBox="0 0 32 32" width="26" height="26"><rect width="32" height="32" rx="8" fill="#00a39a" /><path d="M6 16h6l2-6 4 12 2-6h6" stroke="#fff" strokeWidth="2.6" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          </span>
+          <span className="brand-name">MakerLab</span>
+        </button>
         <input className="doc-name" value={doc.name} onChange={(e) => updateDoc((d) => ({ ...d, name: e.target.value }))} aria-label="Project name" spellCheck={false} />
       </div>
 
@@ -114,15 +117,7 @@ export function Toolbar() {
           <>
             <button className="menu-item" onClick={() => { if (running) toggleSimulation(); loadDoc(emptyDoc(), { keepHistory: true }); close(); }}><b>New circuit</b></button>
             <button className="menu-item" onClick={() => { saveProject(doc); showToast(`Saved “${doc.name}” in this browser`); close(); }}><b>Save to browser</b><span>Ctrl+S</span></button>
-            {listProjects().length > 0 && <div className="menu-sub">Open saved</div>}
-            {listProjects().map((p) => (
-              <div key={p.name} className="menu-item row-item">
-                <button className="link grow-left" onClick={() => { if (running) toggleSimulation(); loadDoc(p.doc, { keepHistory: true }); requestAnimationFrame(() => zoomToFit(p.doc)); close(); }}>
-                  {p.name} <em>{new Date(p.savedAt).toLocaleString()}</em>
-                </button>
-                <button className="link danger" title="Delete" onClick={() => { deleteProject(p.name); close(); }}>✕</button>
-              </div>
-            ))}
+            <button className="menu-item" onClick={() => { openProjects(); close(); }}><b>Your projects…</b><span>Ctrl+O · {listProjects().length} saved</span></button>
             <div className="menu-sep" />
             <button className="menu-item" onClick={() => { exportJson(doc); close(); }}><b>Export .json</b></button>
             <button className="menu-item" onClick={() => { fileRef.current?.click(); close(); }}><b>Import .json…</b></button>
