@@ -70,4 +70,74 @@ describe('blocks → Arduino code', () => {
     expect(r.error).toBeNull();
     expect(r.pins[18].servo).toBe(2400);
   });
+
+  const B = (type: string, extra: Record<string, unknown> = {}) => ({ block: { type, ...extra } });
+  const N = (n: number) => B('math_number', { fields: { NUM: n } });
+
+  it('new blocks: functions, a non-blocking timer, TMP36 into a float variable, button, toggle', () => {
+    const json = {
+      variables: [{ name: 'temp', id: 't' }, { name: 'x', id: 'px' }],
+      blocks: {
+        languageVersion: 0,
+        blocks: [
+          // function "twice(x)" returning x * 2
+          {
+            type: 'procedures_defreturn', x: 400, y: 0, fields: { NAME: 'twice' }, extraState: { params: [{ name: 'x', id: 'px' }] },
+            inputs: { RETURN: B('math_arithmetic', { fields: { OP: 'MULTIPLY' }, inputs: { A: B('variables_get', { fields: { VAR: { id: 'px' } } }), B: N(2) } }) },
+          },
+          {
+            type: 'arduino_forever', x: 0, y: 0,
+            inputs: {
+              DO: B('variables_set', {
+                fields: { VAR: { id: 't' } }, inputs: { VALUE: B('sensor_tmp36', { fields: { PIN: 'A0' } }) },
+                next: B('control_every', {
+                  inputs: { MS: N(250), DO: B('io_toggle', { fields: { PIN: 13 } }) },
+                  next: B('controls_if', {
+                    inputs: {
+                      IF0: B('sensor_button', { fields: { PIN: '2' } }),
+                      DO0: B('serial_print_value', { fields: { LABEL: 'double' }, inputs: { VALUE: B('procedures_callreturn', { extraState: { name: 'twice', params: ['x'] }, inputs: { ARG0: B('variables_get', { fields: { VAR: { id: 't' } } }) } }) } }),
+                    },
+                  }),
+                }),
+              }),
+            },
+          },
+        ],
+      },
+    };
+    const code = sketchFromJson(json, UNO);
+    expect(code).toContain('float temp = 0;');
+    expect(code).toMatch(/float twice\(float x\) \{/);
+    expect(code).toContain('if (millis() - lastRun1 >= 250) {');
+    expect(code).toContain('digitalWrite(13, !digitalRead(13));');
+    expect(code).toContain('pinMode(2, INPUT_PULLUP);');
+    const r = new McuRuntime(UNO);
+    expect(r.load(code)).toBeNull();
+    r.pins[14].volts = 0.75; // TMP36 at 25 °C
+    r.pins[2].volts = 0; // button pressed
+    r.runUntil(1_100_000);
+    expect(r.error).toBeNull();
+    expect(r.serialOut).toMatch(/double = 49\.\d\d|double = 50\.\d\d/);
+    // the timer toggled pin 13 about four times a second without blocking the loop
+    expect(r.serialOut.split('double').length).toBeGreaterThan(20);
+  });
+
+  it('distance sensor block generates a working pulseIn helper', () => {
+    const json = {
+      blocks: {
+        languageVersion: 0,
+        blocks: [{ type: 'arduino_forever', x: 0, y: 0, inputs: { DO: B('serial_print_value', { fields: { LABEL: 'cm' }, inputs: { VALUE: B('sensor_distance', { fields: { TRIG: '7', ECHO: '6' } }) } }) } }],
+      },
+    };
+    const code = sketchFromJson(json, UNO);
+    expect(code).toContain('long readDistanceCm(int trig, int echo) {');
+    expect(code).toContain('Serial.println(readDistanceCm(7, 6));');
+    const r = new McuRuntime(UNO);
+    expect(r.load(code)).toBeNull();
+  });
+
+  it('pins saved as numbers by older block programs still load into the pin dropdowns', () => {
+    const code = sketchFromJson({ blocks: { languageVersion: 0, blocks: [{ type: 'arduino_forever', x: 0, y: 0, inputs: { DO: B('io_digital_write', { fields: { PIN: 7, STATE: 'HIGH' } }) } }] } }, UNO);
+    expect(code).toContain('digitalWrite(7, HIGH);');
+  });
 });

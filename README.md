@@ -112,10 +112,8 @@ npm run build      # static site in dist/
   Interactive parts: hold buttons, click switches and the multimeter dial, drag pot/LDR knobs.
 - **Error flags** – short circuits, LED over-current and burn-out, reversed electrolytics,
   resistor over-power, overloaded Arduino pins / 5 V rail, missing ground, compile/runtime errors.
-- **Board power** – dev boards (Uno, Nano, Mega, ESP32, Pico…) have a *USB cable* setting. Plugged
-  in (drawn as a cable; the default except on the ESP32, which starts unplugged) they are powered
-  by the computer; unplugged they stay off
-  until VIN / VBUS gets 5–12 V through the on-board regulator, or the 5V / 3V3 rail is fed
+- **Board power** – dev boards (Uno, Nano, Mega, ESP32, Pico…) have a *USB cable* setting. A board
+  placed from the library starts unplugged and stays off until VIN / VBUS gets 5–12 V through the on-board regulator, or the 5V / 3V3 rail is fed
   directly, with GND connected — or until you plug its USB cable in (inspector), which powers it
   from the computer (drawn as a cable). The examples come plugged in, except the robot cars,
   which run from their own batteries.
@@ -134,8 +132,13 @@ npm run build      # static site in dist/
     RTClib, SD, MFRC522, Adafruit_PN532, RF24, mcp_can, TinyGPS++
   - `struct`/`typedef`, pointers & references, `String`, multi-dimensional arrays, `enum`, `switch`
 - **Block coding** – Tinkercad-style blocks (Blockly) with *Blocks*, *Blocks + Text* (live
-  generated code) and *Text* modes: pins, PWM, tone, servo, I2C LCD, inputs, waits, loops,
-  conditions, math, text and variables. Generated code targets the selected board.
+  generated code) and *Text* modes. Pins are picked from the board's own pin list (PWM pins
+  marked ~). Blocks for pins, PWM, RGB LEDs, tone, toggle, buttons, analog in percent, TMP36
+  temperature, HC-SR04 distance, servo, I2C LCD, the serial monitor, waits, *every N ms*
+  (non-blocking timers), *wait until*, loops, conditions, math (map, constrain, min/max, round,
+  square root…), text, variables (whole or decimal numbers, chosen automatically) and your own
+  **functions** with parameters and return values. Loose blocks that would never run are greyed
+  out. Generated code targets the selected board.
 - **✨ AI part generator** – describe a part that isn't in the library (“Morse telegraph key”,
   “Nixie tube”, “5 V reed relay”) and a model designs it: pins, Tinkercad-style art, schematic symbol,
   editable properties, and an electrical model built from the simulator's primitives plus

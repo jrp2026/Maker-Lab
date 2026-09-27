@@ -67,6 +67,8 @@ export default function BlocksEditor({ value, board, onChange }: Props) {
       emit();
     };
     ws.addChangeListener(listener);
+    // blocks left loose outside "on start" / "forever" / a function never run: grey them out
+    ws.addChangeListener(Blockly.Events.disableOrphans);
     const ro = new ResizeObserver(() => Blockly.svgResize(ws));
     ro.observe(host.current!);
     return () => {
