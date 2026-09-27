@@ -104,6 +104,26 @@ describe('advanced examples do what they say', () => {
     expect(rows).toMatch(/Wait for green/);
   });
 
+  it('logic gates playground: every probe matches the truth table as the inputs change', () => {
+    const doc = EXAMPLES.find((e) => e.id === 'logic-gates')!.build();
+    const inputs = doc.components.filter((c) => c.type === 'logic-input');
+    const gates = doc.components.filter((c) => c.type.startsWith('gate-'));
+    const probes = doc.components.filter((c) => c.type === 'logic-probe');
+    const f: Record<string, (a: number, b: number) => number> = {
+      'gate-not': (a) => 1 - a, 'gate-and': (a, b) => a & b, 'gate-or': (a, b) => a | b,
+      'gate-nand': (a, b) => 1 - (a & b), 'gate-nor': (a, b) => 1 - (a | b), 'gate-xor': (a, b) => a ^ b,
+    };
+    for (const [a, b] of [[0, 0], [0, 1], [1, 0], [1, 1]]) {
+      inputs[0].props.on = a;
+      inputs[1].props.on = b;
+      const sim = new Simulator(doc);
+      expect([...sim.start().values()]).toEqual([]);
+      for (let i = 0; i < 3; i++) sim.advance(0.02);
+      const snap = sim.snapshot();
+      gates.forEach((g, i) => expect(snap.comps[probes[i].id]!.readouts![0], `${g.type} ${a}${b}`).toBe(f[g.type](a, b)));
+    }
+  });
+
   it('binary adder shows 5 + 6 = 1011', () => {
     const r = run('binary-adder', 0.2);
     const on = r.doc.components.filter((c) => c.type === 'led').map((c) => (r.snap.comps[c.id]!.brightness as number) > 0.2);

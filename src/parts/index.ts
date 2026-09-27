@@ -18,10 +18,11 @@ import { BATTERY_MGMT, CONVERTERS, DISTRIBUTION, POWER_SOURCES, REGULATORS } fro
 import { EXTRA_ICS } from './extra-ics';
 import { EXTRA_IO } from './extra-io';
 import { EXTRA_MORE } from './extra-more';
+import { GATES } from './gates';
 import { DEVICE_PARTS } from './devices';
 export type { PartExt };
 
-export const RAW_PARTS = [...PASSIVE, ...SEMIS, ...SWITCHES, ...RELAYS, ...ANALOG_ICS, ...LOGIC_ICS, ...SENSORS, ...DISPLAYS, KEYPAD, ...MOTORS, ...DRIVERS, ...COMMS_PASSIVE, ...POWER_SOURCES, ...REGULATORS, ...CONVERTERS, ...BATTERY_MGMT, ...DISTRIBUTION, ...EXTRA_ICS, ...EXTRA_IO, ...EXTRA_MORE];
+export const RAW_PARTS = [...PASSIVE, ...SEMIS, ...SWITCHES, ...RELAYS, ...ANALOG_ICS, ...LOGIC_ICS, ...SENSORS, ...DISPLAYS, KEYPAD, ...MOTORS, ...DRIVERS, ...COMMS_PASSIVE, ...POWER_SOURCES, ...REGULATORS, ...CONVERTERS, ...BATTERY_MGMT, ...DISTRIBUTION, ...EXTRA_ICS, ...EXTRA_IO, ...EXTRA_MORE, ...GATES];
 
 export function buildSpecParts(): ComponentDef[] {
   const out: ComponentDef[] = [];

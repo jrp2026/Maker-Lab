@@ -1,7 +1,7 @@
 <h1 align="center">MakerLab</h1>
 
 <p align="center">
-  <b>A browser electronics &amp; Arduino simulator</b> — build circuits from 297 realistic parts, write a sketch, press Run.
+  <b>A browser electronics &amp; Arduino simulator</b> — build circuits from 309 realistic parts, write a sketch, press Run.
 </p>
 
 <p align="center">
@@ -28,10 +28,10 @@ installs as an app that keeps working offline.
 
 ## Parts
 
-All 297 parts, as they look on the breadboard:
+All 309 parts, as they look on the breadboard:
 
 <p align="center">
-  <img src="docs/parts.png" alt="A grid of all 297 MakerLab parts: breadboards, Arduino and other boards, passives, LEDs, transistors, switches, power parts, motors, drivers, ICs, sensors, displays and communication modules" width="100%">
+  <img src="docs/parts.png" alt="A grid of all 309 MakerLab parts: breadboards, Arduino and other boards, passives, LEDs, transistors, switches, power parts, motors, drivers, ICs, sensors, displays and communication modules" width="100%">
 </p>
 
 ## Development
@@ -60,7 +60,7 @@ npm run build      # static site in dist/
   end to reconnect.
 - **Editing** – rotate `R`, flip `F`, delete `Del`, undo/redo `Ctrl+Z` / `Ctrl+Shift+Z`,
   copy/paste/duplicate `Ctrl+C/V/D`, shift-click or shift-drag to multi-select.
-- **Parts (297)** – the whole component library from the brief, every entry placeable:
+- **Parts (309)** – the whole component library from the brief, every entry placeable:
   - *surfaces*: half/full breadboard, perfboard, stripboard, DIP IC sockets
   - *passives*: resistors, pots, trimmers, rheostat, slide pot, LDR, NTC thermistor, ceramic/electrolytic/super
     capacitors, inductor, ferrite, transformer, crystal, resonator, X9C103 digital pot, varistor, 5 W power resistor,
@@ -82,6 +82,8 @@ npm run build      # static site in dist/
     panel indicator lamps, siren, Peltier module, heating pad, solenoid water valve
   - *drivers*: L298N, L293D, TB6612FNG, DRV8833, L9110S, MX1508, BTS7960, VNH2SP30, IRF520 and TIP120
     modules, A4988/DRV8825/TMC2208/TMC2209 step-dir drivers, ULN2003/ULN2803, ESC, BLDC controller, PCA9685
+  - *logic gates*: NOT, buffer, AND, OR, NAND, NOR, XOR, XNOR, 3-input AND/OR as textbook symbols, plus a
+    clickable logic input and a logic probe
   - *ICs*: 555, LM358, LM324, µA741, TL072, MCP6002, LM386, LM393, LM339, LM311,
     74HC00/02/04/08/10/11/14/20/27/32/74/86/125/157/245/283/393, CD4011, CD4066, CD4511, 74HC595, CD4017, 74HC4051, 74HC138,
     ADS1115 ADC, MCP4725 DAC, PCF8574 expander, ADuM1201 isolator
@@ -138,7 +140,7 @@ npm run build      # static site in dist/
   to ChatGPT, Claude, Gemini… and ask for a project; import the JSON it writes with File → Import.
 - **Projects** – autosave, save/open in the browser, JSON import/export, PNG export, and share
   links that carry the whole circuit in the URL.
-- **Examples** (31, in three groups):
+- **Examples** (32, in three groups):
   - *getting started*: blink, button, dimmer, RC charging, motor, melody, servo, LCD, ESP32, interrupts,
     and an AI-made regulator
   - *modules & ICs*: OLED, NeoPixel rainbow, weather station, parking sensor, stepper, RFID lock,
@@ -147,7 +149,7 @@ npm run build      # static site in dist/
     (enum/switch state machine, interrupt crossing button), automatic plant waterer (OLED, MOSFET pump),
     stopwatch on a multiplexed 4-digit display, keypad door lock (Keypad, Servo, String), PWM fan
     controller (NTC beta equation), two-LDR solar tracker, reaction-time game (EEPROM high score),
-    and two no-code logic circuits — a DIP-switch binary adder and a 555 → 74HC393 → CD4511 decimal counter
+    and three no-code logic circuits — a logic-gates playground, a DIP-switch binary adder and a 555 → 74HC393 → CD4511 decimal counter
 
 ## Layout
 
