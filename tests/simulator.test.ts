@@ -5,7 +5,7 @@ import { getDef } from '../src/components/registry';
 import type { CircuitDoc, ComponentInstance } from '../src/model/types';
 
 const comp = (id: string, type: string, x: number, y: number, props: Record<string, any> = {}, rot: 0 | 1 | 2 | 3 = 0): ComponentInstance => ({
-  id, type, x, y, rot, flip: false, props: { ...getDef(type)!.defaultProps, ...props },
+  id, type, x, y, rot, flip: false, props: { ...getDef(type)!.defaultProps, ...('usb' in getDef(type)!.defaultProps ? { usb: 1 } : {}), ...props }, // boards: USB plugged in
 });
 
 function run(sim: Simulator, seconds: number) {

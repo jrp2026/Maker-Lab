@@ -5,7 +5,9 @@ import type { CircuitDoc, ComponentInstance, Wire } from '../src/model/types';
 export const part = (id: string, type: string, props: Record<string, any> = {}): ComponentInstance => {
   const def = getDef(type);
   if (!def) throw new Error(`no part ${type}`);
-  return { id, type, x: 0, y: 0, rot: 0, flip: false, props: { ...def.defaultProps, ...props } };
+  // boards start unplugged; most tests are about sketches, so plug them in unless the test says
+  const usb: Record<string, number> = 'usb' in def.defaultProps && !('usb' in props) ? { usb: 1 } : {};
+  return { id, type, x: 0, y: 0, rot: 0, flip: false, props: { ...def.defaultProps, ...usb, ...props } };
 };
 let wn = 0;
 /** wire('a.PIN', 'b.PIN') */

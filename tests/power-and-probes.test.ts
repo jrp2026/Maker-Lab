@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { part, simulate, wire } from './helpers';
-import { getDef } from '../src/components/registry';
+import { DEFS } from '../src/components/registry';
 import { parseDoc } from '../src/model/persistence';
 
 
@@ -17,14 +17,15 @@ function runBoard(parts: ReturnType<typeof part>[], wires: ReturnType<typeof wir
 
 describe('boards need power when the USB cable is unplugged', () => {
   it('a board with its USB cable plugged in runs with nothing wired (like on a desk)', () => {
-    const r = runBoard([part('u', 'arduino-uno')], [], 'u');
+    const r = runBoard([part('u', 'arduino-uno', { usb: 1 })], [], 'u');
     expect(r.off).toBe(false);
     expect(r.blinked).toBe(true);
   });
 
-  it('a new ESP32 starts unplugged; one from a circuit saved before the setting stays plugged in', () => {
-    expect(getDef('esp32-devkit')!.defaultProps.usb).toBe(0);
-    expect(getDef('arduino-uno')!.defaultProps.usb).toBe(1);
+  it('new boards start unplugged; one from a circuit saved before the setting stays plugged in', () => {
+    const boards = DEFS.filter((d) => 'usb' in d.defaultProps);
+    expect(boards.length).toBeGreaterThan(8);
+    for (const d of boards) expect(d.defaultProps.usb, d.type).toBe(0);
     const esp = { id: 'e', type: 'esp32-devkit', x: 0, y: 0, rot: 0, flip: false };
     expect(parseDoc({ version: 1, name: 'old', components: [{ ...esp, props: { code: '' } }], wires: [] }).components[0].props.usb).toBe(1);
     expect(parseDoc({ version: 1, name: 'new', components: [{ ...esp, props: { code: '', usb: 0 } }], wires: [] }).components[0].props.usb).toBe(0);

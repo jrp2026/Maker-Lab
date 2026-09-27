@@ -114,7 +114,7 @@ export const arduinoUno: ComponentDef = {
   bounds: { x: -14, y: 0, w: 294, h: 210 },
   pins: () => PINS,
   internalConnections: () => [['GND1', 'GND2', 'GND3'], ['A4', 'SDA'], ['A5', 'SCL']],
-  defaultProps: { code: BLINK_SKETCH, usb: 1 },
+  defaultProps: { code: BLINK_SKETCH, usb: 0 },
   fields: [USB_FIELD],
   mcu: { defaultCode: BLINK_SKETCH, board: UNO },
   thumbScale: 1,

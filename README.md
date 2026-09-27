@@ -116,7 +116,9 @@ npm run build      # static site in dist/
   in (drawn as a cable; the default except on the ESP32, which starts unplugged) they are powered
   by the computer; unplugged they stay off
   until VIN / VBUS gets 5–12 V through the on-board regulator, or the 5V / 3V3 rail is fed
-  directly, with GND connected. The robot cars run unplugged from their own batteries.
+  directly, with GND connected — or until you plug its USB cable in (inspector), which powers it
+  from the computer (drawn as a cable). The examples come plugged in, except the robot cars,
+  which run from their own batteries.
 - **Probes** – the multimeter and the oscilloscope measure between both of their leads: with the
   COM probe or the scope's ground clip unconnected they show nothing and say which lead is missing.
 - **Arduino code (every board)** – an Arduino C++ subset compiled to JavaScript generators:

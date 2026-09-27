@@ -4,7 +4,7 @@ import { getDef } from '../src/components/registry';
 import type { CircuitDoc, ComponentInstance, Wire } from '../src/model/types';
 
 const comp = (id: string, type: string, x = 0, y = 0, props: Record<string, any> = {}): ComponentInstance => ({
-  id, type, x, y, rot: 0, flip: false, props: { ...getDef(type)!.defaultProps, ...props },
+  id, type, x, y, rot: 0, flip: false, props: { ...getDef(type)!.defaultProps, ...('usb' in getDef(type)!.defaultProps ? { usb: 1 } : {}), ...props }, // boards: USB plugged in
 });
 let wn = 0;
 const w = (a: string, b: string): Wire => {

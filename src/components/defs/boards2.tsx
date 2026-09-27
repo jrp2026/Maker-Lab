@@ -140,7 +140,7 @@ function makeBoard(c: BoardCfg): ComponentDef {
     bounds,
     pins: () => pins,
     internalConnections: () => [...(c.groundGroups ?? []), ...(c.internal ?? [])],
-    defaultProps: c.power ? { code: c.code } : { code: c.code, usb: 1 },
+    defaultProps: c.power ? { code: c.code } : { code: c.code, usb: 0 },
     fields: c.power ? undefined : [USB_FIELD],
     mcu: { defaultCode: c.code, board: c.spec },
     summary: () => c.summary,

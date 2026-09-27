@@ -69,7 +69,7 @@ Pins: `SCL` (SCL (= D21)), `SDA` (SDA (= D20)), `AREF`, `GND3` (GND), `D13`, `D1
 
 Props:
 - `code` — the Arduino sketch (a string of C++ source)
-- `usb` = 1 — USB cable; one of 1 (Plugged in (powered by the computer)), 0 (Unplugged: power it through VIN / 5V / 3V3 + GND)
+- `usb` = 0 — USB cable; one of 1 (Plugged in (powered by the computer)), 0 (Unplugged: power it through VIN / 5V / 3V3 + GND)
 
 Internally connected: `GND1` = `GND2` = `GND3`; `SCL` = `D21`; `SDA` = `D20`
 
@@ -81,7 +81,7 @@ Pins: `MOSI`, `SS` (SS / RX LED), `D1` (D1 / TX (Serial1)), `D0` (D0 / RX (Seria
 
 Props:
 - `code` — the Arduino sketch (a string of C++ source)
-- `usb` = 1 — USB cable; one of 1 (Plugged in (powered by the computer)), 0 (Unplugged: power it through VIN / 5V / 3V3 + GND)
+- `usb` = 0 — USB cable; one of 1 (Plugged in (powered by the computer)), 0 (Unplugged: power it through VIN / 5V / 3V3 + GND)
 
 Internally connected: `GND1` = `GND2`; `RST1` = `RST2`
 
@@ -93,7 +93,7 @@ Pins: `D12` (D12 / MISO), `D11` (D11 / MOSI), `D10` (D10 / SS), `D9`, `D8`, `D7`
 
 Props:
 - `code` — the Arduino sketch (a string of C++ source)
-- `usb` = 1 — USB cable; one of 1 (Plugged in (powered by the computer)), 0 (Unplugged: power it through VIN / 5V / 3V3 + GND)
+- `usb` = 0 — USB cable; one of 1 (Plugged in (powered by the computer)), 0 (Unplugged: power it through VIN / 5V / 3V3 + GND)
 
 Internally connected: `GND1` = `GND2`; `RST1` = `RST2`
 
@@ -105,7 +105,7 @@ Pins: `SCL`, `SDA`, `AREF`, `GND3` (GND), `D13` (Digital pin 13), `D12` (Digital
 
 Props:
 - `code` — the Arduino sketch (a string of C++ source)
-- `usb` = 1 — USB cable; one of 1 (Plugged in (powered by the computer)), 0 (Unplugged: power it through VIN / 5V / 3V3 + GND)
+- `usb` = 0 — USB cable; one of 1 (Plugged in (powered by the computer)), 0 (Unplugged: power it through VIN / 5V / 3V3 + GND)
 
 Internally connected: `GND1` = `GND2` = `GND3`; `A4` = `SDA`; `A5` = `SCL`
 
@@ -149,7 +149,7 @@ Pins: `D0` (D0 / GPIO16 (wake)), `D1` (D1 / GPIO5 / SCL), `D2` (D2 / GPIO4 / SDA
 
 Props:
 - `code` — the Arduino sketch (a string of C++ source)
-- `usb` = 1 — USB cable; one of 1 (Plugged in (powered by the computer)), 0 (Unplugged: power it through VIN / 5V / 3V3 + GND)
+- `usb` = 0 — USB cable; one of 1 (Plugged in (powered by the computer)), 0 (Unplugged: power it through VIN / 5V / 3V3 + GND)
 
 Internally connected: `GND1` = `GND2` = `GND3` = `GND4`; `3V3` = `3V3A` = `3V3B`
 
@@ -190,7 +190,7 @@ Pins: `VBUS` (VBUS (5 V from USB)), `VSYS` (VSYS (1.8–5.5 V in)), `GND8`, `3V3
 
 Props:
 - `code` — the Arduino sketch (a string of C++ source)
-- `usb` = 1 — USB cable; one of 1 (Plugged in (powered by the computer)), 0 (Unplugged: power it through VIN / 5V / 3V3 + GND)
+- `usb` = 0 — USB cable; one of 1 (Plugged in (powered by the computer)), 0 (Unplugged: power it through VIN / 5V / 3V3 + GND)
 
 Internally connected: `GND1` = `GND2` = `GND3` = `GND4` = `GND6` = `GND7` = `GND8` = `AGND`
 
@@ -202,7 +202,7 @@ Pins: `VBUS` (VBUS (5 V from USB)), `VSYS` (VSYS (1.8–5.5 V in)), `GND8`, `3V3
 
 Props:
 - `code` — the Arduino sketch (a string of C++ source)
-- `usb` = 1 — USB cable; one of 1 (Plugged in (powered by the computer)), 0 (Unplugged: power it through VIN / 5V / 3V3 + GND)
+- `usb` = 0 — USB cable; one of 1 (Plugged in (powered by the computer)), 0 (Unplugged: power it through VIN / 5V / 3V3 + GND)
 
 Internally connected: `GND1` = `GND2` = `GND3` = `GND4` = `GND6` = `GND7` = `GND8` = `AGND`
 
@@ -214,7 +214,7 @@ Pins: `PB12`, `PB13`, `PB14`, `PB15`, `PA8`, `PA9` (PA9 / TX1), `PA10` (PA10 / R
 
 Props:
 - `code` — the Arduino sketch (a string of C++ source)
-- `usb` = 1 — USB cable; one of 1 (Plugged in (powered by the computer)), 0 (Unplugged: power it through VIN / 5V / 3V3 + GND)
+- `usb` = 0 — USB cable; one of 1 (Plugged in (powered by the computer)), 0 (Unplugged: power it through VIN / 5V / 3V3 + GND)
 
 Internally connected: `GND1` = `GND2` = `GND3`; `3V3` = `3V3A`
 
@@ -226,7 +226,7 @@ Pins: `VIN` (VIN (3.6–5.5 V)), `GND2` (GND), `3V3`, `D23`, `D22`, `D21`, `D20`
 
 Props:
 - `code` — the Arduino sketch (a string of C++ source)
-- `usb` = 1 — USB cable; one of 1 (Plugged in (powered by the computer)), 0 (Unplugged: power it through VIN / 5V / 3V3 + GND)
+- `usb` = 0 — USB cable; one of 1 (Plugged in (powered by the computer)), 0 (Unplugged: power it through VIN / 5V / 3V3 + GND)
 
 Internally connected: `GND1` = `GND2`
 

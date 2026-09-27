@@ -343,6 +343,7 @@ void loop() {
 export const ROBOT_EXAMPLES = [
   {
     id: 'robot-avoider',
+    selfPowered: true,
     name: 'Autonomous 4WD car (ESP32, obstacle avoiding)',
     description: 'ESP32 + 2 × L298N + 4 TT motors, 2 × 18650 with a TP4056 USB-C charger, power switch and 8.5 V boost. It cruises, and when the HC-SR04 sees an obstacle it backs up, looks both ways with the servo and turns to the clearer side. Drag the obstacle distance; plug in the USB-C cable to charge.',
     build: (): CircuitDoc => {
@@ -356,6 +357,7 @@ export const ROBOT_EXAMPLES = [
   },
   {
     id: 'robot-line',
+    selfPowered: true,
     name: 'Line-following 4WD car (ESP32, 3 IR sensors)',
     description: 'The same ESP32 4WD chassis (2 × L298N, 2 × 18650 + TP4056 charger, 8.5 V boost) following a black line with three TCRT5000 sensors, and stopping for obstacles with an HC-SR04. Lower a sensor’s surface reflectance to put the line under it.',
     build: (): CircuitDoc => {

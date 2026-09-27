@@ -356,10 +356,24 @@ export interface Example {
   description: string;
   /** heading the example is listed under in the Examples menu */
   group?: string;
+  /** the boards are powered from the circuit (batteries), not a USB cable */
+  selfPowered?: boolean;
   build: () => CircuitDoc;
 }
 
-export const EXAMPLES: Example[] = [
+/**
+ * Boards start unplugged when placed from the library. Examples show a working project, so their
+ * boards get the USB cable plugged in — except self-powered ones such as the robot cars.
+ */
+function plugBoards(doc: CircuitDoc): CircuitDoc {
+  for (const c of doc.components) {
+    const def = getDef(c.type);
+    if (def && 'usb' in def.defaultProps) c.props = { ...c.props, usb: 1 };
+  }
+  return doc;
+}
+
+const ALL_EXAMPLES: Example[] = [
   {
     id: 'blink',
     name: 'Blink an LED',
@@ -627,3 +641,5 @@ export const EXAMPLES: Example[] = [
   ...ROBOT_EXAMPLES.map((e) => ({ ...e, group: 'Robot cars' })),
   ...GATE_EXAMPLES.map((e) => ({ ...e, group: 'Logic gates' })),
 ];
+
+export const EXAMPLES: Example[] = ALL_EXAMPLES.map((e) => (e.selfPowered ? e : { ...e, build: () => plugBoards(e.build()) }));
