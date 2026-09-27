@@ -131,10 +131,15 @@ describe('advanced examples do what they say', () => {
   });
 
   it('decimal counter counts 0–9 and wraps', () => {
+    // The AND gate resets the counter the moment it reaches 10, so 10 exists for a few
+    // time steps (like the real chips' glitch); only count values held over two samples.
     const seen = new Set<number>();
+    let prev = -1;
     run('decade-counter', 6, {}, (_sim, snap) => {
       const id = Object.keys(snap.comps).find((k) => snap.comps[k]?.vars && 'nl' in (snap.comps[k]!.vars as object))!;
-      seen.add((snap.comps[id]!.vars as Record<string, number>).nl);
+      const nl = (snap.comps[id]!.vars as Record<string, number>).nl;
+      if (nl === prev) seen.add(nl);
+      prev = nl;
     });
     expect(Math.max(...seen)).toBe(9);
     expect([...seen].every((v) => v >= 0 && v <= 9)).toBe(true);
