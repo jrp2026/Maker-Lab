@@ -1,5 +1,5 @@
 import type { ComponentDef } from '../types';
-import { Avg } from '../../sim/builder';
+import { Avg, type SimWarning } from '../../sim/builder';
 import { DropShadow, formatSI, Label, Sheen, SLine, SText } from '../util';
 
 // ------------------------------------------------------------------ Multimeter
@@ -49,7 +49,7 @@ export const multimeter: ComponentDef = {
   summary: (p) => MODES[String(p.mode)]?.label ?? '',
   render: ({ props, sim }) => {
     const mode = String(props.mode);
-    const text = sim ? formatMeter(mode, sim.value) : '';
+    const text = sim ? (sim.open ? '- - - -' : formatMeter(mode, sim.value)) : '';
     const knob = { V: -40, A: 0, R: 40 }[mode] ?? 0;
     return (
       <g>
@@ -88,6 +88,13 @@ export const multimeter: ComponentDef = {
   build: (b, comp) => {
     const mode = String(comp.props.mode);
     const avg = new Avg();
+    // a meter measures between its two probes: with either one hanging free it reads nothing
+    const missing = [!b.connected('COM') && 'black COM probe', !b.connected('+') && 'red probe'].filter(Boolean);
+    if (missing.length) {
+      b.resistor('+', 'COM', 10e6);
+      const warn: SimWarning[] = [{ level: 'warn', message: `Connect the ${missing.join(' and the ')} — a meter measures between both probes.` }];
+      return { frame: () => ({ open: true }), warnings: () => warn };
+    }
     if (mode === 'A') {
       const r = b.resistor('+', 'COM', 0.01);
       return {
@@ -165,6 +172,12 @@ export const oscilloscope: ComponentDef = {
         {Array.from({ length: 9 }, (_, i) => (
           <line key={`h${i}`} y1={SCREEN.y + (i * SCREEN.h) / 8} y2={SCREEN.y + (i * SCREEN.h) / 8} x1={SCREEN.x} x2={SCREEN.x + SCREEN.w} stroke="#1f3b2a" strokeWidth={i === 4 ? 0.8 : 0.4} />
         ))}
+        {sim?.open && (
+          <g>
+            <Label x={SCREEN.x + SCREEN.w / 2} y={SCREEN.y + SCREEN.h / 2 - 2} size={7} fill="#ffb347" weight={700}>NO SIGNAL</Label>
+            <Label x={SCREEN.x + SCREEN.w / 2} y={SCREEN.y + SCREEN.h / 2 + 9} size={5} fill="#ffb347">connect {String(sim.open)}</Label>
+          </g>
+        )}
         {pts.length > 1 && <polyline points={pts.join(' ')} fill="none" stroke="#5dff8c" strokeWidth={1.2} strokeLinejoin="round" style={{ filter: 'drop-shadow(0 0 1.5px #3dff7a)' }} />}
         <Label x={SCREEN.x + 2} y={SCREEN.y + SCREEN.h + 12} size={5.5} fill="#333" anchor="start">
           {formatSI(Number(props.timeDiv), 's')}/div  {vd} V/div
@@ -200,6 +213,12 @@ export const oscilloscope: ComponentDef = {
   },
   build: (b, comp) => {
     const r = b.resistor('+', '-', 10e6);
+    // the trace is the voltage between the probe and the ground clip: both have to be connected
+    const missing = [!b.connected('+') && 'probe (+)', !b.connected('-') && 'ground clip (−)'].filter(Boolean);
+    if (missing.length) {
+      const warn: SimWarning[] = [{ level: 'warn', message: `Connect the scope's ${missing.join(' and ')}: it shows the voltage between the probe and ground, so both must be wired.` }];
+      return { frame: () => ({ trace: [], vpp: 0, open: missing.join(' + ') }), warnings: () => warn };
+    }
     const timeDiv = Number(comp.props.timeDiv) || 0.01;
     const window = timeDiv * 10;
     const BUF = 400;

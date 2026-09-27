@@ -1,7 +1,8 @@
 import type { ComponentDef, PinDef } from '../types';
 import { Label, SLine, SText } from '../util';
 import { UNO } from '../../mcu/boards';
-import { buildBoard } from './board';
+import { buildBoard, USB_FIELD, usbPlugged } from './board';
+import { UsbCable } from './usbCable';
 import { Shapes } from '../../ai/customPart';
 import type { PartShape } from '../../ai/spec';
 import { chip, circle, crystalCan, ecap, epoxy, mountHole, path, rect, shade, COL } from '../../parts/kit';
@@ -113,14 +114,16 @@ export const arduinoUno: ComponentDef = {
   bounds: { x: -14, y: 0, w: 294, h: 210 },
   pins: () => PINS,
   internalConnections: () => [['GND1', 'GND2', 'GND3'], ['A4', 'SDA'], ['A5', 'SCL']],
-  defaultProps: { code: BLINK_SKETCH },
+  defaultProps: { code: BLINK_SKETCH, usb: 1 },
+  fields: [USB_FIELD],
   mcu: { defaultCode: BLINK_SKETCH, board: UNO },
   thumbScale: 1,
   summary: () => 'ATmega328P · 16 MHz',
-  render: ({ sim }) => {
-    const running = !!sim;
+  render: ({ sim, props }) => {
+    const running = !!sim && !sim.off;
     return (
       <g>
+        {usbPlugged(props) && <UsbCable x={-14} y={46} side="left" size={22} />}
         <Shapes shapes={UNO_ART} />
         <Label x={50} y={42} size={4.4} fill="#e8f3f3">RESET</Label>
         <Label x={190} y={143} size={5.6} fill="#b9bdc3" weight={500}>ATMEGA328P-PU</Label>
@@ -177,9 +180,9 @@ export const arduinoUno: ComponentDef = {
       ))}
     </g>
   ),
-  build: (b) =>
+  build: (b, comp) =>
     buildBoard(b, UNO, [...TOP, ...BOTTOM].map(([id]) => id), 'GND1', [
       { pin: '5V', volts: 5, r: 0.05, warn: 0.45, short: 0.9 },
       { pin: '3V3', volts: 3.3, r: 0.5, warn: 0.1, short: 0.15 },
-    ]),
+    ], undefined, usbPlugged(comp.props)),
 };

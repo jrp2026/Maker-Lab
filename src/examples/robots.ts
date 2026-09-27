@@ -37,7 +37,7 @@ function link(a: ComponentInstance, ap: string, b: ComponentInstance, bp: string
   return { id: uid('w'), a: { comp: a.id, pin: ap }, b: { comp: b.id, pin: bp }, points, color };
 }
 
-const esp32 = (code: string): ComponentInstance => ({ id: 'esp', type: 'esp32-devkit', x: 0, y: 0, rot: 0, flip: false, props: { ...getDef('esp32-devkit')!.defaultProps, code } });
+const esp32 = (code: string): ComponentInstance => ({ id: 'esp', type: 'esp32-devkit', x: 0, y: 0, rot: 0, flip: false, props: { ...getDef('esp32-devkit')!.defaultProps, code, usb: 0 } }); // runs on the car's own battery: no USB cable
 
 // ESP32 pins used by both cars
 const PINS = { L_EN: 'D25', L_A: 'D26', L_B: 'D27', R_EN: 'D33', R_A: 'D32', R_B: 'D14', VBAT: 'D34' };

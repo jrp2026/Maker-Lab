@@ -6,7 +6,8 @@ import type { ReactNode } from 'react';
 import type { ComponentDef, PinDef } from '../types';
 import { Label, PinTip, SLine, SText } from '../util';
 import { ATMEGA328P, ATTINY85, BLUEPILL, ESP8266, GENERIC_MCU, MEGA, MICRO, NANO, PIC16F877A, PICO, PICO_W, TEENSY40, type BoardSpec } from '../../mcu/boards';
-import { buildBoard, type SupplyPin } from './board';
+import { buildBoard, USB_FIELD, usbPlugged, type SupplyPin } from './board';
+import { UsbCable } from './usbCable';
 import { Shapes } from '../../ai/customPart';
 import type { PartShape } from '../../ai/spec';
 import { COL, chip as chipArt, circle, epoxy, header as headerArt, pcb, rect, shade, text } from '../../parts/kit';
@@ -115,7 +116,6 @@ function makeBoard(c: BoardCfg): ComponentDef {
     ...c.bottom.map((id, i) => ({ id, x: i * 10, y: c.rowGap, kind: 'lead' as const, label: c.labels?.[id] ?? id })),
     ...(c.extra ?? []),
   ];
-  const ioPins = pins.map((p) => p.id).filter((id) => c.spec.pinIndex(id) >= 0);
   const short = c.short ?? ((id: string) => id);
   const { body } = c;
   const bounds = { x: Math.min(body.x, -5), y: Math.min(body.y, -5), w: 0, h: 0 };
@@ -140,12 +140,18 @@ function makeBoard(c: BoardCfg): ComponentDef {
     bounds,
     pins: () => pins,
     internalConnections: () => [...(c.groundGroups ?? []), ...(c.internal ?? [])],
-    defaultProps: { code: c.code },
+    defaultProps: c.power ? { code: c.code } : { code: c.code, usb: 1 },
+    fields: c.power ? undefined : [USB_FIELD],
     mcu: { defaultCode: c.code, board: c.spec },
     summary: () => c.summary,
     thumbScale: c.thumbScale,
-    render: ({ sim }) => (
+    render: ({ sim, props }) => (
       <g>
+        {c.usb && !c.power && usbPlugged(props) && (() => {
+          const u = c.usb!;
+          const left = u.x + u.w / 2 < body.x + body.w / 2;
+          return <UsbCable x={left ? u.x : u.x + u.w} y={u.y + u.h / 2} side={left ? 'left' : 'right'} size={Math.min(u.h, 22)} />;
+        })()}
         <Shapes shapes={art} />
         {c.dip && c.chip && (
           <g>
@@ -201,11 +207,7 @@ function makeBoard(c: BoardCfg): ComponentDef {
         {(c.extra ?? []).map((p) => <SLine key={p.id} pts={[[p.x, p.y], [p.x - 5, p.y]]} />)}
       </g>
     ),
-    build: (b) => {
-      const comp = buildBoard(b, c.spec, ioPins, c.gnd, c.supplies, c.power);
-      const frame = comp.frame!;
-      return { ...comp, frame: (dt) => ({ ...frame(dt), off: b.mcu ? !b.mcu.powerOk : false }) };
-    },
+    build: (b, comp) => buildBoard(b, c.spec, pins.map((p) => p.id), c.gnd, c.supplies, c.power, c.power ? true : usbPlugged(comp.props)),
   };
 }
 

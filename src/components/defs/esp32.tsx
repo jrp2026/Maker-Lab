@@ -1,7 +1,8 @@
 import type { ComponentDef, PinDef } from '../types';
 import { DropShadow, Label, PinTip, SLine, SText, Sheen } from '../util';
 import { ESP32 } from '../../mcu/boards';
-import { buildBoard } from './board';
+import { buildBoard, USB_FIELD, usbPlugged } from './board';
+import { UsbCable } from './usbCable';
 
 export const ESP32_BLINK = `// ESP32 blink + fade: GPIO2 is the blue on-board LED.
 // ESP32 pins are 3.3 V; analogRead() returns 0–4095.
@@ -27,7 +28,7 @@ const BOTTOM = ['EN', 'VP', 'VN', 'D34', 'D35', 'D32', 'D33', 'D25', 'D26', 'D27
 const X0 = 20, TOP_Y = 0, BOT_Y = 100;
 
 const LABEL: Record<string, string> = {
-  GND1: 'GND', GND2: 'GND', '3V3': '3.3 V out', VIN: 'VIN (5 V from USB)', EN: 'EN (reset)',
+  GND1: 'GND', GND2: 'GND', '3V3': '3.3 V out', VIN: 'VIN (5 V: from USB, or feed it here)', EN: 'EN (reset)',
   VP: 'GPIO36 / VP (input only, ADC)', VN: 'GPIO39 / VN (input only, ADC)', TX0: 'GPIO1 / TX0', RX0: 'GPIO3 / RX0', TX2: 'GPIO17 / TX2', RX2: 'GPIO16 / RX2',
   D34: 'GPIO34 (input only, ADC)', D35: 'GPIO35 (input only, ADC)', D21: 'GPIO21 / SDA', D22: 'GPIO22 / SCL', D25: 'GPIO25 / DAC1', D26: 'GPIO26 / DAC2', D2: 'GPIO2 / on-board LED',
 };
@@ -48,13 +49,15 @@ export const esp32: ComponentDef = {
   bounds: { x: -30, y: -6, w: 204, h: 112 },
   pins: () => PINS,
   internalConnections: () => [['GND1', 'GND2']],
-  defaultProps: { code: ESP32_BLINK },
+  defaultProps: { code: ESP32_BLINK, usb: 1 },
+  fields: [USB_FIELD],
   mcu: { defaultCode: ESP32_BLINK, board: ESP32 },
   summary: () => 'Dual-core 240 MHz · 3.3 V',
-  render: ({ sim }) => {
-    const running = !!sim;
+  render: ({ sim, props }) => {
+    const running = !!sim && !sim.off;
     return (
       <g>
+        {usbPlugged(props) && <UsbCable x={180} y={50} side="right" size={16} />}
         <DropShadow x={-30} y={4} w={204} h={92} rx={5} />
         <rect x={-30} y={4} width={204} height={92} rx={5} fill="#23252a" stroke="#101114" strokeWidth={1} />
         <Sheen x={-30} y={4} w={204} h={92} rx={5} />
@@ -125,9 +128,9 @@ export const esp32: ComponentDef = {
       ))}
     </g>
   ),
-  build: (b) =>
+  build: (b, comp) =>
     buildBoard(b, ESP32, [...TOP, ...BOTTOM], 'GND1', [
       { pin: '3V3', volts: 3.3, r: 0.3, warn: 0.4, short: 0.8 },
       { pin: 'VIN', volts: 4.7, r: 0.5, warn: 0.45, short: 1 },
-    ]),
+    ], undefined, usbPlugged(comp.props)),
 };
