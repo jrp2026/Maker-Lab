@@ -102,11 +102,15 @@ export function boxSymbol(pins: Pin[], title: string): Shape[] {
   const x0 = Math.min(...xs) - 6, x1 = Math.max(...xs) + 6;
   const top = Math.min(...ys), bottom = Math.max(...ys);
   const twoRows = top !== bottom;
-  const by = twoRows ? top + 8 : top - 30, bh = twoRows ? bottom - top - 16 : 20;
-  const out: Shape[] = [rect(x0, by, x1 - x0, bh, 'none', { strokeWidth: 1.3 }), text((x0 + x1) / 2, by + bh / 2 + 2, title, 5)];
+  const by = twoRows ? top + 5 : top - 30, bh = twoRows ? bottom - top - 10 : 22;
+  // the name as large as the box allows; each lead labelled with its pin name inside the box
+  const size = Math.max(3.5, Math.min(7, (x1 - x0 - 4) / (Math.max(1, title.length) * 0.62)));
+  const out: Shape[] = [rect(x0, by, x1 - x0, bh, 'none', { strokeWidth: 1.3 }), text((x0 + x1) / 2, by + bh / 2 + size * 0.36, title, size, '#222', 'middle', { weight: 700 })];
   for (const p of pins) {
-    const edge = p.y <= by ? by : by + bh;
+    const atTop = p.y <= by;
+    const edge = atTop ? by : by + bh;
     out.push(line(p.x, p.y, p.x, edge, '#1f3a5f', 1.2));
+    out.push(text(p.x, atTop ? edge + 3.4 : edge - 1.3, p.id.length > 4 ? p.id.slice(0, 4) : p.id, 2.8, '#222'));
   }
   return out;
 }

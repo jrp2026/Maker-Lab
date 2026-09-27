@@ -70,6 +70,14 @@ const logicInput: Raw = {
   ],
   props: [{ key: 'on', label: 'Output', type: 'select', default: 0, options: [{ value: 0, label: '0 (LOW)' }, { value: 1, label: '1 (HIGH)' }] }],
   toggle: 'on',
+  // schematic: an input flag pointing at its output, fed from VCC / GND
+  symbol: [
+    { type: 'polyline', points: [0, 10, 26, 10, 34, 20, 26, 30, 0, 30, 0, 10], fill: 'none', strokeWidth: 1.3 },
+    text(14, 22.5, 'IN', 7, '#1f3a5f', 'middle', { weight: 700 }),
+    { type: 'line', x1: 10, y1: 0, x2: 10, y2: 10, strokeWidth: 1.2 },
+    { type: 'line', x1: 10, y1: 30, x2: 10, y2: 40, strokeWidth: 1.2 },
+    { type: 'line', x1: 34, y1: 20, x2: 40, y2: 20, strokeWidth: 1.2 },
+  ],
   shapes: [
     lead(10, 0, 10, 6), lead(10, 34, 10, 40), lead(30, 20, 40, 20),
     rect(-2, 6, 32, 28, BODY, { rx: 4, stroke: EDGE, strokeWidth: 1.4, shadow: 0.6 }),
@@ -89,6 +97,14 @@ const logicProbe: Raw = {
     { id: 'IN', x: 0, y: 20, label: 'IN', kind: 'lead' },
     { id: 'VCC', x: 30, y: 0, label: 'VCC', kind: 'lead' },
     { id: 'GND', x: 30, y: 40, label: 'GND', kind: 'lead' },
+  ],
+  // schematic: a probe flag receiving its input
+  symbol: [
+    { type: 'polyline', points: [6, 20, 14, 10, 40, 10, 40, 30, 14, 30, 6, 20], fill: 'none', strokeWidth: 1.3 },
+    text(25, 22.5, 'PROBE', 5.5, '#1f3a5f', 'middle', { weight: 700 }),
+    { type: 'line', x1: 0, y1: 20, x2: 6, y2: 20, strokeWidth: 1.2 },
+    { type: 'line', x1: 30, y1: 0, x2: 30, y2: 10, strokeWidth: 1.2 },
+    { type: 'line', x1: 30, y1: 30, x2: 30, y2: 40, strokeWidth: 1.2 },
   ],
   shapes: [
     lead(0, 20, 14, 20), lead(30, 0, 30, 6), lead(30, 34, 30, 40),

@@ -5,7 +5,7 @@ import { compileExpr, type Compiled, type ExprScope } from './expr';
 import { BehaviouralCurrent, BehaviouralResistor, BehaviouralSource, Bjt, Capacitor, Comparator, Diode, Inductor, Mosfet, OpAmp, Resistor, Source, Transformer, type Prim } from '../sim/solver';
 import type { SimBuilder, SimWarning } from '../sim/builder';
 import type { ComponentInstance } from '../model/types';
-import { PinTip, SLine, SText, clamp01, formatSI, ledParams } from '../components/util';
+import { PinTip, SLine, clamp01, formatSI, ledParams } from '../components/util';
 
 /** the bare SVG element for a shape, with the given paint */
 function geometry(s: PartShape, paint: Record<string, unknown>): ReactNode {
@@ -231,14 +231,47 @@ export function defFromSpec(spec: CustomPartSpec, ext?: PartExt): ComponentDef {
   const defaultProps = { ...Object.fromEntries(spec.props.map((p) => [p.key, p.default])), ...(ext?.defaultProps ?? {}) };
   const ai = spec.origin !== 'builtin';
 
+  /** Generic symbol for parts without their own: a named box, every lead labelled with its pin. */
   const autoSymbol = () => {
     const xs = spec.pins.map((p) => p.x), ys = spec.pins.map((p) => p.y);
-    const bx = Math.min(...xs) - 5, by = Math.min(...ys) - 25, bw = Math.max(...xs) - Math.min(...xs) + 10;
+    const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+    const oneRow = maxY - minY < 1;
+    // one row of pins: box above them; pins around a module: box inside the ring of pins
+    const box = oneRow
+      ? { x: minX - 6, y: minY - 26, w: Math.max(maxX - minX + 12, 40), h: 20 }
+      : { x: minX + 6, y: minY + 6, w: Math.max(maxX - minX - 12, 24), h: Math.max(maxY - minY - 12, 16) };
+    if (oneRow && box.w > maxX - minX + 12) box.x -= (box.w - (maxX - minX + 12)) / 2;
+    const title = spec.name.replace(/\s*[(—–].*$/, '').trim() || spec.name;
+    const size = Math.max(3.2, Math.min(7, (box.w - 4) / (title.length * 0.62)));
+    const fit = Math.max(4, Math.floor((box.w - 3) / (size * 0.62)));
+    const edge = (p: { x: number; y: number }) => {
+      const d = [
+        { e: [p.x, box.y] as const, d: Math.abs(p.y - box.y), top: true },
+        { e: [p.x, box.y + box.h] as const, d: Math.abs(p.y - box.y - box.h), top: false },
+        { e: [box.x, p.y] as const, d: Math.abs(p.x - box.x), top: false },
+        { e: [box.x + box.w, p.y] as const, d: Math.abs(p.x - box.x - box.w), top: false },
+      ];
+      return d.reduce((a, c) => (c.d < a.d ? c : a));
+    };
     return (
       <g>
-        <rect x={bx} y={by} width={Math.max(bw, 30)} height={18} rx={2} fill="#fff" stroke="#1f3a5f" strokeWidth={1.3} />
-        <SText x={bx + Math.max(bw, 30) / 2} y={by + 11} size={5}>{spec.name.slice(0, 18)}</SText>
-        {spec.pins.map((p) => <SLine key={p.id} pts={[[p.x, p.y], [p.x, by + 18]]} />)}
+        <rect x={box.x} y={box.y} width={box.w} height={box.h} rx={2} fill="#fff" stroke="#1f3a5f" strokeWidth={1.3} />
+        <text x={box.x + box.w / 2} y={box.y + box.h / 2 + size * 0.36} fontSize={size} fontWeight={700} textAnchor="middle" fill="#1f3a5f" fontFamily="'JetBrains Mono', ui-monospace, monospace">
+          {title.length > fit ? `${title.slice(0, fit - 1)}…` : title}
+        </text>
+        {spec.pins.map((p) => {
+          const e = edge(p);
+          const vertical = e.e[0] === p.x;
+          const inside = vertical ? (e.top ? 3.6 : -1.4) : 0;
+          return (
+            <g key={p.id}>
+              <SLine pts={[[p.x, p.y], [e.e[0], e.e[1]]]} />
+              <text x={vertical ? p.x : e.e[0] + (e.e[0] === box.x ? 1.5 : -1.5)} y={vertical ? e.e[1] + inside : p.y + 1.1} fontSize={3} textAnchor={vertical ? 'middle' : e.e[0] === box.x ? 'start' : 'end'} fill="#1f3a5f" fontFamily="'JetBrains Mono', ui-monospace, monospace">
+                {p.id.length > 5 ? p.id.slice(0, 5) : p.id}
+              </text>
+            </g>
+          );
+        })}
       </g>
     );
   };

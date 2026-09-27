@@ -175,14 +175,29 @@ export const oscilloscope: ComponentDef = {
       </g>
     );
   },
-  schematic: () => (
-    <g>
-      <rect x={20} y={20} width={100} height={70} rx={4} fill="none" stroke="#1f3a5f" strokeWidth={1.4} />
-      <path d="M30 55 q10 -25 20 0 t20 0 t20 0 t20 0" fill="none" stroke="#1f3a5f" strokeWidth={1.2} />
-      <SLine pts={[[120, 40], [140, 40]]} />
-      <SLine pts={[[120, 70], [140, 70]]} />
-    </g>
-  ),
+  schematic: ({ props, sim }) => {
+    // instrument box: a graticule screen (showing the live trace while simulating) and labelled inputs
+    const S = { x: 30, y: 26, w: 80, h: 50 };
+    const vd = Number(props.voltDiv) || 1;
+    const trace: number[] = sim?.trace ?? [];
+    const pts = trace.length > 1
+      ? trace.map((v, i) => `${(S.x + (i / (trace.length - 1)) * S.w).toFixed(1)},${Math.max(S.y, Math.min(S.y + S.h, S.y + S.h / 2 - (v / vd) * (S.h / 8))).toFixed(1)}`).join(' ')
+      : `${S.x},${S.y + S.h / 2} ${S.x + S.w},${S.y + S.h / 2}`;
+    return (
+      <g>
+        <rect x={18} y={14} width={104} height={82} rx={5} fill="#fff" stroke="#1f3a5f" strokeWidth={1.4} />
+        <rect x={S.x} y={S.y} width={S.w} height={S.h} fill="none" stroke="#1f3a5f" strokeWidth={1} />
+        {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => <line key={`v${i}`} x1={S.x + (i * S.w) / 10} x2={S.x + (i * S.w) / 10} y1={S.y} y2={S.y + S.h} stroke="#1f3a5f" strokeWidth={0.3} opacity={0.45} />)}
+        {[1, 2, 3, 4, 5, 6, 7].map((i) => <line key={`h${i}`} y1={S.y + (i * S.h) / 8} y2={S.y + (i * S.h) / 8} x1={S.x} x2={S.x + S.w} stroke="#1f3a5f" strokeWidth={0.3} opacity={0.45} />)}
+        <polyline points={pts} fill="none" stroke="#1f3a5f" strokeWidth={1.2} strokeLinejoin="round" />
+        <SText x={70} y={89} size={8}>SCOPE</SText>
+        <SText x={116} y={43} size={7} anchor="end">IN</SText>
+        <SText x={116} y={73} size={7} anchor="end">⏚</SText>
+        <SLine pts={[[122, 40], [140, 40]]} />
+        <SLine pts={[[122, 70], [140, 70]]} />
+      </g>
+    );
+  },
   build: (b, comp) => {
     const r = b.resistor('+', '-', 10e6);
     const timeDiv = Number(comp.props.timeDiv) || 0.01;

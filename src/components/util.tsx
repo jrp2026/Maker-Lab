@@ -115,7 +115,7 @@ export function SLine({ pts, w = 1.4 }: { pts: [number, number][]; w?: number })
   return <polyline points={pts.map((p) => p.join(',')).join(' ')} fill="none" stroke={SCH} strokeWidth={w} strokeLinejoin="round" strokeLinecap="round" />;
 }
 
-export function SText({ x, y, children, size = 6, anchor = 'middle' }: { x: number; y: number; children: ReactNode; size?: number; anchor?: 'start' | 'middle' | 'end' }) {
+export function SText({ x, y, children, size = 8, anchor = 'middle' }: { x: number; y: number; children: ReactNode; size?: number; anchor?: 'start' | 'middle' | 'end' }) {
   return (
     <text x={x} y={y} fontSize={size} fill={SCH} textAnchor={anchor} fontFamily="'JetBrains Mono', ui-monospace, monospace" style={{ userSelect: 'none', pointerEvents: 'none' }}>
       {children}
