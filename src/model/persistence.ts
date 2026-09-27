@@ -1,4 +1,4 @@
-import type { CircuitDoc } from './types';
+import type { CircuitDoc, PropValue } from './types';
 import { getDef } from '../components/registry';
 import { adoptDocParts } from '../ai/library';
 import { storageKey } from './storageKey';
@@ -22,6 +22,16 @@ function safeSet(key: string, value: string) {
 }
 
 /** Validate & normalise untrusted JSON into a circuit document. */
+/**
+ * Boards saved before the "USB cable" setting existed were always powered: keep them plugged in
+ * even where the default is now unplugged (the ESP32), so old circuits and share links still run.
+ */
+function withLegacyUsb(defaults: Record<string, PropValue>, saved: Record<string, PropValue>): Record<string, PropValue> {
+  const props = { ...defaults, ...saved };
+  if ('usb' in defaults && !('usb' in saved)) props.usb = 1;
+  return props;
+}
+
 export function parseDoc(json: unknown): CircuitDoc {
   const d = json as Partial<CircuitDoc>;
   if (!d || typeof d !== 'object' || !Array.isArray(d.components) || !Array.isArray(d.wires)) throw new Error('Not a circuit file');
@@ -38,7 +48,7 @@ export function parseDoc(json: unknown): CircuitDoc {
         y: Number(c.y) || 0,
         rot: ([0, 1, 2, 3].includes(Number(c.rot)) ? Number(c.rot) : 0) as 0 | 1 | 2 | 3,
         flip: !!c.flip,
-        props: { ...def.defaultProps, ...(c.props && typeof c.props === 'object' ? c.props : {}) },
+        props: withLegacyUsb(def.defaultProps, c.props && typeof c.props === 'object' ? c.props : {}),
       };
     });
   const ids = new Set(components.map((c) => c.id));

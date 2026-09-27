@@ -49,7 +49,8 @@ export const esp32: ComponentDef = {
   bounds: { x: -30, y: -6, w: 204, h: 112 },
   pins: () => PINS,
   internalConnections: () => [['GND1', 'GND2']],
-  defaultProps: { code: ESP32_BLINK, usb: 1 },
+  // unplugged by default: power it through VIN (5 V) or 3V3, or plug the USB cable in (inspector)
+  defaultProps: { code: ESP32_BLINK, usb: 0 },
   fields: [USB_FIELD],
   mcu: { defaultCode: ESP32_BLINK, board: ESP32 },
   summary: () => 'Dual-core 240 MHz · 3.3 V',

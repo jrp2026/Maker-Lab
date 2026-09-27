@@ -137,7 +137,7 @@ Pins: `D23` (GPIO23), `D22` (GPIO22 / SCL), `TX0` (GPIO1 / TX0), `RX0` (GPIO3 / 
 
 Props:
 - `code` — the Arduino sketch (a string of C++ source)
-- `usb` = 1 — USB cable; one of 1 (Plugged in (powered by the computer)), 0 (Unplugged: power it through VIN / 5V / 3V3 + GND)
+- `usb` = 0 — USB cable; one of 1 (Plugged in (powered by the computer)), 0 (Unplugged: power it through VIN / 5V / 3V3 + GND)
 
 Internally connected: `GND1` = `GND2`
 

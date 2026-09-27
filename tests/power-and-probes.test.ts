@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { part, simulate, wire } from './helpers';
+import { getDef } from '../src/components/registry';
+import { parseDoc } from '../src/model/persistence';
 
 
 /** run a board and record whether its built-in LED ever turned on and whether it reported "off" */
@@ -18,6 +20,14 @@ describe('boards need power when the USB cable is unplugged', () => {
     const r = runBoard([part('u', 'arduino-uno')], [], 'u');
     expect(r.off).toBe(false);
     expect(r.blinked).toBe(true);
+  });
+
+  it('a new ESP32 starts unplugged; one from a circuit saved before the setting stays plugged in', () => {
+    expect(getDef('esp32-devkit')!.defaultProps.usb).toBe(0);
+    expect(getDef('arduino-uno')!.defaultProps.usb).toBe(1);
+    const esp = { id: 'e', type: 'esp32-devkit', x: 0, y: 0, rot: 0, flip: false };
+    expect(parseDoc({ version: 1, name: 'old', components: [{ ...esp, props: { code: '' } }], wires: [] }).components[0].props.usb).toBe(1);
+    expect(parseDoc({ version: 1, name: 'new', components: [{ ...esp, props: { code: '', usb: 0 } }], wires: [] }).components[0].props.usb).toBe(0);
   });
 
   it('unplugged and unwired, the ESP32 and the Uno stay off and say why', () => {

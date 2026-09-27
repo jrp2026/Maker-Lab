@@ -13,6 +13,10 @@ describe('every programmable board runs its default sketch', () => {
     if (CHIP_POWER[type]) {
       comps.push(part('b', 'battery', { kind: 'AA4' }));
       wires.push(wire('b.+', `u.${CHIP_POWER[type][0]}`), wire('b.-', `u.${CHIP_POWER[type][1]}`));
+    } else if (def.defaultProps.usb === 0) {
+      // boards that start unplugged (ESP32): 5 V from a USB breakout into VIN
+      comps.push(part('p', 'usb-breakout'));
+      wires.push(wire('p.VBUS', 'u.VIN'), wire('p.GND', 'u.GND1'));
     }
     const seen = new Set<number>();
     const code = String(def.defaultProps.code);

@@ -42,6 +42,11 @@ unknown is silently dropped when the file is loaded, so a single typo loses a pa
   `5` and `"5"` are different).
 - Microcontroller boards (`arduino-uno`, `arduino-nano`, `esp32-devkit`, `pico`, …) take their program
   in `props.code` as one string of Arduino C++ (newlines as `\n` in JSON). See "Sketches" below.
+- Boards have a USB cable setting, `props.usb`: `1` = plugged in (the computer powers the board),
+  `0` = unplugged (the board is off until you wire power: 5 V to the ESP32's `VIN` or 3.3 V to
+  `3V3`, 7–12 V to an Uno's `VIN`, plus `GND`). Set it explicitly; if you leave it out the board is
+  treated as plugged in. A battery-powered project (a robot car) should use `"usb": 0` and wire the
+  battery / regulator to `VIN` and `GND`.
 
 ### Wires
 

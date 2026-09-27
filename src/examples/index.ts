@@ -552,7 +552,7 @@ export const EXAMPLES: Example[] = [
     name: 'ESP32 + I2C LCD + ADC',
     description: 'ESP32 DevKit reads a potentiometer with its 12-bit ADC and shows the value on an I2C LCD (SDA 21, SCL 22).',
     build: () => {
-      const esp: ComponentInstance = { id: 'esp', type: 'esp32-devkit', x: ESP_AT.x, y: ESP_AT.y, rot: 0, flip: false, props: { ...getDef('esp32-devkit')!.defaultProps, code: ESP32_LCD } };
+      const esp: ComponentInstance = { id: 'esp', type: 'esp32-devkit', x: ESP_AT.x, y: ESP_AT.y, rot: 0, flip: false, props: { ...getDef('esp32-devkit')!.defaultProps, code: ESP32_LCD, usb: 1 } }; // powered over its USB cable
       const lcd = place('lcd-i2c', 'GND', { x: 330, y: 150 });
       const pot = place('potentiometer', '1', { x: 90, y: 260 });
       return {

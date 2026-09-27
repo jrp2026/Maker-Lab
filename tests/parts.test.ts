@@ -88,7 +88,7 @@ describe('LCD', () => {
       void loop(){}`;
     const doc: CircuitDoc = {
       version: 1, name: 't',
-      components: [comp('esp', 'esp32-devkit', 0, 0, { code }), comp('lcd', 'lcd-i2c', 0, 400)],
+      components: [comp('esp', 'esp32-devkit', 0, 0, { code, usb: 1 }), comp('lcd', 'lcd-i2c', 0, 400)],
       wires: [w('lcd.GND', 'esp.GND1'), w('lcd.VCC', 'esp.VIN'), w('lcd.SDA', 'esp.D21'), w('lcd.SCL', 'esp.D22')],
     };
     const { snap } = run(doc, 0.5);
@@ -104,7 +104,7 @@ describe('ESP32', () => {
       void loop(){ Serial.println(analogRead(34)); delay(100); }`;
     const doc: CircuitDoc = {
       version: 1, name: 't',
-      components: [comp('esp', 'esp32-devkit', 0, 0, { code }), comp('r', 'resistor', 0, 300, { resistance: 100 }), comp('l', 'led', 0, 400), comp('pot', 'potentiometer', 200, 300, { position: 0.5 })],
+      components: [comp('esp', 'esp32-devkit', 0, 0, { code, usb: 1 }), comp('r', 'resistor', 0, 300, { resistance: 100 }), comp('l', 'led', 0, 400), comp('pot', 'potentiometer', 200, 300, { position: 0.5 })],
       wires: [w('esp.D4', 'r.1'), w('r.2', 'l.A'), w('l.K', 'esp.GND1'), w('pot.1', 'esp.GND2'), w('pot.2', 'esp.3V3'), w('pot.W', 'esp.D34')],
     };
     const { sim, snap } = run(doc, 0.4);
@@ -122,7 +122,7 @@ describe('ESP32', () => {
       void loop(){ Serial.println(n); delay(50); }`;
     const doc: CircuitDoc = {
       version: 1, name: 't',
-      components: [comp('esp', 'esp32-devkit', 0, 0, { code }), comp('b', 'pushbutton', 0, 300)],
+      components: [comp('esp', 'esp32-devkit', 0, 0, { code, usb: 1 }), comp('b', 'pushbutton', 0, 300)],
       wires: [w('b.1a', 'esp.D15'), w('b.2a', 'esp.GND1')],
     };
     const sim = new Simulator(doc);

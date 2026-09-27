@@ -113,7 +113,8 @@ npm run build      # static site in dist/
 - **Error flags** – short circuits, LED over-current and burn-out, reversed electrolytics,
   resistor over-power, overloaded Arduino pins / 5 V rail, missing ground, compile/runtime errors.
 - **Board power** – dev boards (Uno, Nano, Mega, ESP32, Pico…) have a *USB cable* setting. Plugged
-  in (the default, drawn as a cable) they are powered by the computer; unplugged they stay off
+  in (drawn as a cable; the default except on the ESP32, which starts unplugged) they are powered
+  by the computer; unplugged they stay off
   until VIN / VBUS gets 5–12 V through the on-board regulator, or the 5V / 3V3 rail is fed
   directly, with GND connected. The robot cars run unplugged from their own batteries.
 - **Probes** – the multimeter and the oscilloscope measure between both of their leads: with the
