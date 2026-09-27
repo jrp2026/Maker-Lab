@@ -776,33 +776,4 @@ export const ADVANCED_EXAMPLES = [
       return doc('Decimal counter', [p, t, r1, r2, c, ctr, and, dec, disp, ...sr], wires);
     },
   },
-  {
-    id: 'logic-gates',
-    name: 'Logic gates playground (no code)',
-    description: 'Two clickable inputs A and B feed NOT, AND, OR, NAND, NOR and XOR gates; a probe on each output shows 1 or 0. Click the inputs while simulating and check the truth tables.',
-    build: (): CircuitDoc => {
-      const p = place('usb-breakout', 'VBUS', { x: -200, y: -120 });
-      const inA = place('logic-input', 'OUT', { x: 0, y: 40 });
-      const inB = place('logic-input', 'OUT', { x: 0, y: 200 });
-      const types = ['gate-not', 'gate-and', 'gate-or', 'gate-nand', 'gate-nor', 'gate-xor'];
-      const gates = types.map((t, i) => place(t, 'Y', { x: 250, y: -20 + i * 70 }));
-      const probes = gates.map((_, i) => place('logic-probe', 'IN', { x: 310, y: -20 + i * 70 }));
-      const V = (x: ComponentInstance, lane: number) => link(p, 'VBUS', x, 'VCC', RED, lane);
-      const G = (x: ComponentInstance, lane: number) => link(p, 'GND', x, 'GND', BLACK, lane);
-      const wires: Wire[] = [V(inA, -80), G(inA, 440), V(inB, -80), G(inB, 440)];
-      gates.forEach((g, i) => {
-        wires.push(V(g, -80), G(g, 440), V(probes[i], -80), G(probes[i], 440), link(g, 'Y', probes[i], 'IN', GREEN));
-        wires.push(link(inA, 'OUT', g, 'A', BLUE, undefined));
-        if (types[i] !== 'gate-not') wires.push(link(inB, 'OUT', g, 'B', ORANGE, undefined));
-      });
-      // tidy the input fan-out: route each input through its own vertical bus
-      for (const w of wires) {
-        const from = w.a.comp === inA.id ? 120 : w.a.comp === inB.id ? 140 : null;
-        if (from === null || w.b.pin === 'IN') continue;
-        const pa = pinAt(w.a.comp === inA.id ? inA : inB, 'OUT'), pb = pinAt(gates.find((g) => g.id === w.b.comp)!, w.b.pin);
-        w.points = [{ x: from, y: pa.y }, { x: from, y: pb.y }];
-      }
-      return doc('Logic gates', [p, inA, inB, ...gates, ...probes], wires);
-    },
-  },
 ];

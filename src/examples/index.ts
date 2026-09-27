@@ -6,6 +6,7 @@ import { validateSpec } from '../ai/spec';
 import { registerSpec } from '../ai/library';
 import { DEVICE_EXAMPLES } from './devices';
 import { ADVANCED_EXAMPLES } from './advanced';
+import { GATE_EXAMPLES } from './gates';
 
 // ------------------------------------------------------------------ placement helpers
 
@@ -621,4 +622,5 @@ export const EXAMPLES: Example[] = [
   },
   ...DEVICE_EXAMPLES.map((e) => ({ ...e, group: 'Modules & ICs' })),
   ...ADVANCED_EXAMPLES.map((e) => ({ ...e, group: 'Advanced projects' })),
+  ...GATE_EXAMPLES.map((e) => ({ ...e, group: 'Logic gates' })),
 ];
