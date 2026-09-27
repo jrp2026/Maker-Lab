@@ -80,6 +80,10 @@ function evalCondition(text: string, macros: Map<string, Token[]>): boolean {
 export function tokenize(src: string, predefined: Record<string, number> = {}): Token[] {
   const raw: Token[] = [];
   const macros = new Map<string, Token[]>();
+  /** function-like macros: #define SQ(x) ((x)*(x)) */
+  const fnMacros = new Map<string, { params: string[]; body: Token[] }>();
+  /** names the sketch declares as class/struct: their `Name::member` qualifiers are kept */
+  const userTypes = new Set([...src.matchAll(/\b(?:class|struct)\s+([A-Za-z_]\w*)/g)].map((m) => m[1]));
   for (const [k, v] of Object.entries(predefined)) macros.set(k, [{ k: 'num', v: String(v), n: v, line: 0, col: 0 }]);
   /** conditional-compilation stack: is this level active, has a branch been taken */
   const conds: { active: boolean; taken: boolean; outer: boolean }[] = [];
@@ -164,10 +168,22 @@ export function tokenize(src: string, predefined: Record<string, number> = {}): 
       if (dir === 'define') {
         const dm = /^(\w+)(\(?)(.*)$/.exec(rest);
         if (!dm) throw new CompileError('malformed #define', l0, c0);
-        if (dm[2] === '(') throw new CompileError('function-like macros are not supported; use a function instead', l0, c0);
-        macros.set(dm[1], lexLine(dm[3].trim(), l0, c0));
+        if (dm[2] === '(') {
+          // function-like macro: NAME(a, b) body
+          const close = dm[3].indexOf(')');
+          if (close < 0) throw new CompileError(`missing ')' in the parameter list of macro '${dm[1]}'`, l0, c0);
+          const params = dm[3].slice(0, close).split(',').map((x) => x.trim()).filter(Boolean);
+          const body = dm[3].slice(close + 1).trim();
+          if (/(^|[^'"])#/.test(body)) throw new CompileError(`the # and ## macro operators are not supported (in macro '${dm[1]}')`, l0, c0);
+          fnMacros.set(dm[1], { params, body: lexLine(body, l0, c0) });
+          macros.delete(dm[1]);
+        } else {
+          macros.set(dm[1], lexLine(dm[3].trim(), l0, c0));
+          fnMacros.delete(dm[1]);
+        }
       } else if (dir === 'undef') {
         macros.delete(rest.trim());
+        fnMacros.delete(rest.trim());
       } else if (dir === 'error') {
         throw new CompileError(`#error ${rest}`, l0, c0);
       }
@@ -242,25 +258,67 @@ export function tokenize(src: string, predefined: Record<string, number> = {}): 
     raw.push({ k: 'op', v: op, line: l0, col: c0 });
   }
 
-  // macro expansion
-  const out: Token[] = [];
-  const IGNORED = new Set(['PROGMEM', 'IRAM_ATTR', 'ICACHE_RAM_ATTR', 'DRAM_ATTR']);
-  const expand = (t: Token, depth: number) => {
-    if (t.k === 'id' && IGNORED.has(t.v)) return;
-    if (t.k === 'id' && macros.has(t.v) && depth < 16) {
-      for (const mt of macros.get(t.v)!) expand({ ...mt, line: t.line, col: t.col }, depth + 1);
-    } else out.push(t);
-  };
+  // qualifiers: Class::NAME / std::x → NAME (the names are global here), except the sketch's own
+  // classes, whose `Name::method` definitions the parser needs
+  const flat: Token[] = [];
   for (let k = 0; k < raw.length; k++) {
     const t = raw[k];
-    // Class::NAME / std::x → NAME (qualifiers are dropped; the names are global here)
-    if (t.k === 'id' && raw[k + 1]?.k === 'op' && raw[k + 1].v === '::') {
+    if (t.k === 'id' && raw[k + 1]?.k === 'op' && raw[k + 1].v === '::' && !userTypes.has(t.v)) {
       k++;
       continue;
     }
-    if (t.k === 'op' && t.v === '::') continue;
-    expand(t, 0);
+    if (t.k === 'op' && t.v === '::' && !(raw[k - 1]?.k === 'id' && userTypes.has(raw[k - 1].v))) continue;
+    flat.push(t);
   }
+
+  // macro expansion
+  const out: Token[] = [];
+  const IGNORED = new Set(['PROGMEM', 'IRAM_ATTR', 'ICACHE_RAM_ATTR', 'DRAM_ATTR']);
+  const isOp = (t: Token | undefined, v: string) => !!t && t.k === 'op' && t.v === v;
+  const expandSeq = (toks: Token[], depth: number, sink: Token[]) => {
+    for (let k = 0; k < toks.length; k++) {
+      const t = toks[k];
+      if (t.k === 'id' && IGNORED.has(t.v)) continue;
+      if (t.k === 'id' && depth < 16 && macros.has(t.v)) {
+        expandSeq(macros.get(t.v)!.map((mt) => ({ ...mt, line: t.line, col: t.col })), depth + 1, sink);
+        continue;
+      }
+      const fm = t.k === 'id' && depth < 16 ? fnMacros.get(t.v) : undefined;
+      if (fm && isOp(toks[k + 1], '(')) {
+        // collect the arguments: split on commas at the outer parenthesis level
+        const args: Token[][] = [[]];
+        let lvl = 0, j = k + 2;
+        for (; j < toks.length; j++) {
+          const a = toks[j];
+          if (isOp(a, '(') || isOp(a, '[') || isOp(a, '{')) lvl++;
+          else if (isOp(a, ')') || isOp(a, ']') || isOp(a, '}')) {
+            if (lvl === 0) break;
+            lvl--;
+          } else if (isOp(a, ',') && lvl === 0) {
+            args.push([]);
+            continue;
+          }
+          args[args.length - 1].push(a);
+        }
+        if (j >= toks.length) throw new CompileError(`unterminated call to macro '${t.v}'`, t.line, t.col);
+        const given = args.length === 1 && !args[0].length ? [] : args;
+        if (given.length !== fm.params.length) {
+          throw new CompileError(`macro '${t.v}' takes ${fm.params.length} argument${fm.params.length === 1 ? '' : 's'}, but ${given.length} given`, t.line, t.col);
+        }
+        const body: Token[] = [];
+        for (const bt of fm.body) {
+          const pi = bt.k === 'id' ? fm.params.indexOf(bt.v) : -1;
+          if (pi >= 0) body.push(...given[pi]);
+          else body.push({ ...bt, line: t.line, col: t.col });
+        }
+        expandSeq(body, depth + 1, sink);
+        k = j;
+        continue;
+      }
+      sink.push(t);
+    }
+  };
+  expandSeq(flat, 0, out);
   if (conds.length) throw new CompileError('unterminated #if', line, col);
   out.push({ k: 'eof', v: '', line, col });
   return out;

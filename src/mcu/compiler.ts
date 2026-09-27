@@ -22,6 +22,8 @@ interface Type {
   cls?: string;
   /** reference parameter / variable (int &x) */
   ref?: boolean;
+  /** `auto`: the type comes from the initializer */
+  auto?: boolean;
 }
 
 const isPtr = (t: Type) => !!t.ptr && !t.dims;
@@ -90,12 +92,25 @@ type Stmt =
   | { k: 'break' }
   | { k: 'continue' }
   | { k: 'return'; e?: Expr; tok: Token }
+  | { k: 'forin'; d: Declarator; arr: Expr; body: Stmt; tok: Token }
   | { k: 'empty' };
 
+interface Param {
+  name: string;
+  type: Type;
+  /** default argument: `int b = 10` */
+  def?: Expr;
+}
+
 interface FuncDef {
+  /** member function / constructor of this class */
+  owner?: string;
+  isCtor?: boolean;
+  /** constructor initializer list `: pin(p), count(0)` */
+  inits?: { name: string; args: Expr[]; tok: Token }[];
   name: string;
   ret: Type;
-  params: { name: string; type: Type }[];
+  params: Param[];
   body: Stmt;
   tok: Token;
 }
@@ -103,14 +118,13 @@ interface FuncDef {
 // ---------------------------------------------------------------- parser
 
 const TYPE_WORDS = new Set([
-  'void', 'bool', 'boolean', 'char', 'byte', 'int', 'short', 'long', 'float', 'double', 'unsigned', 'signed', 'String', 'word',
+  'auto', 'void', 'bool', 'boolean', 'char', 'byte', 'int', 'short', 'long', 'float', 'double', 'unsigned', 'signed', 'String', 'word',
   'uint8_t', 'int8_t', 'uint16_t', 'int16_t', 'uint32_t', 'int32_t', 'uint64_t', 'int64_t', 'size_t',
 ]);
-const QUALIFIERS = new Set(['const', 'static', 'volatile', 'inline', 'constexpr', 'register', 'extern']);
+const QUALIFIERS = new Set(['const', 'static', 'volatile', 'inline', 'constexpr', 'register', 'extern', 'virtual', 'explicit']);
 /** Arduino library classes the simulator implements (see LIBS below). */
 const isClass = (name: string) => Object.prototype.hasOwnProperty.call(LIBS, name) && !GLOBAL_OBJECTS[name];
 const UNSUPPORTED_TYPES: Record<string, string> = {
-  class: 'Defining your own classes is not supported in this simulator yet — use a struct plus functions.',
   union: 'union is not supported in this simulator.',
 };
 
@@ -129,6 +143,53 @@ class Parser {
   consts = new Map<string, number>();
   structs = new Map<string, StructField[]>(Object.entries(BUILTIN_STRUCTS()));
   typedefs = new Map<string, Type>();
+  /** default arguments given in prototypes (`int f(int a, int b = 10);`), by name/param count */
+  protoDefaults = new Map<string, Param[]>();
+  /** the sketch's own classes (and structs with member functions) */
+  classes = new Map<string, { base?: string }>();
+  /** member functions and constructors, defined in the class or as `Class::name(…) {…}` */
+  methods: FuncDef[] = [];
+  /** declarations found inside a class body that belong at global scope (enums) */
+  pendingGlobals: Stmt[] = [];
+
+  /** `struct {`, `struct Name {`, `class Name : public Base {` */
+  isRecordDef(): boolean {
+    if (!this.is('struct') && !this.is('class')) return false;
+    return this.is('{', this.peek()) || this.is('{', this.peek(2)) || this.is(':', this.peek(2));
+  }
+
+  /** after a member function's `)`: const / override / noexcept / final */
+  methodTail() {
+    while (this.eat('const') || this.eat('override') || this.eat('noexcept') || this.eat('final'));
+  }
+
+  /** constructor initializer list: `: pin(p), count{0}` */
+  parseInits(): { name: string; args: Expr[]; tok: Token }[] {
+    const inits: { name: string; args: Expr[]; tok: Token }[] = [];
+    if (!this.eat(':')) return inits;
+    do {
+      const nt = this.ident();
+      const close = this.is('{') ? '}' : ')';
+      if (!this.eat('(') && !this.eat('{')) this.err(`expected '(' after '${nt.v}' in the initializer list`);
+      const args: Expr[] = [];
+      if (!this.is(close)) do args.push(this.parseAssign()); while (this.eat(','));
+      this.expect(close);
+      inits.push({ name: nt.v, args, tok: nt });
+    } while (this.eat(','));
+    return inits;
+  }
+
+  /** a member function body, or `;` for a declaration defined later as Class::name */
+  methodBody(): Stmt | null {
+    if (this.eat(';')) return null;
+    if (this.eat('=')) {
+      // pure virtual `= 0;` / `= default;` / `= delete;`
+      this.i++;
+      this.expect(';');
+      return null;
+    }
+    return this.parseBlock();
+  }
   constructor(private toks: Token[]) {}
 
   get cur() {
@@ -168,7 +229,7 @@ class Parser {
     const t = this.toks[j];
     if (t.k !== 'id') return false;
     if (UNSUPPORTED_TYPES[t.v] && this.toks[j + 1]?.k === 'id') throw new CompileError(UNSUPPORTED_TYPES[t.v], t.line, t.col);
-    return TYPE_WORDS.has(t.v) || isClass(t.v) || this.structs.has(t.v) || this.typedefs.has(t.v) || t.v === 'struct';
+    return TYPE_WORDS.has(t.v) || isClass(t.v) || this.structs.has(t.v) || this.typedefs.has(t.v) || t.v === 'struct' || t.v === 'class';
   }
 
   /** Consume `*` (and `const` after them); returns the pointer depth. */
@@ -195,7 +256,7 @@ class Parser {
       this.i++;
       return { type: { b: 'obj', cls, isConst }, isStatic };
     }
-    if (this.is('struct')) {
+    if (this.is('struct') || this.is('class')) {
       this.i++;
       const nt = this.ident();
       if (!this.structs.has(nt.v)) this.err(`unknown struct '${nt.v}'`, nt);
@@ -233,6 +294,7 @@ class Parser {
     void signed;
     let b: Base;
     switch (base) {
+      case 'auto': return { type: { b: 'int', isConst, auto: true }, isStatic };
       case 'void': b = 'void'; break;
       case 'bool': case 'boolean': b = 'bool'; break;
       case 'char': b = unsigned ? 'uchar' : 'char'; break;
@@ -269,9 +331,27 @@ class Parser {
         if (d) globals.push(d);
         continue;
       }
-      if (this.is('struct') && (this.is('{', this.peek()) || this.is('{', this.peek(2)))) {
+      if (this.isRecordDef()) {
         const d = this.parseStructDef();
+        globals.push(...this.pendingGlobals.splice(0));
         if (d) globals.push(d);
+        continue;
+      }
+      if (this.is('template')) this.err('templates are not supported in this simulator — write the function for each type you need (overloads are fine)');
+      if (this.cur.k === 'id' && this.classes.has(this.cur.v) && this.is('::', this.peek())) {
+        // Class::Class(…) : inits { … }   or   Class::~Class() { … }
+        const owner = this.ident().v;
+        this.expect('::');
+        const dtor = this.eat('~');
+        const nt = this.ident();
+        if (nt.v !== owner) this.err(`expected a constructor '${owner}::${owner}' here`, nt);
+        this.expect('(');
+        const params = this.parseParams();
+        const inits = this.parseInits();
+        const body = this.parseBlock();
+        const proto = this.protoDefaults.get(`${owner}::${owner}/${params.length}`);
+        if (proto && !params.some((p) => p.def)) params.forEach((p, k) => (p.def = proto[k].def));
+        if (!dtor) this.methods.push({ owner, isCtor: true, inits, name: owner, ret: T('void'), params, body, tok: nt });
         continue;
       }
       if (this.cur.k === 'id' && UNSUPPORTED_TYPES[this.cur.v]) this.err(UNSUPPORTED_TYPES[this.cur.v]);
@@ -283,28 +363,33 @@ class Parser {
       const { type: baseType } = this.parseType();
       const type = withPtr(baseType, this.stars());
       this.eat('&');
+      if (this.cur.k === 'id' && this.classes.has(this.cur.v) && this.is('::', this.peek())) {
+        // int Class::method(…) const { … }
+        const owner = this.ident().v;
+        this.expect('::');
+        const nt = this.ident();
+        this.expect('(');
+        const params = this.parseParams();
+        this.methodTail();
+        const proto = this.protoDefaults.get(`${owner}::${nt.v}/${params.length}`);
+        if (proto && !params.some((p) => p.def)) params.forEach((p, k) => (p.def = proto[k].def));
+        const body = this.parseBlock();
+        this.methods.push({ owner, name: nt.v, ret: type, params, body, tok: nt });
+        continue;
+      }
       const nameTok = this.ident();
-      if (this.is('(') && type.b !== 'obj') {
+      // `Blinker led(13);` is an object with constructor arguments, not a function
+      const ctorDecl = type.b === 'struct' && !type.ptr && this.is('(') && !this.is(')', this.peek()) && !this.isTypeStart(1);
+      if (this.is('(') && type.b !== 'obj' && !ctorDecl) {
         this.i++;
-        const params: { name: string; type: Type }[] = [];
-        if (!this.is(')')) {
-          if (this.is('void') && this.peek().v === ')') this.i++;
-          else
-            do {
-              const { type: bt } = this.parseType();
-              let pt = withPtr(bt, this.stars());
-              if (this.eat('&')) pt = { ...pt, ref: true };
-              const pn = this.cur.k === 'id' ? this.ident().v : `_p${params.length}`;
-              const dims: (number | null)[] = [];
-              while (this.eat('[')) {
-                dims.push(this.cur.k === 'num' ? this.toks[this.i++].n! : null);
-                this.expect(']');
-              }
-              params.push({ name: pn, type: dims.length ? { ...pt, dims } : pt });
-            } while (this.eat(','));
+        const params = this.parseParams();
+        if (this.eat(';')) {
+          // prototype: remember its default arguments for the definition
+          if (params.some((p) => p.def)) this.protoDefaults.set(`${nameTok.v}/${params.length}`, params);
+          continue;
         }
-        this.expect(')');
-        if (this.eat(';')) continue; // prototype
+        const proto = this.protoDefaults.get(`${nameTok.v}/${params.length}`);
+        if (proto && !params.some((p) => p.def)) params.forEach((p, k) => (p.def = proto[k].def));
         const body = this.parseBlock();
         funcs.push({ name: nameTok.v, ret: type, params, body, tok: nameTok });
       } else {
@@ -315,20 +400,114 @@ class Parser {
     return { globals, funcs };
   }
 
-  /** `struct [Name] { fields }` → the struct's name (anonymous structs get a generated one). */
+  /** `(int a, float b = 1.5, int arr[])` — after the '(' up to and including ')' */
+  parseParams(): Param[] {
+    const params: Param[] = [];
+    if (!this.is(')')) {
+      if (this.is('void') && this.peek().v === ')') this.i++;
+      else
+        do {
+          const { type: bt } = this.parseType();
+          let pt = withPtr(bt, this.stars());
+          if (this.eat('&')) pt = { ...pt, ref: true };
+          const pn = this.cur.k === 'id' ? this.ident().v : `_p${params.length}`;
+          const dims: (number | null)[] = [];
+          while (this.eat('[')) {
+            dims.push(this.cur.k === 'num' ? this.toks[this.i++].n! : null);
+            this.expect(']');
+          }
+          const p: Param = { name: pn, type: dims.length ? { ...pt, dims } : pt };
+          if (this.eat('=')) p.def = this.parseAssign();
+          else if (params.some((q) => q.def)) this.err(`default argument missing for parameter ${params.length + 1} of '${pn}'`);
+          params.push(p);
+        } while (this.eat(','));
+    }
+    this.expect(')');
+    return params;
+  }
+
+  /**
+   * `struct|class [Name] [: public Base] { members }` → the type's name (anonymous structs get a
+   * generated one). Members are fields (with default values), member functions, constructors with
+   * initializer lists, a destructor (ignored) and access labels (not enforced).
+   */
   parseStructHead(): string {
-    this.expect('struct');
+    const kw = this.cur.v;
+    this.i++;
     const name = this.cur.k === 'id' ? this.ident().v : `$anon${this.i}`;
-    this.expect('{');
     const fields: StructField[] = [];
     this.structs.set(name, fields); // registered first so it can point to itself
+    let base: string | undefined;
+    if (this.eat(':')) {
+      this.eat('public') || this.eat('protected') || this.eat('private');
+      const bt = this.ident();
+      if (!this.structs.has(bt.v)) this.err(`base class '${bt.v}' is not defined`, bt);
+      base = bt.v;
+      fields.push(...this.structs.get(base)!.map((f) => ({ ...f })));
+      if (this.eat(',')) this.err('multiple inheritance is not supported in this simulator', bt);
+    }
+    if (kw === 'class' || base) this.classes.set(name, { base });
+    this.expect('{');
+    const method = (f: FuncDef) => {
+      this.classes.set(name, this.classes.get(name) ?? { base });
+      this.methods.push(f);
+    };
     while (!this.is('}')) {
       if (this.cur.k === 'eof') this.err("expected '}' at end of input");
-      const { type: bt } = this.parseType();
+      if ((this.is('public') || this.is('private') || this.is('protected')) && this.is(':', this.peek())) {
+        this.i += 2;
+        continue;
+      }
+      if (this.eat(';')) continue;
+      if (this.is('enum')) {
+        this.pendingGlobals.push(this.parseEnum());
+        continue;
+      }
+      if (this.is('friend') || this.is('operator')) this.err(`'${this.cur.v}' is not supported in this simulator`);
+      // destructor: parsed and ignored (objects here are never destroyed early)
+      if (this.is('~')) {
+        this.i++;
+        this.ident();
+        this.expect('(');
+        this.parseParams();
+        this.methodTail();
+        this.methodBody();
+        continue;
+      }
+      // constructor: Name(params) [: inits] { body }
+      let j = this.i;
+      while (this.toks[j].k === 'id' && (this.toks[j].v === 'explicit' || this.toks[j].v === 'inline')) j++;
+      if (this.toks[j].k === 'id' && this.toks[j].v === name && this.is('(', this.toks[j + 1])) {
+        this.i = j;
+        const nt = this.ident();
+        this.expect('(');
+        const params = this.parseParams();
+        const inits = this.parseInits();
+        const body = this.methodBody();
+        if (body) method({ owner: name, isCtor: true, inits, name, ret: T('void'), params, body, tok: nt });
+        else this.protoDefaults.set(`${name}::${name}/${params.length}`, params);
+        continue;
+      }
+      const { type: bt, isStatic } = this.parseType();
       do {
-        const ft = withPtr(bt, this.stars());
+        let ft = withPtr(bt, this.stars());
+        if (this.eat('&')) ft = { ...ft, ref: true };
         const fn = this.ident();
-        if (this.is('(')) this.err('functions inside a struct are not supported in this simulator — write a normal function that takes the struct', fn);
+        if (this.is('(')) {
+          // member function
+          if (isStatic) this.err('static member functions are not supported in this simulator — use a normal function', fn);
+          this.i++;
+          const params = this.parseParams();
+          this.methodTail();
+          const body = this.methodBody();
+          if (body) method({ owner: name, name: fn.v, ret: ft, params, body, tok: fn });
+          else {
+            this.classes.set(name, this.classes.get(name) ?? { base });
+            if (params.some((p) => p.def)) this.protoDefaults.set(`${name}::${fn.v}/${params.length}`, params);
+          }
+          break;
+        }
+        if (isStatic) this.err('static data members are not supported in this simulator — use a global variable', fn);
         const dims: (number | null)[] = [];
         while (this.eat('[')) {
           const v = constEval(this.parseCond(), this.consts);
@@ -338,10 +517,17 @@ class Parser {
         }
         let init: Expr | undefined;
         if (this.eat('=')) init = this.is('{') ? this.parseInitList() : this.parseAssign();
-        if (fields.some((f) => f.name === fn.v)) this.err(`duplicate member '${fn.v}'`, fn);
-        fields.push({ name: fn.v, type: dims.length ? { ...ft, dims } : ft, init });
-      } while (this.eat(','));
-      this.expect(';');
+        else if (this.is('{')) init = this.parseInitList();
+        const existing = fields.findIndex((f) => f.name === fn.v);
+        if (existing >= 0 && !base) this.err(`duplicate member '${fn.v}'`, fn);
+        const field = { name: fn.v, type: dims.length ? { ...ft, dims } : ft, init };
+        if (existing >= 0) fields[existing] = field;
+        else fields.push(field);
+        if (!this.eat(',')) {
+          this.expect(';');
+          break;
+        }
+      } while (true);
     }
     this.expect('}');
     return name;
@@ -431,7 +617,17 @@ class Parser {
       }
       let init: Expr | undefined;
       if (this.eat('=')) init = this.is('{') ? this.parseInitList() : this.parseAssign();
-      else if (this.is('(') && type.b === 'obj') {
+      else if (this.is('(') && type.b === 'struct' && !type.ptr) {
+        // Blinker led(13);  → constructor call
+        const t = this.cur;
+        this.i++;
+        const args: Expr[] = [];
+        if (!this.is(')')) do args.push(this.parseAssign()); while (this.eat(','));
+        this.expect(')');
+        init = { k: 'new', cls: type.cls!, args, tok: t };
+      } else if (this.is('{') && type.b === 'struct' && !type.ptr && this.classes.has(type.cls!) && !dims.length) {
+        init = this.parseInitList();
+      } else if (this.is('(') && type.b === 'obj') {
         // LiquidCrystal lcd(12, 11, 5, 4, 3, 2);
         const t = this.cur;
         this.i++;
@@ -515,6 +711,21 @@ class Parser {
         case 'for': {
           this.i++;
           this.expect('(');
+          if (this.isTypeStart()) {
+            // range-based for: for (int v : values) / for (auto &led : leds)
+            const save = this.i;
+            const { type: bt } = this.parseType();
+            let vt = withPtr(bt, this.stars());
+            if (this.eat('&')) vt = { ...vt, ref: true };
+            if (this.cur.k === 'id' && this.is(':', this.peek())) {
+              const nt = this.ident();
+              const colon = this.expect(':');
+              const arr = this.parseExpr();
+              this.expect(')');
+              return { k: 'forin', d: { name: nt.v, type: vt, tok: nt }, arr, body: this.parseStmt(), tok: colon };
+            }
+            this.i = save;
+          }
           let init: Stmt | undefined;
           if (!this.is(';')) init = this.isTypeStart() ? this.parseDecl(false) : { k: 'expr', e: this.parseExpr() };
           this.expect(';');
@@ -562,13 +773,15 @@ class Parser {
           return { k: 'return', e, tok: t };
         }
         case 'goto':
-          this.err('goto is not supported');
+          this.err('goto is not supported — use a loop with break / continue instead');
       }
-      if (t.v === 'struct' && (this.is('{', this.peek()) || this.is('{', this.peek(2)))) {
+      if (this.isRecordDef()) {
         const d = this.parseStructDef();
+        if (this.pendingGlobals.length) this.err('enums inside a class must be defined at global scope in this simulator');
         return d ?? { k: 'empty' };
       }
       if (t.v === 'typedef') return this.parseTypedef() ?? { k: 'empty' };
+      if (this.is(':', this.peek()) && !this.is('::', this.peek())) this.err(`labels and goto are not supported — use a loop with break / continue instead`);
       if (this.isTypeStart()) return this.parseDecl();
       if (UNSUPPORTED_TYPES[t.v]) this.err(UNSUPPORTED_TYPES[t.v]);
     }
@@ -743,6 +956,7 @@ class Parser {
       return e;
     }
     if (t.k === 'eof') this.err('unexpected end of input');
+    if (this.is('[')) this.err('lambda expressions ([](…) { … }) are not supported in this simulator — write a normal function');
     this.err(`expected expression before '${t.v}'`);
   }
 }
@@ -841,7 +1055,9 @@ const withPre = (pre: string | undefined, code: string) => (pre ? `(${pre},${cod
 interface FuncInfo {
   js: string;
   ret: Type;
-  params: { name: string; type: Type }[];
+  params: Param[];
+  /** member function / constructor of this class: gets the object as its first argument */
+  owner?: string;
 }
 
 type BuiltinGen = (c: Gen, args: Expr[], tok: Token) => { code: string; type: Type };
@@ -850,7 +1066,91 @@ const JS_RESERVED = new Set(['R']);
 
 class Gen {
   scopes: Map<string, VarInfo>[] = [];
-  funcs = new Map<string, FuncInfo>();
+  /** user functions by name: every overload */
+  funcs = new Map<string, FuncInfo[]>();
+  /** the sketch's classes: base class, member functions by name, constructors */
+  classes = new Map<string, { base?: string }>();
+  methods = new Map<string, Map<string, FuncInfo[]>>();
+  ctors = new Map<string, FuncInfo[]>();
+
+  /** overloads of a member function, looking through base classes */
+  methodsOf(cls: string, name: string): FuncInfo[] | undefined {
+    for (let c: string | undefined = cls; c; c = this.classes.get(c)?.base) {
+      const m = this.methods.get(c)?.get(name);
+      if (m) return m;
+    }
+    return undefined;
+  }
+
+  /** does constructing a `cls` run code (its own or its base class's constructor, or members')? */
+  hasCtor(cls: string): boolean {
+    for (let c: string | undefined = cls; c; c = this.classes.get(c)?.base) if (this.ctors.has(c)) return true;
+    return (this.structs.get(cls) ?? []).some((f) => f.type.b === 'struct' && !f.type.dims && !isPtr(f.type) && f.type.cls !== cls && this.hasCtor(f.type.cls!));
+  }
+
+  /** a variable declared in the current function (params and locals), not a global */
+  lookupLocal(name: string): VarInfo | undefined {
+    for (let i = this.scopes.length - 1; i >= 1; i--) {
+      const v = this.scopes[i].get(name);
+      if (v) return v;
+    }
+    return undefined;
+  }
+
+  /** inside a member function, a bare field name means this->field (unless a local hides it) */
+  selfField(name: string): { code: string; type: Type } | undefined {
+    const owner = this.currentFunc?.owner;
+    if (!owner || this.lookupLocal(name)) return undefined;
+    const f = this.structs.get(owner)?.find((x) => x.name === name);
+    return f ? { code: `$self.${name}`, type: f.type } : undefined;
+  }
+
+  /** JS arguments for a call to a user function / member function, with defaults filled in */
+  callArgs(user: FuncInfo, name: string, args: Expr[]): string[] {
+    const allArgs = [...args, ...user.params.slice(args.length).map((p) => p.def!)];
+    return allArgs.map((a, i) => {
+      const pt = user.params[i].type;
+      if (pt.ref && !pt.dims && pt.b !== 'obj' && pt.b !== 'struct') return this.addrOf(a).code;
+      const x = this.expr(a);
+      if (pt.dims && !x.type.dims && !isPtr(x.type)) this.err(`argument ${i + 1} of '${name}' must be an array`, a.tok);
+      const c = this.conv(x.code, x.type, pt, a.tok);
+      return pt.b === 'struct' && !pt.ref && !isPtr(pt) && !pt.dims ? `R.clone(${c})` : c;
+    });
+  }
+
+  /** obj.method(args) for the sketch's own classes */
+  userMethod(cls: string, self: string, name: string, args: Expr[], tok: Token): { code: string; type: Type } {
+    const ov = this.methodsOf(cls, name);
+    if (!ov) {
+      const field = this.structs.get(cls)?.some((f) => f.name === name);
+      this.err(field ? `'${cls}::${name}' is a variable, not a function` : `'${cls}' has no member function named '${name}'`, tok);
+    }
+    const f = this.pickOverload(`${cls}::${name}`, ov, args, tok);
+    const a = this.callArgs(f, name, args);
+    return { code: `(yield* ${f.js}(${[self, ...a].join(',')}))`, type: f.ret };
+  }
+
+  /** constructor call on an existing object (a statement-level expression), '' if there is none */
+  ctorCall(cls: string, self: string, args: Expr[], tok: Token): string {
+    const own = this.ctors.get(cls);
+    if (!own) {
+      const base = this.classes.get(cls)?.base;
+      if (args.length) this.err(`no matching constructor for '${cls}' with ${args.length} argument${args.length === 1 ? '' : 's'} — the class has no constructor`, tok);
+      const parts = [base && this.hasCtor(base) ? this.ctorCall(base, self, [], tok) : '', ...this.memberCtors(cls, self, new Set(), tok)].filter(Boolean);
+      return parts.join(',');
+    }
+    const f = this.pickOverload(`${cls}::${cls}`, own, args, tok);
+    const a = this.callArgs(f, cls, args);
+    return `(yield* ${f.js}(${[self, ...a].join(',')}))`;
+  }
+
+  /** default constructors of class-typed fields not named in an initializer list */
+  memberCtors(cls: string, self: string, skip: Set<string>, tok: Token): string[] {
+    return (this.structs.get(cls) ?? [])
+      .filter((f) => !skip.has(f.name) && f.type.b === 'struct' && !f.type.dims && !isPtr(f.type) && f.type.cls !== cls && this.hasCtor(f.type.cls!))
+      .map((f) => this.ctorCall(f.type.cls!, `${self}.${f.name}`, [], tok))
+      .filter(Boolean);
+  }
   statics: string[] = [];
   staticCounter = 0;
   currentFunc: FuncInfo | null = null;
@@ -928,6 +1228,12 @@ class Gen {
   /** Pointer to an lvalue: `&x`, `&a[i]`, `&*p`. */
   addrOf(e: Expr): { code: string; type: Type } {
     if (e.k === 'id') {
+      const sf = this.selfField(e.name);
+      if (sf) {
+        if (sf.type.dims) return { code: `R.ptr(${sf.code},0)`, type: { ...elemOf(sf.type), ptr: (elemOf(sf.type).ptr ?? 0) + 1 } };
+        if (sf.type.b === 'obj') return sf;
+        return { code: `R.fptr($self,${JSON.stringify(e.name)})`, type: { ...sf.type, ptr: (sf.type.ptr ?? 0) + 1, isConst: false } };
+      }
       const v = this.lookup(e.name);
       if (!v && GLOBAL_OBJECTS[e.name]) return this.expr(e); // &Wire, &Serial
       if (!v) this.err(`'${e.name}' was not declared in this scope`, e.tok);
@@ -1032,9 +1338,12 @@ class Gen {
       case 'str':
         return { code: JSON.stringify(e.v), type: T('String') };
       case 'id': {
+        const sf = this.selfField(e.name);
+        if (sf) return sf;
+        if (e.name === 'this' && this.currentFunc?.owner && !this.lookup('this')) return { code: '$self', type: { b: 'struct', cls: this.currentFunc.owner, ptr: 1 } };
         const v = this.lookup(e.name);
         if (v) return { code: this.varCode(v), type: v.type };
-        const fn = this.funcs.get(e.name);
+        const fn = this.funcs.get(e.name)?.[0];
         if (fn) return { code: fn.js, type: { b: 'func' } };
         const bc = this.board.constants[e.name];
         if (bc !== undefined) return { code: String(bc), type: T('int') };
@@ -1164,7 +1473,10 @@ class Gen {
   member(e: Expr & { k: 'member' }): { code: string; type: Type } {
     const o = this.expr(e.obj);
     let base = o.code, t = o.type;
-    if (e.tok.v === '->') {
+    if (o.code === '$self' && e.obj.k === 'id' && e.obj.name === 'this') {
+      // this->field
+      t = { b: 'struct', cls: this.currentFunc!.owner };
+    } else if (e.tok.v === '->') {
       if (!isPtr(t)) this.err(`base operand of '->' is not a pointer`, e.tok);
       base = `R.deref(${o.code})`;
       t = elemOf(t);
@@ -1273,6 +1585,8 @@ class Gen {
   /** Assignable JS expression for a C lvalue. Pointer targets may need a temp (`pre`). */
   lvalue(e: Expr): LValue {
     if (e.k === 'id') {
+      const sf = this.selfField(e.name);
+      if (sf) return sf;
       const v = this.lookup(e.name);
       if (!v) {
         if (CONSTANTS[e.name] || this.board.constants[e.name] !== undefined) this.err(`lvalue required as left operand of assignment`, e.tok);
@@ -1321,23 +1635,22 @@ class Gen {
 
   call(e: Expr & { k: 'call' }): { code: string; type: Type } {
     const callee = e.callee;
-    if (callee.k === 'member') return this.method(callee.obj, callee.name, e.args, e.tok);
+    if (callee.k === 'member') return this.method(callee.obj, callee.name, e.args, e.tok, callee.tok.v === '->');
     if (callee.k !== 'id') this.err('called object is not a function', e.tok);
     const name = callee.name;
-    const user = this.funcs.get(name);
-    if (user && !this.lookup(name)) {
-      if (e.args.length !== user.params.length) this.err(`wrong number of arguments to function '${name}' (expected ${user.params.length})`, e.tok);
-      const argCodes = e.args.map((a, i) => {
-        const pt = user.params[i].type;
-        if (pt.ref && !pt.dims && pt.b !== 'obj' && pt.b !== 'struct') {
-          const ptr = this.addrOf(a);
-          return ptr.code;
-        }
-        const x = this.expr(a);
-        if (pt.dims && !x.type.dims && !isPtr(x.type)) this.err(`argument ${i + 1} of '${name}' must be an array`, a.tok);
-        const c = this.conv(x.code, x.type, pt, a.tok);
-        return pt.b === 'struct' && !pt.ref && !isPtr(pt) && !pt.dims ? `R.clone(${c})` : c;
-      });
+    // inside a member function: another member function of the same object
+    const owner = this.currentFunc?.owner;
+    if (owner && !this.lookupLocal(name) && this.methodsOf(owner, name)) return this.userMethod(owner, '$self', name, e.args, e.tok);
+    // Blinker(13) as a value: construct a temporary
+    if (this.classes.has(name) && this.structs.has(name) && !this.funcs.has(name)) {
+      const t = this.newTemp();
+      const ctor = this.ctorCall(name, t, e.args, e.tok);
+      return { code: `(${t}=${this.newStruct(name)}${ctor ? `,${ctor}` : ''},${t})`, type: { b: 'struct', cls: name } };
+    }
+    const overloads = this.funcs.get(name);
+    if (overloads && !this.lookup(name)) {
+      const user = this.pickOverload(name, overloads, e.args, e.tok);
+      const argCodes = this.callArgs(user, name, e.args);
       return { code: `(yield* ${user.js}(${argCodes.join(',')}))`, type: user.ret };
     }
     const b = BUILTINS[name];
@@ -1345,9 +1658,49 @@ class Gen {
     this.err(`'${name}' was not declared in this scope`, callee.tok);
   }
 
-  method(obj: Expr, name: string, args: Expr[], tok: Token): { code: string; type: Type } {
+  /**
+   * Overload resolution: candidates that take this many arguments (counting defaults), then the
+   * one whose parameter types match the arguments best (exact > promotion > conversion).
+   */
+  pickOverload(name: string, overloads: FuncInfo[], args: Expr[], tok: Token): FuncInfo {
+    const fits = overloads.filter((f) => args.length <= f.params.length && args.length >= f.params.filter((p) => !p.def).length);
+    if (!fits.length) {
+      const counts = [...new Set(overloads.map((f) => f.params.length))].join(' or ');
+      this.err(`wrong number of arguments to function '${name}' (expected ${counts}, got ${args.length})`, tok);
+    }
+    if (fits.length === 1) return fits[0];
+    const saveTemps = this.temps.length;
+    const types = args.map((a) => this.expr(a).type);
+    this.temps.length = saveTemps;
+    const cost = (want: Type, have: Type): number => {
+      const pw = isPtr(want) || !!want.dims, ph = isPtr(have) || !!have.dims;
+      if (pw || ph) return pw && ph && want.b === have.b ? 0 : pw && ph ? 50 : 1000;
+      if (want.b === have.b && want.cls === have.cls) return 0;
+      if (want.b === 'String' || have.b === 'String' || want.b === 'struct' || have.b === 'struct' || want.b === 'obj' || have.b === 'obj') return 1000;
+      const fl = (t: Type) => t.b === "float";
+      if (fl(want) === fl(have)) return 1; // int ↔ long, char → int …
+      return 3; // int ↔ float
+    };
+    let best = fits[0], bestCost = Infinity, tie = false;
+    for (const f of fits) {
+      const c = types.reduce((n, t, i) => n + cost(f.params[i].type, t), 0);
+      if (c < bestCost) {
+        best = f;
+        bestCost = c;
+        tie = false;
+      } else if (c === bestCost) tie = true;
+    }
+    if (bestCost >= 1000) this.err(`no matching function for call to '${name}(${types.map(typeName).join(', ')})'`, tok);
+    if (tie) this.err(`call of overloaded '${name}(${types.map(typeName).join(', ')})' is ambiguous`, tok);
+    return best;
+  }
+
+  method(obj: Expr, name: string, args: Expr[], tok: Token, arrow = false): { code: string; type: Type } {
     if (obj.k === 'id' && !this.lookup(obj.name) && UNSUPPORTED_TYPES[obj.name]) this.err(UNSUPPORTED_TYPES[obj.name], tok);
-    const o = this.expr(obj);
+    let o = this.expr(obj);
+    if (o.code === '$self' && obj.k === 'id' && obj.name === 'this') o = { code: '$self', type: { b: 'struct', cls: this.currentFunc!.owner } };
+    else if (arrow && isPtr(o.type)) o = { code: `R.deref(${o.code})`, type: elemOf(o.type) };
+    if (o.type.b === 'struct' && !o.type.dims && !isPtr(o.type)) return this.userMethod(o.type.cls!, o.code, name, args, tok);
     if (o.type.b === 'obj' && !o.type.dims) return this.libCall(o.type.cls!, o.code, name, args, tok);
     if (o.type.b === 'String' && !o.type.dims) {
       const a = this.args(args);
@@ -1449,11 +1802,25 @@ class Gen {
 
   // ---- statements
   decl(s: Stmt & { k: 'decl' }, out: string[], global: boolean) {
-    for (const d of s.decls) {
+    for (const d0 of s.decls) {
+      let d = d0;
+      if (d.type.auto) {
+        // auto x = expr;  → the type of expr
+        if (!d.init || d.init.k === 'init') this.err(`declaration of 'auto ${d.name}' needs an initializer`, d.tok);
+        const saveTemps = this.temps.length;
+        const xt = this.expr(d.init).type;
+        this.temps.length = saveTemps;
+        const { ref: _r, auto: _a, ...clean } = xt;
+        void _r;
+        void _a;
+        d = { ...d, type: { ...clean, isConst: d.type.isConst || undefined, ref: d.type.ref, ptr: (clean.ptr ?? 0) + (d.type.ptr ?? 0) || undefined } };
+      }
       if (d.type.b === 'void' && !d.type.ptr) this.err(`variable '${d.name}' declared void`, d.tok);
       let type = d.type;
       let init: string;
       let ref = false;
+      /** constructor to run once the object exists */
+      let ctorArgs: Expr[] | undefined;
       if (type.ref && !type.dims && (type.b === 'obj' || type.b === 'struct')) {
         // Data &d = arr[i];  → an alias of the same JS object
         if (!d.init) this.err(`'${d.name}' declared as reference but not initialized`, d.tok);
@@ -1477,8 +1844,17 @@ class Gen {
           init = this.conv(x.code, x.type, type, d.tok);
         } else init = this.newObj(type.cls!, d.init?.k === 'new' ? d.init.args : [], d.tok);
       } else if (type.b === 'struct' && !type.dims && !isPtr(type)) {
-        if (!d.init) init = this.newStruct(type.cls!);
-        else if (d.init.k === 'init') init = this.structInit(d.init, type);
+        if (!d.init) {
+          init = this.newStruct(type.cls!);
+          ctorArgs = [];
+        } else if (d.init.k === 'new') {
+          init = this.newStruct(type.cls!);
+          ctorArgs = d.init.args;
+        } else if (d.init.k === 'init' && this.ctors.has(type.cls!)) {
+          // Blinker led{13};
+          init = this.newStruct(type.cls!);
+          ctorArgs = d.init.items;
+        } else if (d.init.k === 'init') init = this.structInit(d.init, type);
         else {
           const x = this.expr(d.init);
           init = `R.clone(${this.conv(x.code, x.type, type, d.tok)})`;
@@ -1531,6 +1907,18 @@ class Gen {
       }
       v.boxed = boxed;
       v.ref = ref;
+      if (type.b === 'struct' && !isPtr(type) && this.structs.has(type.cls!)) {
+        const target = this.varCode(v);
+        if (!type.dims && ctorArgs) {
+          const call = this.ctorCall(type.cls!, target, ctorArgs, d.tok);
+          if (call && s.isStatic && !global) this.err('static objects with a constructor are not supported in this simulator — make it global', d.tok);
+          if (call) out.push(`${call};`);
+        } else if (type.dims?.length === 1 && !d.init && this.hasCtor(type.cls!)) {
+          // Blinker leds[3];  → default constructor for each
+          const call = this.ctorCall(type.cls!, '$o', [], d.tok);
+          if (call) out.push(`for(const $o of ${target}){${call};}`);
+        }
+      }
     }
   }
 
@@ -1625,6 +2013,34 @@ class Gen {
           if (f.ret.b === 'void') this.err(`return-statement with a value, in function returning 'void'`, s.tok);
           out.push(`return ${this.conv(x.code, x.type, f.ret, s.tok)};`);
         } else out.push('return;');
+        break;
+      }
+      case 'forin': {
+        const a = this.expr(s.arr);
+        if (!a.type.dims) this.err(`range-based for needs an array (got '${typeName(a.type)}')`, s.tok);
+        const et = elemOf(a.type);
+        const arr = this.newTemp();
+        const idx = `$r${this.tmp++}`;
+        this.scopes.push(new Map());
+        let vt = s.d.type;
+        if (vt.auto) vt = { ...et, isConst: vt.isConst || undefined, ref: vt.ref };
+        const byRef = !!vt.ref;
+        const { ref: _r, auto: _a, ...clean } = vt;
+        void _r;
+        void _a;
+        const v = this.declare(s.d.name, clean, s.d.tok);
+        let bind: string;
+        const item = `${arr}[${idx}]`;
+        if (clean.dims || (byRef && (clean.b === 'struct' || clean.b === 'obj'))) bind = `let ${v.js}=${item};`;
+        else if (byRef) {
+          v.ref = true;
+          bind = `let ${v.js}=R.ptr(${arr},${idx});`;
+        } else if (clean.b === 'struct' && !isPtr(clean)) bind = `let ${v.js}=R.clone(${item});`;
+        else bind = `let ${v.js}=${this.conv(item, et, clean, s.tok)};`;
+        const body: string[] = [];
+        this.scoped(() => this.stmt(s.body, body));
+        this.scopes.pop();
+        out.push(`${arr}=${a.code};for(let ${idx}=0;${idx}<${arr}.length;${idx}++){${this.tick(cost(s.body) + 1)}${bind}${body.join('\n')}}`);
         break;
       }
       case 'empty':
@@ -1881,7 +2297,12 @@ const BUILTINS: Record<string, BuiltinGen> = {
 
 /** Names used with unary `&` or passed to reference parameters: those variables get boxed. */
 function findAddressTaken(roots: unknown[], funcs: FuncDef[]): Set<string> {
-  const refParams = new Map(funcs.map((f) => [f.name, f.params.map((p) => !!p.type.ref && !p.type.dims && p.type.b !== 'obj' && p.type.b !== 'struct')]));
+  const refParams = new Map<string, boolean[]>();
+  for (const f of funcs) {
+    const refs = f.params.map((p) => !!p.type.ref && !p.type.dims && p.type.b !== 'obj' && p.type.b !== 'struct');
+    const prev = refParams.get(f.name) ?? [];
+    refParams.set(f.name, refs.map((r, i) => r || !!prev[i]).concat(prev.slice(refs.length)));
+  }
   const out = new Set<string>();
   const walk = (n: any) => {
     if (!n || typeof n !== 'object') return;
@@ -1890,8 +2311,8 @@ function findAddressTaken(roots: unknown[], funcs: FuncDef[]): Set<string> {
       return;
     }
     if (n.k === 'un' && n.op === '&' && n.e?.k === 'id') out.add(n.e.name);
-    if (n.k === 'call' && n.callee?.k === 'id') {
-      const refs = refParams.get(n.callee.name);
+    if (n.k === 'call' && (n.callee?.k === 'id' || n.callee?.k === 'member')) {
+      const refs = refParams.get(n.callee.k === 'id' ? n.callee.name : n.callee.name);
       n.args.forEach((a: any, i: number) => refs?.[i] && a.k === 'id' && out.add(a.name));
     }
     if (n.k === 'decl') for (const d of n.decls) if (d.type?.ref && d.init?.k === 'id') out.add(d.init.name);
@@ -1945,22 +2366,46 @@ export function compileSketch(src: string, board: BoardSpec = UNO): CompiledProg
   const toks = tokenize(src, board.macros);
   const parser = new Parser(toks);
   const { globals, funcs } = parser.parseProgram();
+  const methods = parser.methods;
   const g = new Gen();
   g.board = board;
   g.scopes.push(new Map());
 
+  const infoOf = new Map<FuncDef, FuncInfo>();
   for (const f of funcs) {
-    if (BUILTINS[f.name] && f.name !== 'map') {
-      // allow users to shadow some names, but warn for core ones
-    }
-    g.funcs.set(f.name, { js: `$f_${f.name}`, ret: f.ret, params: f.params });
+    const list = g.funcs.get(f.name) ?? [];
+    const same = list.find((o) => o.params.length === f.params.length && o.params.every((p, k) => typeName(p.type) === typeName(f.params[k].type)));
+    if (same) throw new CompileError(`redefinition of '${f.name}'`, f.tok.line, f.tok.col);
+    // the first overload keeps the plain name (setup/loop, function pointers)
+    const info: FuncInfo = { js: list.length ? `$f_${f.name}$${list.length + 1}` : `$f_${f.name}`, ret: f.ret, params: f.params };
+    list.push(info);
+    g.funcs.set(f.name, list);
+    infoOf.set(f, info);
   }
-  const setup = g.funcs.get('setup');
-  const loop = g.funcs.get('loop');
+  g.classes = parser.classes;
+  g.structs = parser.structs;
+  for (const m of methods) {
+    const cls = m.owner!;
+    const safe = cls.replace(/\$/g, '_');
+    const list = m.isCtor ? g.ctors.get(cls) ?? [] : g.methods.get(cls)?.get(m.name) ?? [];
+    const same = list.find((o) => o.params.length === m.params.length && o.params.every((p, k) => typeName(p.type) === typeName(m.params[k].type)));
+    if (same) throw new CompileError(`redefinition of '${cls}::${m.name}'`, m.tok.line, m.tok.col);
+    const js = m.isCtor ? `$c_${safe}$${list.length + 1}` : `$m_${safe}_${m.name}$${list.length + 1}`;
+    const info: FuncInfo = { js, ret: m.ret, params: m.params, owner: cls };
+    list.push(info);
+    if (m.isCtor) g.ctors.set(cls, list);
+    else {
+      if (!g.methods.has(cls)) g.methods.set(cls, new Map());
+      g.methods.get(cls)!.set(m.name, list);
+    }
+    infoOf.set(m, info);
+  }
+  const setup = g.funcs.get('setup')?.[0];
+  const loop = g.funcs.get('loop')?.[0];
   if (!setup) throw new CompileError("undefined reference to 'setup' — every sketch needs a setup() function", 1, 1);
   if (!loop) throw new CompileError("undefined reference to 'loop' — every sketch needs a loop() function", 1, 1);
 
-  g.boxedNames = findAddressTaken([...globals, ...funcs.map((f) => f.body)], funcs);
+  g.boxedNames = findAddressTaken([...globals, ...funcs.map((f) => f.body), ...methods.map((f) => f.body)], [...funcs, ...methods]);
   g.structs = parser.structs;
   const factories: string[] = [];
   const madeFactory = new Set<string>();
@@ -1979,8 +2424,8 @@ export function compileSketch(src: string, board: BoardSpec = UNO): CompiledProg
   const globalNames = [...g.scopes[0].values()].map((v) => v.js);
 
   const fnCode: string[] = [];
-  for (const f of funcs) {
-    const info = g.funcs.get(f.name)!;
+  for (const f of [...funcs, ...methods]) {
+    const info = infoOf.get(f)!;
     g.currentFunc = info;
     g.scopes.push(new Map());
     g.temps = [];
@@ -1998,10 +2443,42 @@ export function compileSketch(src: string, board: BoardSpec = UNO): CompiledProg
       return v.js;
     });
     const body: string[] = [];
+    if (f.isCtor) {
+      // base class, initializer list, then default constructors of the other member objects
+      const cls = f.owner!;
+      const base = g.classes.get(cls)?.base;
+      const named = new Set((f.inits ?? []).map((x) => x.name));
+      const baseInit = f.inits?.find((x) => x.name === base);
+      if (base && g.hasCtor(base)) {
+        const c = g.ctorCall(base, '$self', baseInit?.args ?? [], f.tok);
+        if (c) body.push(`${c};`);
+      }
+      for (const it of f.inits ?? []) {
+        if (it.name === base) continue;
+        const field = g.structs.get(cls)?.find((x) => x.name === it.name);
+        if (!field) throw new CompileError(`class '${cls}' does not have any field named '${it.name}'`, it.tok.line, it.tok.col);
+        const target = `$self.${it.name}`;
+        const ft = field.type;
+        if (ft.b === 'struct' && !ft.dims && !isPtr(ft) && g.hasCtor(ft.cls!)) {
+          const c = g.ctorCall(ft.cls!, target, it.args, it.tok);
+          if (c) body.push(`${c};`);
+        } else if (ft.b === 'obj' && !ft.dims) body.push(`${target}=${g.newObj(ft.cls!, it.args, it.tok)};`);
+        else if (ft.dims || ft.ref) throw new CompileError(`initializing '${it.name}' in the initializer list is not supported here — assign it in the constructor body`, it.tok.line, it.tok.col);
+        else if (it.args.length > 1) throw new CompileError(`too many initializers for '${it.name}'`, it.tok.line, it.tok.col);
+        else if (it.args.length === 0) body.push(`${target}=${g.zeroValue(ft)};`);
+        else {
+          const x = g.expr(it.args[0]);
+          const c = g.conv(x.code, x.type, ft, it.tok);
+          body.push(`${target}=${ft.b === 'struct' && !isPtr(ft) ? `R.clone(${c})` : c};`);
+        }
+      }
+      body.push(...g.memberCtors(cls, '$self', named, f.tok).map((c) => `${c};`));
+    }
     for (const st of (f.body as Stmt & { k: 'block' }).body) g.stmt(st, body);
     g.scopes.pop();
     g.currentFunc = null;
     const temps = g.temps.length ? `let ${g.temps.join(',')};` : '';
+    if (info.owner) params.unshift('$self');
     fnCode.push(`function* ${info.js}(${params.join(',')}){R.t+=${board.statementCost};${temps}${prologue.join('')}\n${body.join('\n')}\n}`);
   }
 

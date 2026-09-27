@@ -122,6 +122,10 @@ npm run build      # static site in dist/
 - **Arduino code (every board)** – an Arduino C++ subset compiled to JavaScript generators:
   - per-board integer sizes, pin maps, ADC resolution, PWM/interrupt pins, CPU speed and
     `#if defined(ESP32)` / `__AVR__` style macros
+  - your own `class`es (fields with default values, member functions, constructors with
+    initializer lists, `Class::method` definitions, `this->`, single inheritance, objects in arrays
+    and inside other classes), function overloading, default arguments, function-like `#define`
+    macros, `auto` and range-based `for`
   - `digitalWrite/Read`, `analogRead`, PWM `analogWrite`, ESP32 `ledc*`/`dacWrite`, `tone`, `pulseIn`,
     `shiftOut`, `millis`, `delay`, interrupts, `EEPROM`, `sprintf`/`dtostrf`/`strcpy`…
   - `Serial`, `Serial1–3` and `SoftwareSerial` really carry bytes between boards and modules;
@@ -197,6 +201,7 @@ installs, tests, builds and publishes `dist/` to the `gh-pages` branch, which Gi
 
 - Breadboard view is top-down with shading rather than true isometric.
 - Networking isn't simulated (ESP32/ESP8266/Pico W Wi-Fi, Bluetooth LE); serial modules like the
-  ESP-01 and HC-05 answer realistically instead. User-defined `class`es and function pointers
-  (other than interrupt handlers) aren't supported — the compiler says so.
+  ESP-01 and HC-05 answer realistically instead. Templates, lambdas, virtual dispatch through
+  base-class pointers, operator overloading, `goto` and function pointers (other than interrupt
+  handlers) aren't supported — the compiler says so.
 - Complex chips are behavioural models (e.g. BLDC drive is averaged, radio links are ideal).

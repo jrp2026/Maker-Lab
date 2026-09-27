@@ -124,8 +124,12 @@ The boards run a real Arduino-style C++ subset:
   `random`, `bitRead`…, `Serial` (shown in the Serial monitor).
 - Types: `int` (16-bit on AVR), `long`, `unsigned`, `float`, `bool`, `char`, `byte`, `String`,
   arrays (also 2-D), `struct`, `enum` (usable as a type), `const`, `static`, pointers and references,
-  `#define`.
-- **Not supported:** writing your own `class` (use a `struct` plus functions), templates, the STL.
+  `#define` (also function-like macros), `auto`, range-based `for`.
+- Your own `class`es work: fields, member functions, constructors with initializer lists,
+  `Class::method` definitions, single inheritance, objects in arrays. Overloads and default
+  arguments work too.
+- **Not supported:** templates, lambdas, virtual dispatch through base-class pointers, operator
+  overloading, static class members, `goto`, the STL.
 - Libraries (include the usual header): Wire, SPI, EEPROM, Servo, LiquidCrystal,
   LiquidCrystal_I2C, Adafruit_NeoPixel, Adafruit_SSD1306 (+ Adafruit_GFX), LedControl,
   Adafruit_PWMServoDriver, Stepper, AccelStepper, Keypad, NewPing, DHT, Adafruit_BMP280,
@@ -204,7 +208,7 @@ produces; see `src/ai/prompt.ts` in the repository for the full schema). Prefer 
 4. LEDs have resistors; motors/relays go through a driver.
 5. Parts do not overlap (≥ ~150 units apart) unless you are deliberately plugging into a breadboard.
 6. `props` values use the listed options (numbers as numbers).
-7. The sketch compiles in your head: `setup()` and `loop()`, no `class`, libraries from the list.
+7. The sketch compiles in your head: `setup()` and `loop()`, no templates or lambdas, libraries from the list.
 8. Output **only the JSON** (no comments — JSON has none) when the user wants a file to import.
 
 ## Loading the result
