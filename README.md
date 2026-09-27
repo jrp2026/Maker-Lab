@@ -5,8 +5,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jrp2026/electronic-simulator/actions/workflows/pages.yml"><img src="https://img.shields.io/github/actions/workflow/status/jrp2026/electronic-simulator/pages.yml?style=flat-square&label=tests%20%26%20deploy" alt="Tests and deploy status"></a>
-  <a href="https://jrp2026.github.io/electronic-simulator/"><img src="https://img.shields.io/badge/demo-live-00a39a?style=flat-square" alt="Live demo"></a>
+  <a href="https://github.com/jrp2026/Maker-Lab/actions/workflows/pages.yml"><img src="https://img.shields.io/github/actions/workflow/status/jrp2026/Maker-Lab/pages.yml?style=flat-square&label=tests%20%26%20deploy" alt="Tests and deploy status"></a>
+  <a href="https://jrp2026.github.io/Maker-Lab/"><img src="https://img.shields.io/badge/demo-live-00a39a?style=flat-square" alt="Live demo"></a>
   <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-22-339933?style=flat-square&logo=nodedotjs&logoColor=white" alt="Node.js 22"></a>
   <a href="https://react.dev"><img src="https://img.shields.io/badge/react-19-61dafb?style=flat-square&logo=react&logoColor=black" alt="React 19"></a>
   <a href="https://www.typescriptlang.org"><img src="https://img.shields.io/badge/typescript-strict-3178c6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript"></a>
@@ -15,7 +15,7 @@
 </p>
 
 <p align="center">
-  <a href="https://jrp2026.github.io/electronic-simulator/"><b>Open the live demo</b></a> ·
+  <a href="https://jrp2026.github.io/Maker-Lab/"><b>Open the live demo</b></a> ·
   <a href="#parts">Parts</a> ·
   <a href="#features">Features</a> ·
   <a href="#development">Development</a>

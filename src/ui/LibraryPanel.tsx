@@ -163,7 +163,7 @@ export function LibraryPanel() {
     <aside className="library">
       <div className="panel-head">
         <h3>Components</h3>
-        <span className="muted small">{DEFS.length} parts</span>
+        <span className="muted small">{all.count} parts</span>
         <span className="grow" />
         <button className="icon-btn sheet-close" title="Close" onClick={() => useEditor.setState({ libraryOpen: false })}>✕</button>
       </div>

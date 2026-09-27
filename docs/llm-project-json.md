@@ -205,6 +205,6 @@ produces; see `src/ai/prompt.ts` in the repository for the full schema). Prefer 
 ## Loading the result
 
 - **File → Import .json…** and pick the saved file, or
-- make a share link: `https://jrp2026.github.io/electronic-simulator/#circuit=j` followed by the JSON
+- make a share link: `https://jrp2026.github.io/Maker-Lab/#circuit=j` followed by the JSON
   encoded as base64url (standard base64 with `+`→`-`, `/`→`_`, no `=` padding). Opening the link
   loads the circuit.
