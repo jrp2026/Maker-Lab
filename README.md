@@ -164,6 +164,11 @@ npm run build      # static site in dist/
   part count and when it was saved: search, sort, open, rename, duplicate, download or delete
   them, import a `.json`, start a new circuit or begin from an example. Autosave, `Ctrl+S`,
   JSON import/export, PNG export and share links (the whole circuit in the URL) as before.
+- **Cloud accounts (optional)** – sign in with email or Google and projects are saved to your
+  account and sync live between devices (each browser keeps a copy, so they also work offline).
+  New accounts pass an hCaptcha that a Cloud Function checks on the server, and the number of
+  projects per account comes from Firestore (`config/limits`, per-user overrides) and is enforced
+  by the security rules. Off until configured — see [docs/cloud-setup.md](docs/cloud-setup.md).
 - **Examples** (40, in five groups):
   - *getting started*: blink, button, dimmer, RC charging, motor, melody, servo, LCD, ESP32, interrupts,
     and an AI-made Morse telegraph key

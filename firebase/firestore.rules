@@ -1,0 +1,91 @@
+rules_version = '2';
+
+// MakerLab cloud projects.
+//
+//   config/limits              { maxProjects }        set by you in the Firebase console
+//   users/{uid}                { email, verified, projectIds, maxProjects? }
+//                                created and marked verified ONLY by the verifyCaptcha Cloud
+//                                Function (after hCaptcha); the app may only add/remove one
+//                                project id at a time, together with that project
+//   users/{uid}/projects/{id}  { name, savedAt, json }
+//
+// The number of projects is capped by projectIds.size() <= the limit: per user
+// (users/{uid}.maxProjects, set by you) or global (config/limits.maxProjects), default 25.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+    function userPath(uid) {
+      return /databases/$(database)/documents/users/$(uid);
+    }
+    function projectPath(uid, pid) {
+      return /databases/$(database)/documents/users/$(uid)/projects/$(pid);
+    }
+    function limitsPath() {
+      return /databases/$(database)/documents/config/limits;
+    }
+    function globalLimit() {
+      return exists(limitsPath()) ? get(limitsPath()).data.get('maxProjects', 25) : 25;
+    }
+    function limitFor(uid) {
+      return get(userPath(uid)).data.get('maxProjects', globalLimit());
+    }
+    function verified(uid) {
+      return exists(userPath(uid)) && get(userPath(uid)).data.get('verified', false) == true;
+    }
+
+    match /config/{doc} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    match /users/{uid} {
+      allow read: if isOwner(uid);
+      // created / verified by the Cloud Function only
+      allow create, delete: if false;
+      // the app may change projectIds only: one id added (with its new project, within the
+      // limit) or one id removed (with its project deleted)
+      allow update: if isOwner(uid) && verified(uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['projectIds'])
+        && request.resource.data.projectIds is list
+        && request.resource.data.projectIds.size() == request.resource.data.projectIds.toSet().size()
+        && validIdsChange(uid);
+
+      function validIdsChange(uid) {
+        let before = resource.data.get('projectIds', []);
+        let after = request.resource.data.projectIds;
+        let added = after.removeAll(before);
+        let removed = before.removeAll(after);
+        return (added.size() == 1 && removed.size() == 0
+                  && after.size() <= limitFor(uid)
+                  && existsAfter(projectPath(uid, added[0]))
+                  && !exists(projectPath(uid, added[0])))
+            || (removed.size() == 1 && added.size() == 0
+                  && !existsAfter(projectPath(uid, removed[0])));
+      }
+
+      match /projects/{pid} {
+        allow read: if isOwner(uid);
+        allow create: if isOwner(uid) && verified(uid) && validProject()
+          && getAfter(userPath(uid)).data.projectIds.hasAny([pid])
+          && !get(userPath(uid)).data.get('projectIds', []).hasAny([pid]);
+        allow update: if isOwner(uid) && verified(uid) && validProject();
+        allow delete: if isOwner(uid)
+          && !getAfter(userPath(uid)).data.get('projectIds', []).hasAny([pid]);
+
+        function validProject() {
+          let d = request.resource.data;
+          return d.keys().hasOnly(['name', 'savedAt', 'json'])
+            && d.name is string && d.name.size() > 0 && d.name.size() <= 120
+            && d.savedAt is number
+            && d.json is string && d.json.size() < 900000;
+        }
+      }
+    }
+  }
+}

@@ -6,7 +6,8 @@ import { toggleSimulation } from '../sim/controller';
 import { EXAMPLES } from '../examples';
 import { openWelcome } from './Onboarding';
 import { openProjects } from './ProjectsPage';
-import { exportJson, exportPng, importJson, listProjects, saveProject, shareLink } from '../model/persistence';
+import { exportJson, exportPng, importJson, listProjects, shareLink } from '../model/persistence';
+import { openAccountDialog, saveAndReport, useAccount } from '../cloud/account';
 import { emptyDoc } from '../model/types';
 import { docBounds, zoomBy, zoomToFit } from './viewport';
 
@@ -33,6 +34,8 @@ function Menu({ label, children, icon, tour }: { label: string; icon?: string; t
 }
 
 export function Toolbar() {
+  const accountStatus = useAccount((s) => s.status);
+  const signedIn = useAccount((s) => s.status === 'signed-in' && s.verified);
   const doc = useEditor((s) => s.doc);
   const running = useEditor((s) => s.running);
   const view = useEditor((s) => s.view);
@@ -116,7 +119,8 @@ export function Toolbar() {
         {(close) => (
           <>
             <button className="menu-item" onClick={() => { if (running) toggleSimulation(); loadDoc(emptyDoc(), { keepHistory: true }); close(); }}><b>New circuit</b></button>
-            <button className="menu-item" onClick={() => { saveProject(doc); showToast(`Saved “${doc.name}” in this browser`); close(); }}><b>Save to browser</b><span>Ctrl+S</span></button>
+            <button className="menu-item" onClick={() => { void saveAndReport(doc); close(); }}><b>{signedIn ? 'Save' : 'Save to browser'}</b><span>Ctrl+S{signedIn ? ' · also to your account' : ''}</span></button>
+            {accountStatus !== 'off' && !signedIn && <button className="menu-item" onClick={() => { openAccountDialog('signin'); close(); }}><b>Sign in to sync…</b><span>save projects in the cloud</span></button>}
             <button className="menu-item" onClick={() => { openProjects(); close(); }}><b>Your projects…</b><span>Ctrl+O · {listProjects().length} saved</span></button>
             <div className="menu-sep" />
             <button className="menu-item" onClick={() => { exportJson(doc); close(); }}><b>Export .json</b></button>

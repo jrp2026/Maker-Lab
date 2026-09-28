@@ -491,3 +491,27 @@ kbd { background: #f1f4f7; border: 1px solid var(--line); border-bottom-width: 2
   .proj-grid, .proj-grid.small { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .proj-info b { font-size: 13px; }
 }
+
+/* ---------------------------------------------------------------- accounts / cloud */
+.account-modal { width: min(420px, 100%); display: flex; flex-direction: column; gap: 12px; }
+.account-modal h3 { margin: 0 0 4px; }
+.account-modal form { display: flex; flex-direction: column; gap: 10px; }
+.account-modal label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.account-modal input { height: 36px; border: 1px solid var(--line); border-radius: 8px; padding: 0 10px; font-size: 14px; color: var(--text); }
+.account-modal input:focus { outline: none; border-color: var(--accent); }
+.account-modal .row.end { display: flex; justify-content: flex-end; align-items: center; gap: 12px; }
+.account-tabs { align-self: flex-start; }
+.google-btn { justify-content: center; height: 40px; gap: 10px; font-size: 14px; }
+.or-line { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; }
+.or-line::before, .or-line::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+.captcha-box { min-height: 78px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.account-chip { position: relative; }
+.account-chip .btn { gap: 8px; }
+.avatar { width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; object-fit: cover; }
+.account-name { max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+.account-chip .menu-pop { right: 0; left: auto; }
+.sync-badge { display: inline-block; margin-right: 5px; color: #9aa6b2; }
+.sync-badge.on { color: var(--accent-dark); }
+.proj-unsaved.cloud { background: #eef8ff; border-color: #c7e0f7; }
+.proj-unsaved.promo { background: #effaf8; border-color: #bfe8e2; }
+@media (max-width: 600px) { .account-name { display: none; } }

@@ -86,6 +86,8 @@ export interface SavedProject {
   name: string;
   savedAt: number;
   doc: CircuitDoc;
+  /** id of the synced copy in the signed-in account (cloud saving) */
+  cloudId?: string;
 }
 
 export function listProjects(): SavedProject[] {
@@ -104,8 +106,28 @@ export function saveProject(doc: CircuitDoc) {
   } catch {
     /* start fresh */
   }
-  all[doc.name] = { name: doc.name, savedAt: Date.now(), doc };
+  const prev = all[doc.name];
+  all[doc.name] = { name: doc.name, savedAt: Date.now(), doc, ...(prev?.cloudId ? { cloudId: prev.cloudId } : {}) };
   safeSet(PROJECTS_KEY, JSON.stringify(all));
+  projectsChanged();
+}
+
+/** Store a project exactly as given (used by cloud sync). */
+export function putLocalProject(p: SavedProject) {
+  const all = readProjects();
+  all[p.name] = p;
+  safeSet(PROJECTS_KEY, JSON.stringify(all));
+  projectsChanged();
+}
+
+/** listeners told when the saved projects change (the projects page, cloud sync) */
+const listeners = new Set<() => void>();
+export function onProjectsChanged(fn: () => void): () => void {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
+function projectsChanged() {
+  for (const fn of listeners) fn();
 }
 
 function readProjects(): Record<string, SavedProject> {
@@ -132,6 +154,7 @@ export function renameProject(from: string, to: string): boolean {
   delete all[from];
   all[to] = { ...p, name: to, doc: { ...p.doc, name: to } };
   safeSet(PROJECTS_KEY, JSON.stringify(all));
+  projectsChanged();
   return true;
 }
 
@@ -143,6 +166,7 @@ export function duplicateProject(name: string): string | null {
   const copy = uniqueProjectName(`${name} (copy)`);
   all[copy] = { name: copy, savedAt: Date.now(), doc: { ...structuredClone(p.doc), name: copy } };
   safeSet(PROJECTS_KEY, JSON.stringify(all));
+  projectsChanged();
   return copy;
 }
 
@@ -151,6 +175,7 @@ export function deleteProject(name: string) {
     const all = JSON.parse(safeGet(PROJECTS_KEY) ?? '{}');
     delete all[name];
     safeSet(PROJECTS_KEY, JSON.stringify(all));
+    projectsChanged();
   } catch {
     /* ignore */
   }

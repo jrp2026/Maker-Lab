@@ -8,7 +8,9 @@ import { IssuesBar } from './ui/IssuesBar';
 import {
   copySelection, deleteSelection, flipSelection, loadDoc, paste, redo, rotateSelection, select, showToast, undo, useEditor,
 } from './model/store';
-import { autosave, docFromHash, loadAutosave, saveProject } from './model/persistence';
+import { autosave, docFromHash, loadAutosave } from './model/persistence';
+import { initAccount, saveAndReport } from './cloud/account';
+import { AccountDialog } from './ui/AccountDialog';
 import { EXAMPLES } from './examples';
 import { zoomToFit } from './ui/viewport';
 import { toggleSimulation } from './sim/controller';
@@ -18,6 +20,7 @@ import { openProjects, ProjectsPage } from './ui/ProjectsPage';
 import { EmptyCanvas, maybeWelcome, Tour, Welcome } from './ui/Onboarding';
 
 loadSavedParts();
+initAccount();
 
 function isTyping(e: KeyboardEvent) {
   const t = e.target as HTMLElement;
@@ -68,8 +71,7 @@ export function App() {
       }
       if (mod && e.key.toLowerCase() === 's') {
         e.preventDefault();
-        saveProject(useEditor.getState().doc);
-        showToast('Saved in this browser');
+        void saveAndReport(useEditor.getState().doc);
         return;
       }
       if (isTyping(e)) return;
@@ -129,6 +131,7 @@ export function App() {
         {codeOpen ? <CodePanel /> : <LibraryPanel />}
       </main>
       <ProjectsPage />
+      <AccountDialog />
       <Welcome />
       <Tour />
       {toast && <div className={`toast ${toast.kind}`}>{toast.text}</div>}

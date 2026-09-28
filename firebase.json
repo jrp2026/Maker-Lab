@@ -1,0 +1,26 @@
+{
+  "firestore": {
+    "rules": "firebase/firestore.rules"
+  },
+  "functions": [
+    {
+      "source": "firebase/functions",
+      "codebase": "makerlab",
+      "runtime": "nodejs20"
+    }
+  ],
+  "emulators": {
+    "firestore": {
+      "port": 8085
+    },
+    "auth": {
+      "port": 9099
+    },
+    "functions": {
+      "port": 5001
+    },
+    "ui": {
+      "enabled": false
+    }
+  }
+}

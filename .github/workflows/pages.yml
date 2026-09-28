@@ -24,6 +24,14 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+        env:
+          # cloud accounts (docs/cloud-setup.md); empty = projects are saved in the browser only
+          VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
+          VITE_FIREBASE_FUNCTIONS_REGION: ${{ vars.VITE_FIREBASE_FUNCTIONS_REGION }}
+          VITE_HCAPTCHA_SITE_KEY: ${{ vars.VITE_HCAPTCHA_SITE_KEY }}
       - run: touch dist/.nojekyll
       - name: Publish dist/ to the gh-pages branch
         uses: peaceiris/actions-gh-pages@v4

@@ -5,9 +5,11 @@ import { getDef } from '../components/registry';
 import { transformOf, worldPins } from '../model/geometry';
 import { loadDoc, showToast, useEditor } from '../model/store';
 import { emptyDoc } from '../model/types';
+import { exportJson, importJson, listProjects, onProjectsChanged, uniqueProjectName, type SavedProject } from '../model/persistence';
 import {
-  deleteProject, duplicateProject, exportJson, importJson, listProjects, renameProject, saveProject, uniqueProjectName, type SavedProject,
-} from '../model/persistence';
+  deleteEverywhere, duplicateEverywhere, openAccountDialog, renameEverywhere, saveAndReport, saveEverywhere, uploadLocal, useAccount,
+} from '../cloud/account';
+import { AccountChip } from './AccountDialog';
 import { EXAMPLES } from '../examples';
 import { docBounds, zoomToFit } from './viewport';
 import { wirePath } from './ComponentView';
@@ -69,7 +71,7 @@ function openDoc(doc: CircuitDoc) {
   const saved = listProjects().find((p) => p.name === cur.name);
   const dirty = cur.components.length > 0 && (!saved || JSON.stringify(saved.doc) !== JSON.stringify(cur));
   if (dirty && cur !== doc && window.confirm(`Save your current circuit “${cur.name}” before opening another one?\n\nOK = save it, Cancel = open without saving.`)) {
-    saveProject(cur);
+    void saveEverywhere(cur).then((err) => err && showToast(err, 'error'));
   }
   if (useEditor.getState().running) toggleSimulation();
   loadDoc(structuredClone(doc), { keepHistory: true });
@@ -77,7 +79,7 @@ function openDoc(doc: CircuitDoc) {
   closeProjects();
 }
 
-function ProjectCard({ p, current, onChange }: { p: SavedProject; current: boolean; onChange: () => void }) {
+function ProjectCard({ p, current, onChange, cloud }: { p: SavedProject; current: boolean; onChange: () => void; cloud: boolean }) {
   const [menu, setMenu] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -86,9 +88,9 @@ function ProjectCard({ p, current, onChange }: { p: SavedProject; current: boole
     window.addEventListener('pointerdown', h);
     return () => window.removeEventListener('pointerdown', h);
   }, [menu]);
-  const act = (fn: () => void) => () => {
+  const act = (fn: () => void | Promise<void>) => async () => {
     setMenu(false);
-    fn();
+    await fn();
     onChange();
   };
   return (
@@ -98,7 +100,10 @@ function ProjectCard({ p, current, onChange }: { p: SavedProject; current: boole
         <div className="proj-info">
           <b>{p.name}</b>
           <span>{summary(p.doc)}</span>
-          <span className="muted">{current ? 'Open now · ' : ''}saved {ago(p.savedAt)}</span>
+          <span className="muted">
+            {cloud && <span className={`sync-badge${p.cloudId ? ' on' : ''}`} title={p.cloudId ? 'Saved in your account: on all your devices' : 'Only in this browser — upload it to sync'}>{p.cloudId ? '☁' : '⌂'}</span>}
+            {current ? 'Open now · ' : ''}saved {ago(p.savedAt)}
+          </span>
         </div>
       </button>
       <div className="proj-more" ref={ref}>
@@ -106,21 +111,25 @@ function ProjectCard({ p, current, onChange }: { p: SavedProject; current: boole
         {menu && (
           <div className="menu-pop proj-menu">
             <button className="menu-item" onClick={act(() => openDoc(p.doc))}><b>Open</b></button>
-            <button className="menu-item" onClick={act(() => {
+            <button className="menu-item" onClick={act(async () => {
               const to = window.prompt('New name:', p.name)?.trim();
               if (!to || to === p.name) return;
-              if (!renameProject(p.name, to)) return showToast(`There is already a project called “${to}”`, 'error');
               const cur = useEditor.getState().doc;
+              const err = await renameEverywhere(p.name, to);
+              if (err) return showToast(err, 'error');
               if (cur.name === p.name) useEditor.setState({ doc: { ...cur, name: to } });
             })}><b>Rename…</b></button>
-            <button className="menu-item" onClick={act(() => {
-              const copy = duplicateProject(p.name);
-              if (copy) showToast(`Copied as “${copy}”`);
+            <button className="menu-item" onClick={act(async () => {
+              const { copy, error } = await duplicateEverywhere(p.name);
+              if (error) showToast(error, 'error');
+              else if (copy) showToast(`Copied as “${copy}”`);
             })}><b>Duplicate</b></button>
             <button className="menu-item" onClick={act(() => exportJson(p.doc))}><b>Download .json</b></button>
             <div className="menu-sep" />
-            <button className="menu-item danger" onClick={act(() => {
-              if (window.confirm(`Delete “${p.name}”? This can't be undone.`)) deleteProject(p.name);
+            <button className="menu-item danger" onClick={act(async () => {
+              if (!window.confirm(`Delete “${p.name}”${p.cloudId ? ' from this browser and your account' : ''}? This can't be undone.`)) return;
+              const err = await deleteEverywhere(p.name);
+              if (err) showToast(err, 'error');
             })}><b>Delete</b></button>
           </div>
         )}
@@ -138,6 +147,10 @@ export function ProjectsPage() {
   const [sort, setSort] = useState<'recent' | 'name'>('recent');
   const fileRef = useRef<HTMLInputElement>(null);
   const projects = useMemo(() => (open ? listProjects() : []), [open, version]);
+  const account = useAccount();
+  const cloudOn = account.status === 'signed-in' && account.verified;
+  // cloud sync and other tabs change the saved projects: refresh the list
+  useEffect(() => onProjectsChanged(() => setVersion((v) => v + 1)), []);
   // built once per opening: the starter examples' circuits (for their previews)
   const starters = useMemo(
     () => (open ? STARTERS.map((id) => EXAMPLES.find((e) => e.id === id)).filter((e) => !!e).map((ex) => ({ ex, doc: ex.build() })) : []),
@@ -164,9 +177,14 @@ export function ProjectsPage() {
         <header className="projects-head">
           <div>
             <h2>Your projects</h2>
-            <p className="muted">Saved in this browser · {projects.length} project{projects.length === 1 ? '' : 's'}</p>
+            <p className="muted">
+              {cloudOn
+                ? <>Synced with your account{account.syncing ? ' (syncing…)' : ''} · {account.cloud.length} / {account.limit} in the cloud</>
+                : <>Saved in this browser · {projects.length} project{projects.length === 1 ? '' : 's'}</>}
+            </p>
           </div>
           <span className="grow" />
+          <AccountChip />
           <button className="btn" onClick={() => fileRef.current?.click()}>⇪ Import .json</button>
           <button className="btn primary" onClick={() => openDoc({ ...emptyDoc(), name: uniqueProjectName('Untitled circuit') })}>＋ New circuit</button>
           <button className="btn" title="Back to the editor (Esc)" onClick={closeProjects}>← Editor</button>
@@ -177,9 +195,9 @@ export function ProjectsPage() {
             try {
               const d = await importJson(f);
               const name = uniqueProjectName(d.name);
-              saveProject({ ...d, name });
+              const err = await saveEverywhere({ ...d, name });
               setVersion((v) => v + 1);
-              showToast(`Imported “${name}”`);
+              showToast(err ?? `Imported “${name}”`, err ? 'error' : 'info');
             } catch (err) {
               showToast(`Could not import: ${(err as Error).message}`, 'error');
             }
@@ -189,9 +207,29 @@ export function ProjectsPage() {
         {unsaved && (
           <div className="proj-unsaved">
             <span>“{doc.name}” in the editor has unsaved changes.</span>
-            <button className="btn primary" onClick={() => { saveProject(doc); setVersion((v) => v + 1); showToast(`Saved “${doc.name}”`); }}>Save it</button>
+            <button className="btn primary" onClick={() => void saveAndReport(doc).then(() => setVersion((v) => v + 1))}>Save it</button>
           </div>
         )}
+
+        {cloudOn && account.localOnly.length > 0 && (
+          <div className="proj-unsaved cloud">
+            <span>
+              {account.localOnly.length} project{account.localOnly.length === 1 ? ' is' : 's are'} only in this browser
+              {account.cloud.length + account.localOnly.length > account.limit ? ` — your account has room for ${Math.max(0, account.limit - account.cloud.length)} more` : ''}.
+            </span>
+            <button className="btn primary" disabled={account.syncing || account.cloud.length >= account.limit} onClick={async () => {
+              const err = await uploadLocal(account.localOnly.map((p) => p.name));
+              if (err) showToast(err, 'error');
+              else showToast('Uploaded to your account');
+            }}>☁ Upload to your account</button>
+          </div>
+        )}
+        {account.status === 'signed-out' || account.status === 'idle' ? (
+          <div className="proj-unsaved promo">
+            <span><b>Keep your projects on all your devices.</b> Sign in with Google or email and they sync automatically.</span>
+            <button className="btn primary" onClick={() => openAccountDialog('signup')}>Create a free account</button>
+          </div>
+        ) : null}
 
         {projects.length > 0 ? (
           <>
@@ -206,14 +244,14 @@ export function ProjectsPage() {
               </select>
             </div>
             <div className="proj-grid">
-              {shown.map((p) => <ProjectCard key={p.name} p={p} current={p.name === doc.name} onChange={() => setVersion((v) => v + 1)} />)}
+              {shown.map((p) => <ProjectCard key={p.name} p={p} current={p.name === doc.name} cloud={cloudOn} onChange={() => setVersion((v) => v + 1)} />)}
             </div>
             {!shown.length && <p className="muted pad">No project matches “{q}”.</p>}
           </>
         ) : (
           <div className="proj-empty">
             <h3>No saved projects yet</h3>
-            <p className="muted">Build something and press <kbd>Ctrl</kbd>+<kbd>S</kbd> (or File → Save to browser) — it will show up here.</p>
+            <p className="muted">Build something and press <kbd>Ctrl</kbd>+<kbd>S</kbd> (or File → Save) — it will show up here.</p>
           </div>
         )}
 
