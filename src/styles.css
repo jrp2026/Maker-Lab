@@ -515,3 +515,4 @@ kbd { background: #f1f4f7; border: 1px solid var(--line); border-bottom-width: 2
 .proj-unsaved.cloud { background: #eef8ff; border-color: #c7e0f7; }
 .proj-unsaved.promo { background: #effaf8; border-color: #bfe8e2; }
 @media (max-width: 600px) { .account-name { display: none; } }
+.kicad-row { display: flex; gap: 6px; align-items: center; margin: 8px 0 4px; flex-wrap: wrap; }

@@ -164,6 +164,13 @@ npm run build      # static site in dist/
   part count and when it was saved: search, sort, open, rename, duplicate, download or delete
   them, import a `.json`, start a new circuit or begin from an example. Autosave, `Ctrl+S`,
   JSON import/export, PNG export and share links (the whole circuit in the URL) as before.
+- **KiCad export** – File → *Export KiCad project (.zip)* writes a KiCad 7+ project (opens in
+  KiCad 7, 8 and 9): the schematic with every board part (breadboards and instruments are left
+  out), connections as wires and net labels named after GND, supplies and MCU pins, plus a
+  `makerlab` symbol library and `makerlab.pretty` footprints at the real pin pitch, already
+  linked to each symbol so *Update PCB from Schematic* works. The inspector (and the AI part
+  dialog) also download a single part's symbol (`.kicad_sym`) or footprint (`.kicad_mod`), and
+  this works for AI-generated parts too.
 - **Cloud accounts (optional)** – sign in with email or Google and projects are saved to your
   account and sync live between devices (each browser keeps a copy, so they also work offline).
   New accounts pass an hCaptcha that a Cloud Function checks on the server, and the number of

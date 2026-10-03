@@ -8,6 +8,7 @@ import { registerSpec, savePart } from '../ai/library';
 import { addComponent, showToast } from '../model/store';
 import { getCanvasSize, useViewport } from './viewport';
 import type { ComponentInstance } from '../model/types';
+import { KicadButtons } from './KicadButtons';
 
 const IDEAS = ['Morse telegraph key', 'Nixie tube showing one digit', '5 V reed relay', 'K-type thermocouple with a temperature slider', 'small wind turbine generator', 'doorbell chime (ding-dong)', 'Geiger counter module that clicks', 'BH1750 light sensor module'];
 
@@ -38,6 +39,7 @@ export function AiPartDialog({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [problems, setProblems] = useState<string[]>([]);
   const [spec, setSpec] = useState<CustomPartSpec | null>(null);
+  const specDef = useMemo(() => (spec ? defFromSpec(spec) : null), [spec]);
   const [view, setView] = useState<'breadboard' | 'schematic'>('breadboard');
   const [jsonOpen, setJsonOpen] = useState(false);
   const [jsonText, setJsonText] = useState('');
@@ -223,6 +225,7 @@ export function AiPartDialog({ onClose }: { onClose: () => void }) {
                   <button className="btn" onClick={() => { savePart(spec); showToast('Saved to My AI parts'); }}>Save to My AI parts</button>
                   <button className="link" onClick={() => setJsonOpen(!jsonOpen)}>{jsonOpen ? 'Hide' : 'Edit'} JSON</button>
                 </div>
+                {specDef && <KicadButtons def={specDef} props={specDef.defaultProps} />}
                 <div className="refine">
                   <input value={refine} onChange={(e) => setRefine(e.target.value)} placeholder="Refine: “make the body blue”, “add a power LED”…" onKeyDown={(e) => e.key === 'Enter' && run(refine, spec)} disabled={!!busy} />
                   <button className="btn" onClick={() => run(refine, spec)} disabled={!!busy || !refine.trim()}>Refine</button>

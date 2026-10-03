@@ -5,6 +5,7 @@ import { WIRE_COLORS, deleteSelection, flipSelection, rotateSelection, setProp, 
 import { formatSI, parseSI } from '../components/util';
 import type { ComponentInstance } from '../model/types';
 import { getSimulator, useSimView } from '../sim/controller';
+import { KicadButtons } from './KicadButtons';
 
 /** Queue text for a running part (it drains `input[key]` while simulating). */
 function SendField({ comp, f }: { comp: ComponentInstance; f: Extract<PropField, { kind: 'send' }> }) {
@@ -175,6 +176,7 @@ export function Inspector() {
         </p>
       )}
       <p className="muted small desc">{def.description}</p>
+      <KicadButtons def={def} props={comp.props} />
     </div>
   );
 }

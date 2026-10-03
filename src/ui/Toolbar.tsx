@@ -136,6 +136,16 @@ export function Toolbar() {
                 showToast(String((e as Error).message), 'error');
               }
             }}><b>Export image (.png)</b></button>
+            <button className="menu-item" onClick={async () => {
+              close();
+              if (!doc.components.length) return showToast('Nothing to export yet', 'error');
+              try {
+                const { downloadKicadProject } = await import('../kicad');
+                showToast(downloadKicadProject(doc));
+              } catch (e) {
+                showToast(`KiCad export failed: ${(e as Error).message}`, 'error');
+              }
+            }}><b>Export KiCad project (.zip)</b><span>schematic + symbols + footprints</span></button>
           </>
         )}
       </Menu>
