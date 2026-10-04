@@ -164,6 +164,15 @@ npm run build      # static site in dist/
   part count and when it was saved: search, sort, open, rename, duplicate, download or delete
   them, import a `.json`, start a new circuit or begin from an example. Autosave, `Ctrl+S`,
   JSON import/export, PNG export and share links (the whole circuit in the URL) as before.
+- **Use your device's sensors** – select a sensor part and switch on *Use this device's …* to drive
+  it from the real phone or laptop: the microphone feeds the KY-038 sound sensor and the MAX4466
+  mic (loudness and pitch); the accelerometer/gyroscope feeds the ADXL335, MPU6050, joystick (tilt to
+  steer), tilt switch and SW-420 (shake it); the compass feeds the QMC5883L; the camera works as a
+  light sensor (TEMT6000, LDR, photoresistor, phototransistor, photodiode, and AI parts with a lux
+  setting) and as the PIR's motion detector; location feeds the NEO-6M GPS. The switch only appears
+  when the device has that sensor, nothing is saved or sent anywhere, and the mic/camera turn off as
+  soon as no part uses them.
+- **Examples menu with pictures** – every example shows a small drawing of its circuit.
 - **Menu bar** – Windows-style *File* and *Edit* menus at the top left (Alt+F / Alt+E, arrow keys,
   Esc): new, open, save, import/export; undo/redo, cut/copy/paste, duplicate, delete, select all,
   rotate and flip, each with its shortcut.

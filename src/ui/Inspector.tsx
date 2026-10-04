@@ -6,6 +6,9 @@ import { formatSI, parseSI } from '../components/util';
 import type { ComponentInstance } from '../model/types';
 import { getSimulator, useSimView } from '../sim/controller';
 import { KicadButtons } from './KicadButtons';
+import { DeviceToggle } from './DeviceToggle';
+import { linkFor } from '../device/links';
+import { useDeviceLinks } from '../device/runner';
 
 /** Queue text for a running part (it drains `input[key]` while simulating). */
 function SendField({ comp, f }: { comp: ComponentInstance; f: Extract<PropField, { kind: 'send' }> }) {
@@ -49,8 +52,22 @@ function NumberField({ comp, f }: { comp: ComponentInstance; f: Extract<PropFiel
   );
 }
 
-function Field({ comp, f }: { comp: ComponentInstance; f: PropField }) {
+function liveText(f: PropField, v: unknown): string {
+  if (f.kind === 'select') {
+    const hit = f.options.find((o) => String(o.value) === String(v));
+    if (hit) return hit.label;
+    // a value between the options (e.g. a measured pitch): borrow the options' unit
+    const unit = /\d\s*([A-Za-z°%]+)/.exec(f.options[0]?.label ?? '')?.[1];
+    return unit ? `${v} ${unit}` : String(v);
+  }
+  const n = Number(v);
+  if (f.kind === 'slider' && f.min === 0 && f.max === 1 && !f.unit) return `${Math.round(n * 100)}%`;
+  return `${+n.toFixed(f.kind === 'number' ? 5 : 2)}${'unit' in f && f.unit ? ` ${f.unit}` : ''}`;
+}
+
+function Field({ comp, f, locked }: { comp: ComponentInstance; f: PropField; locked?: boolean }) {
   const v = comp.props[f.key];
+  if (locked) return <div className="field-live"><span>{liveText(f, v)}</span><span className="from-device">from device</span></div>;
   switch (f.kind) {
     case 'number':
       return <NumberField comp={comp} f={f} />;
@@ -94,6 +111,7 @@ export function Inspector() {
   const selection = useEditor((s) => s.selection);
   const running = useEditor((s) => s.running);
   const warnings = useSimView((s) => s.snap?.warnings);
+  const deviceOn = useDeviceLinks((s) => s.on);
 
   if (selection.wire) {
     const wire = doc.wires.find((w) => w.id === selection.wire);
@@ -141,6 +159,7 @@ export function Inspector() {
   if (!comp) return null;
   const def = getDef(comp.type)!;
   const myWarnings = (warnings ?? []).filter((w) => w.comp === comp.id);
+  const linked = deviceOn[comp.id] ? new Set(linkFor(def)?.keys ?? []) : null;
   return (
     <div className="inspector">
       <div className="insp-head">
@@ -157,10 +176,11 @@ export function Inspector() {
       {myWarnings.map((w, i) => (
         <div key={i} className={`insp-warn ${w.level}`}>{w.message}</div>
       ))}
+      <DeviceToggle compId={comp.id} def={def} />
       {def.fields?.map((f) => (
         <div key={f.key} className="field">
           <label className="field-label">{f.label}{running && 'live' in f && f.live ? <span className="live-dot" title="Adjustable while simulating" /> : null}</label>
-          <Field comp={comp} f={f} />
+          <Field comp={comp} f={f} locked={!!linked?.has(f.key)} />
         </div>
       ))}
       {def.mcu && (

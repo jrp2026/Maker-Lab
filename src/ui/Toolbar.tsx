@@ -4,6 +4,19 @@ import {
   updateDoc, useEditor,
 } from '../model/store';
 import { MenuBar, type BarMenu } from './MenuBar';
+import { CircuitThumb } from './CircuitThumb';
+import type { CircuitDoc } from '../model/types';
+
+/** example circuits are built the first time the menu shows them, then kept for the pictures */
+const exampleDocs = new Map<string, CircuitDoc>();
+function exampleDoc(id: string): CircuitDoc {
+  let d = exampleDocs.get(id);
+  if (!d) {
+    d = EXAMPLES.find((e) => e.id === id)!.build();
+    exampleDocs.set(id, d);
+  }
+  return d;
+}
 import { toggleSimulation } from '../sim/controller';
 import { EXAMPLES } from '../examples';
 import { openWelcome } from './Onboarding';
@@ -13,7 +26,7 @@ import { openAccountDialog, saveAndReport, useAccount } from '../cloud/account';
 import { emptyDoc } from '../model/types';
 import { docBounds, zoomBy, zoomToFit } from './viewport';
 
-function Menu({ label, children, icon, tour }: { label: string; icon?: string; tour?: string; children: (close: () => void) => React.ReactNode }) {
+function Menu({ label, children, icon, tour, popClass }: { label: string; icon?: string; tour?: string; popClass?: string; children: (close: () => void) => React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -30,7 +43,7 @@ function Menu({ label, children, icon, tour }: { label: string; icon?: string; t
         {icon && <span className="ico">{icon}</span>}
         {label} <span className="caret">▾</span>
       </button>
-      {open && <div className="menu-pop">{children(() => setOpen(false))}</div>}
+      {open && <div className={`menu-pop${popClass ? ` ${popClass}` : ''}`}>{children(() => setOpen(false))}</div>}
     </div>
   );
 }
@@ -152,7 +165,7 @@ export function Toolbar() {
 
       <span className="grow" />
 
-      <Menu label="Examples" icon="✦" tour="examples">
+      <Menu label="Examples" icon="✦" tour="examples" popClass="examples-pop">
         {(close) => (
           <>
             {EXAMPLES.map((ex, i) => {
@@ -161,9 +174,12 @@ export function Toolbar() {
               return (
                 <Fragment key={ex.id}>
                   {heading && <div className="menu-heading">{group}</div>}
-                  <button className="menu-item" onClick={() => { loadExample(ex.id); close(); }}>
-                    <b>{ex.name}</b>
-                    <span>{ex.description}</span>
+                  <button className="menu-item ex-item" onClick={() => { loadExample(ex.id); close(); }}>
+                    <CircuitThumb doc={exampleDoc(ex.id)} className="ex-thumb" />
+                    <span className="ex-text">
+                      <b>{ex.name}</b>
+                      <span>{ex.description}</span>
+                    </span>
                   </button>
                 </Fragment>
               );

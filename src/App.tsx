@@ -16,6 +16,7 @@ import { zoomToFit } from './ui/viewport';
 import { toggleSimulation } from './sim/controller';
 import { loadSavedParts } from './ai/library';
 import { SimClock } from './ui/SimClock';
+import { detectCapabilities } from './device/sensors';
 import { openProjects, ProjectsPage } from './ui/ProjectsPage';
 import { EmptyCanvas, maybeWelcome, Tour, Welcome } from './ui/Onboarding';
 
@@ -34,6 +35,8 @@ export function App() {
   const running = useEditor((s) => s.running);
 
   // initial document: share link > autosave > first example
+  useEffect(() => detectCapabilities(), []);
+
   useEffect(() => {
     (async () => {
       let doc = null;

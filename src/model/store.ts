@@ -254,6 +254,12 @@ export function showToast(text: string, kind: 'info' | 'error' = 'info') {
   }, kind === 'error' ? 5000 : 2600);
 }
 
+/** Update several props at once without creating an undo step (live device sensor values). */
+export function setPropsSilent(id: string, patch: Record<string, PropValue>) {
+  const s = get();
+  set({ doc: { ...s.doc, components: s.doc.components.map((c) => (c.id === id ? { ...c, props: { ...c.props, ...patch } } : c)) } });
+}
+
 /** Update a prop without creating an undo step (used for code editing keystrokes). */
 export function setPropSilent(id: string, key: string, value: PropValue) {
   const s = get();

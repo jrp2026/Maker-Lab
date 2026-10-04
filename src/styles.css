@@ -539,3 +539,43 @@ kbd { background: #f1f4f7; border: 1px solid var(--line); border-bottom-width: 2
   .menubar-pop { position: fixed; left: 8px; right: 8px; top: 8px; min-width: 0; max-height: 72dvh; overflow: auto; z-index: 300; box-shadow: 0 12px 40px rgba(20, 28, 38, 0.35); }
   .bar-item { padding: 10px; font-size: 14px; }
 }
+
+/* ---------------------------------------------------------------- device sensors (mic, motion, camera …) */
+.device-link { margin-top: 10px; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; background: #f8fafb; }
+.device-link.on { border-color: #9edbd6; background: #eef9f8; }
+.device-link.bad { border-color: #f1c4bf; background: #fdf3f2; }
+.device-row { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.device-ico { font-size: 15px; line-height: 1; }
+.device-label { flex: 1; font-size: 12.5px; font-weight: 600; color: var(--text); }
+.device-note { display: flex; align-items: center; gap: 8px; margin-top: 5px; font-size: 11.5px; color: var(--muted); line-height: 1.35; font-variant-numeric: tabular-nums; }
+.device-link.bad .device-note { color: #b3261e; }
+.device-meter { flex: 0 0 56px; height: 6px; border-radius: 3px; background: #dbe3ea; overflow: hidden; }
+.device-meter span { display: block; height: 100%; background: var(--accent); border-radius: 3px; transition: width 0.08s linear; }
+.switch {
+  appearance: none; -webkit-appearance: none; flex: 0 0 auto; width: 34px; height: 20px; border-radius: 10px; margin: 0;
+  background: #c7d0d8; position: relative; cursor: pointer; transition: background 0.15s;
+}
+.switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25); transition: transform 0.15s; }
+.switch:checked { background: var(--accent); }
+.switch:checked::after { transform: translateX(14px); }
+.switch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.field-live { display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 30px; padding: 0 9px; border-radius: 8px; background: #eef9f8; font-weight: 600; font-variant-numeric: tabular-nums; }
+.from-device { font-size: 10.5px; font-weight: 700; color: var(--accent-dark); text-transform: uppercase; letter-spacing: 0.04em; }
+@media (prefers-reduced-motion: reduce) { .switch, .switch::after, .device-meter span { transition: none; } }
+
+/* ---------------------------------------------------------------- Examples menu with circuit pictures */
+.menu-pop.examples-pop { min-width: 400px; max-width: 440px; }
+.menu-item.ex-item { flex-direction: row; align-items: center; gap: 12px; }
+.ex-thumb {
+  flex: 0 0 auto; display: block; width: 92px; height: 58px; border-radius: 7px; border: 1px solid var(--line);
+  background: #f3f6f9; background-image: radial-gradient(#dde2e8 0.6px, transparent 0.6px); background-size: 8px 8px;
+}
+.ex-thumb.empty { display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 10px; }
+.menu-item.ex-item:hover .ex-thumb { border-color: #9edbd6; }
+.ex-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; color: inherit !important; font-size: inherit !important; }
+.ex-text b { color: var(--text); }
+.ex-text span { color: var(--muted); font-size: 11.5px; line-height: 1.35; }
+@media (max-width: 760px) {
+  .menu-pop.examples-pop { max-width: none; }
+  .ex-thumb { width: 68px; height: 44px; }
+}
