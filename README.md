@@ -164,6 +164,9 @@ npm run build      # static site in dist/
   part count and when it was saved: search, sort, open, rename, duplicate, download or delete
   them, import a `.json`, start a new circuit or begin from an example. Autosave, `Ctrl+S`,
   JSON import/export, PNG export and share links (the whole circuit in the URL) as before.
+- **Menu bar** – Windows-style *File* and *Edit* menus at the top left (Alt+F / Alt+E, arrow keys,
+  Esc): new, open, save, import/export; undo/redo, cut/copy/paste, duplicate, delete, select all,
+  rotate and flip, each with its shortcut.
 - **KiCad export** – File → *Export KiCad project (.zip)* writes a KiCad 7+ project (opens in
   KiCad 7, 8 and 9): the schematic with every board part (breadboards and instruments are left
   out), connections as wires and net labels named after GND, supplies and MCU pins, plus a

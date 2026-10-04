@@ -6,7 +6,7 @@ import { Inspector } from './ui/Inspector';
 import { CodePanel } from './ui/CodePanel';
 import { IssuesBar } from './ui/IssuesBar';
 import {
-  copySelection, deleteSelection, flipSelection, loadDoc, paste, redo, rotateSelection, select, showToast, undo, useEditor,
+  copySelection, cutSelection, deleteSelection, flipSelection, loadDoc, paste, redo, rotateSelection, select, showToast, undo, useEditor,
 } from './model/store';
 import { autosave, docFromHash, loadAutosave } from './model/persistence';
 import { initAccount, saveAndReport } from './cloud/account';
@@ -84,6 +84,8 @@ export function App() {
         redo();
       } else if (mod && e.key.toLowerCase() === 'c') {
         copySelection();
+      } else if (mod && e.key.toLowerCase() === 'x') {
+        cutSelection();
       } else if (mod && e.key.toLowerCase() === 'v') {
         paste();
       } else if (mod && e.key.toLowerCase() === 'd') {

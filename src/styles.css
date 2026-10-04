@@ -516,3 +516,26 @@ kbd { background: #f1f4f7; border: 1px solid var(--line); border-bottom-width: 2
 .proj-unsaved.promo { background: #effaf8; border-color: #bfe8e2; }
 @media (max-width: 600px) { .account-name { display: none; } }
 .kicad-row { display: flex; gap: 6px; align-items: center; margin: 8px 0 4px; flex-wrap: wrap; }
+
+/* ---------------------------------------------------------------- Windows-style menu bar (File, Edit) */
+.menubar { display: flex; align-items: center; }
+.menubar-title { border: none; background: transparent; height: 30px; padding: 0 10px; border-radius: 6px; font-weight: 600; color: var(--text); }
+.menubar-title:hover, .menubar-title.open { background: #eaeff4; }
+.menubar-pop {
+  position: absolute; left: 0; top: 36px; min-width: 250px; background: #fff; border: 1px solid var(--line);
+  border-radius: 10px; box-shadow: var(--shadow); padding: 5px; z-index: 50;
+}
+.bar-item {
+  display: flex; align-items: center; gap: 28px; width: 100%; border: none; background: transparent;
+  padding: 7px 10px; border-radius: 6px; text-align: left; font-size: 13px; color: var(--text);
+}
+.bar-item span { flex: 1; }
+.bar-item kbd { font-family: inherit; font-size: 12px; color: var(--muted); border: none; background: none; padding: 0; box-shadow: none; }
+.bar-item:hover:not(:disabled), .bar-item:focus-visible { background: #e8f2fb; outline: none; }
+.bar-item:disabled { color: #aab4be; cursor: default; }
+.bar-item:disabled kbd { color: #c3cbd3; }
+@media (max-width: 760px) {
+  .menubar-title { height: 34px; padding: 0 8px; }
+  .menubar-pop { position: fixed; left: 8px; right: 8px; top: 8px; min-width: 0; max-height: 72dvh; overflow: auto; z-index: 300; box-shadow: 0 12px 40px rgba(20, 28, 38, 0.35); }
+  .bar-item { padding: 10px; font-size: 14px; }
+}

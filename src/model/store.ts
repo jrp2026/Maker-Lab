@@ -218,6 +218,14 @@ export function copySelection() {
   return true;
 }
 
+export function cutSelection() {
+  if (!copySelection()) return false;
+  deleteSelection();
+  return true;
+}
+
+export const hasClipboard = () => !!clipboard;
+
 export function paste(offset = 20) {
   if (!clipboard) return;
   const map = new Map<string, string>();

@@ -1,7 +1,9 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import {
-  deleteSelection, flipSelection, loadDoc, redo, rotateSelection, showToast, undo, updateDoc, useEditor,
+  copySelection, cutSelection, deleteSelection, flipSelection, hasClipboard, loadDoc, paste, redo, rotateSelection, select, showToast, undo,
+  updateDoc, useEditor,
 } from '../model/store';
+import { MenuBar, type BarMenu } from './MenuBar';
 import { toggleSimulation } from '../sim/controller';
 import { EXAMPLES } from '../examples';
 import { openWelcome } from './Onboarding';
@@ -53,6 +55,60 @@ export function Toolbar() {
     requestAnimationFrame(() => zoomToFit(useEditor.getState().doc));
   };
 
+  const exportImage = async () => {
+    const svg = document.querySelector('svg.canvas') as SVGSVGElement | null;
+    const b = docBounds(doc);
+    if (!svg || !b) return showToast('Nothing to export yet', 'error');
+    try {
+      await exportPng(svg, b, doc.name);
+    } catch (e) {
+      showToast(String((e as Error).message), 'error');
+    }
+  };
+  const exportKicad = async () => {
+    if (!doc.components.length) return showToast('Nothing to export yet', 'error');
+    try {
+      const { downloadKicadProject } = await import('../kicad');
+      showToast(downloadKicadProject(doc));
+    } catch (e) {
+      showToast(`KiCad export failed: ${(e as Error).message}`, 'error');
+    }
+  };
+  const hasComps = useEditor((s) => s.selection.comps.length > 0);
+  const menus: BarMenu[] = [
+    {
+      label: 'File', alt: 'f', items: () => [
+        { label: 'New circuit', run: () => { if (running) toggleSimulation(); loadDoc(emptyDoc(), { keepHistory: true }); } },
+        { label: 'Your projects…', keys: 'Ctrl+O', run: openProjects, title: `${listProjects().length} saved` },
+        { label: signedIn ? 'Save' : 'Save to browser', keys: 'Ctrl+S', run: () => void saveAndReport(doc), title: signedIn ? 'Also saves to your account' : undefined },
+        ...(accountStatus !== 'off' && !signedIn ? [{ label: 'Sign in to sync…', run: () => openAccountDialog('signin'), title: 'Save projects in the cloud' }] : []),
+        'sep',
+        { label: 'Import .json…', run: () => fileRef.current?.click() },
+        { label: 'Export .json', run: () => exportJson(doc) },
+        { label: 'Export image (.png)', run: () => void exportImage() },
+        { label: 'Export KiCad project (.zip)', run: () => void exportKicad(), title: 'Schematic + symbols + footprints' },
+      ],
+    },
+    {
+      label: 'Edit', alt: 'e', items: () => [
+        { label: 'Undo', keys: 'Ctrl+Z', disabled: !canUndo, run: undo },
+        { label: 'Redo', keys: 'Ctrl+Y', disabled: !canRedo, run: redo },
+        'sep',
+        { label: 'Cut', keys: 'Ctrl+X', disabled: !hasComps, run: () => cutSelection() },
+        { label: 'Copy', keys: 'Ctrl+C', disabled: !hasComps, run: () => copySelection() },
+        { label: 'Paste', keys: 'Ctrl+V', disabled: !hasClipboard(), run: () => paste() },
+        { label: 'Duplicate', keys: 'Ctrl+D', disabled: !hasComps, run: () => { if (copySelection()) paste(); } },
+        { label: 'Delete', keys: 'Del', disabled: !hasSel, run: deleteSelection },
+        'sep',
+        { label: 'Select all', keys: 'Ctrl+A', disabled: !doc.components.length, run: () => select({ comps: doc.components.map((c) => c.id) }) },
+        'sep',
+        { label: 'Rotate right', keys: 'R', disabled: !hasComps, run: () => rotateSelection(1) },
+        { label: 'Rotate left', keys: 'Shift+R', disabled: !hasComps, run: () => rotateSelection(-1) },
+        { label: 'Flip', keys: 'F', disabled: !hasComps, run: flipSelection },
+      ],
+    },
+  ];
+
   // the toolbar wraps onto several rows on phones; panels that sit under it need its height
   const headerRef = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -72,6 +128,7 @@ export function Toolbar() {
           </span>
           <span className="brand-name">MakerLab</span>
         </button>
+        <MenuBar menus={menus} />
         <input className="doc-name" value={doc.name} onChange={(e) => updateDoc((d) => ({ ...d, name: e.target.value }))} aria-label="Project name" spellCheck={false} />
       </div>
 
@@ -111,41 +168,6 @@ export function Toolbar() {
                 </Fragment>
               );
             })}
-          </>
-        )}
-      </Menu>
-
-      <Menu label="File" icon="▤">
-        {(close) => (
-          <>
-            <button className="menu-item" onClick={() => { if (running) toggleSimulation(); loadDoc(emptyDoc(), { keepHistory: true }); close(); }}><b>New circuit</b></button>
-            <button className="menu-item" onClick={() => { void saveAndReport(doc); close(); }}><b>{signedIn ? 'Save' : 'Save to browser'}</b><span>Ctrl+S{signedIn ? ' · also to your account' : ''}</span></button>
-            {accountStatus !== 'off' && !signedIn && <button className="menu-item" onClick={() => { openAccountDialog('signin'); close(); }}><b>Sign in to sync…</b><span>save projects in the cloud</span></button>}
-            <button className="menu-item" onClick={() => { openProjects(); close(); }}><b>Your projects…</b><span>Ctrl+O · {listProjects().length} saved</span></button>
-            <div className="menu-sep" />
-            <button className="menu-item" onClick={() => { exportJson(doc); close(); }}><b>Export .json</b></button>
-            <button className="menu-item" onClick={() => { fileRef.current?.click(); close(); }}><b>Import .json…</b></button>
-            <button className="menu-item" onClick={async () => {
-              close();
-              const svg = document.querySelector('svg.canvas') as SVGSVGElement | null;
-              const b = docBounds(doc);
-              if (!svg || !b) return showToast('Nothing to export yet', 'error');
-              try {
-                await exportPng(svg, b, doc.name);
-              } catch (e) {
-                showToast(String((e as Error).message), 'error');
-              }
-            }}><b>Export image (.png)</b></button>
-            <button className="menu-item" onClick={async () => {
-              close();
-              if (!doc.components.length) return showToast('Nothing to export yet', 'error');
-              try {
-                const { downloadKicadProject } = await import('../kicad');
-                showToast(downloadKicadProject(doc));
-              } catch (e) {
-                showToast(`KiCad export failed: ${(e as Error).message}`, 'error');
-              }
-            }}><b>Export KiCad project (.zip)</b><span>schematic + symbols + footprints</span></button>
           </>
         )}
       </Menu>
