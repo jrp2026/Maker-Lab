@@ -185,7 +185,7 @@ npm run build      # static site in dist/
   this works for AI-generated parts too.
 - **Cloud accounts (optional)** – sign in with email or Google and projects are saved to your
   account and sync live between devices (each browser keeps a copy, so they also work offline).
-  New accounts pass an hCaptcha that a Cloud Function checks on the server, and the number of
+  New accounts pass an hCaptcha that a free Cloudflare Worker checks on the server, and the number of
   projects per account comes from Firestore (`config/limits`, per-user overrides) and is enforced
   by the security rules. Off until configured — see [docs/cloud-setup.md](docs/cloud-setup.md).
 - **Examples** (40, in five groups):

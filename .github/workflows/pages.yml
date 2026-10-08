@@ -32,6 +32,7 @@ jobs:
           VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
           VITE_FIREBASE_FUNCTIONS_REGION: ${{ vars.VITE_FIREBASE_FUNCTIONS_REGION }}
           VITE_HCAPTCHA_SITE_KEY: ${{ vars.VITE_HCAPTCHA_SITE_KEY }}
+          VITE_CAPTCHA_URL: ${{ vars.VITE_CAPTCHA_URL }}
       - run: touch dist/.nojekyll
       - name: Publish dist/ to the gh-pages branch
         uses: peaceiris/actions-gh-pages@v4

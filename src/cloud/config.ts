@@ -16,6 +16,8 @@ export const FUNCTIONS_REGION = env.VITE_FIREBASE_FUNCTIONS_REGION || 'us-centra
 /** development: talk to the local Firebase emulators (auth 9099, firestore 8085, functions 5001) */
 export const USE_EMULATORS = env.VITE_FIREBASE_EMULATORS === '1';
 export const HCAPTCHA_SITE_KEY = env.VITE_HCAPTCHA_SITE_KEY ?? '';
+/** the Cloudflare Worker that checks the captcha (cloudflare/captcha-worker); without it the verifyCaptcha Cloud Function is used */
+export const CAPTCHA_URL = env.VITE_CAPTCHA_URL ?? '';
 
 /** are cloud accounts available in this build? */
 export const cloudEnabled = !!(FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.projectId && FIREBASE_CONFIG.appId);

@@ -1,0 +1,15 @@
+# MakerLab captcha check (see docs/cloud-setup.md)
+name = "makerlab-captcha"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+
+[vars]
+FIREBASE_PROJECT_ID = "your-firebase-project-id"
+# the sites allowed to call this worker (comma separated)
+ALLOWED_ORIGINS = "https://jrp2026.github.io,http://localhost:5173,http://localhost:4173"
+# optional: only accept captchas solved for this hCaptcha site key
+HCAPTCHA_SITE_KEY = ""
+
+# secrets (not in this file):
+#   npx wrangler secret put HCAPTCHA_SECRET            ← hCaptcha secret key
+#   npx wrangler secret put FIREBASE_SERVICE_ACCOUNT   ← paste the whole service-account JSON

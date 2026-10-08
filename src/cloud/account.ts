@@ -11,7 +11,7 @@
  * keep projectIds (and so the number of projects) within the limit.
  */
 import { create } from 'zustand';
-import { cloudEnabled, DEFAULT_PROJECT_LIMIT, FIREBASE_CONFIG, FUNCTIONS_REGION, MAX_PROJECT_BYTES, USE_EMULATORS } from './config';
+import { cloudEnabled, DEFAULT_PROJECT_LIMIT, FIREBASE_CONFIG, FUNCTIONS_REGION, MAX_PROJECT_BYTES, USE_EMULATORS, CAPTCHA_URL } from './config';
 import { planSync, type CloudProject } from './sync';
 import { deleteProject, duplicateProject, listProjects, onProjectsChanged, parseDoc, putLocalProject, renameProject, saveProject, type SavedProject } from '../model/persistence';
 import type { CircuitDoc } from '../model/types';
@@ -177,7 +177,25 @@ export function accountError(e: unknown): string {
 }
 
 async function verifyCaptcha(s: Sdk, token: string) {
-  await s.fnM.httpsCallable(s.fns, 'verifyCaptcha')({ token });
+  if (!CAPTCHA_URL) {
+    await s.fnM.httpsCallable(s.fns, 'verifyCaptcha')({ token });
+    return;
+  }
+  const user = s.auth.currentUser;
+  if (!user) throw new Error('Sign in first.');
+  let res: Response;
+  try {
+    res = await fetch(CAPTCHA_URL, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${await user.getIdToken()}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ token }),
+    });
+  } catch {
+    throw Object.assign(new Error('No connection to the captcha check. Check your internet and try again.'), { code: 'captcha/network' });
+  }
+  if (res.ok) return;
+  const out = (await res.json().catch(() => ({}))) as { error?: string };
+  throw Object.assign(new Error(out.error ?? `The captcha check failed (${res.status}).`), { code: `captcha/${res.status}` });
 }
 
 export async function signUpEmail(email: string, password: string, captchaToken: string) {
