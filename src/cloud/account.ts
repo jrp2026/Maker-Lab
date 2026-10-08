@@ -193,8 +193,10 @@ async function verifyCaptcha(s: Sdk, token: string) {
   } catch {
     throw Object.assign(new Error('No connection to the captcha check. Check your internet and try again.'), { code: 'captcha/network' });
   }
-  if (res.ok) return;
-  const out = (await res.json().catch(() => ({}))) as { error?: string };
+  const out = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+  if (res.ok && out.ok === true) return;
+  // e.g. the Worker address points at something else (a starter "Hello World" worker)
+  if (res.ok) throw Object.assign(new Error('The captcha check is not set up correctly (the Worker gave an unexpected answer). Please tell the site owner.'), { code: 'captcha/misconfigured' });
   throw Object.assign(new Error(out.error ?? `The captcha check failed (${res.status}).`), { code: `captcha/${res.status}` });
 }
 
