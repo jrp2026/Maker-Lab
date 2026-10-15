@@ -19,8 +19,15 @@ export const HCAPTCHA_SITE_KEY = env.VITE_HCAPTCHA_SITE_KEY ?? '';
 /** the Cloudflare Worker that checks the captcha (cloudflare/captcha-worker); without it the verifyCaptcha Cloud Function is used */
 export const CAPTCHA_URL = env.VITE_CAPTCHA_URL ?? '';
 
+/**
+ * Accounts are switched off for now: sign-in and cloud saving are hidden and nothing talks to
+ * Firebase. Projects keep saving in this browser (every project saved while signed in was also
+ * kept here, so nothing is lost). Set to false to bring accounts back.
+ */
+export const ACCOUNTS_PAUSED = true;
+
 /** are cloud accounts available in this build? */
-export const cloudEnabled = !!(FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.projectId && FIREBASE_CONFIG.appId);
+export const cloudEnabled = !ACCOUNTS_PAUSED && !!(FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.projectId && FIREBASE_CONFIG.appId);
 
 /** used when Firestore has no config/limits document */
 export const DEFAULT_PROJECT_LIMIT = 25;

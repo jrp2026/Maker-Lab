@@ -183,7 +183,8 @@ npm run build      # static site in dist/
   linked to each symbol so *Update PCB from Schematic* works. The inspector (and the AI part
   dialog) also download a single part's symbol (`.kicad_sym`) or footprint (`.kicad_mod`), and
   this works for AI-generated parts too.
-- **Cloud accounts (optional)** – sign in with email or Google and projects are saved to your
+- **Cloud accounts (paused)** – switched off for now (`ACCOUNTS_PAUSED` in `src/cloud/config.ts`);
+  projects save in the browser. When on: sign in with email or Google and projects are saved to your
   account and sync live between devices (each browser keeps a copy, so they also work offline).
   New accounts pass an hCaptcha that a free Cloudflare Worker checks on the server, and the number of
   projects per account comes from Firestore (`config/limits`, per-user overrides) and is enforced
