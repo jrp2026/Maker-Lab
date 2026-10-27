@@ -4,6 +4,7 @@
  * API keys are kept in this browser's localStorage only.
  */
 import { storageKey } from '../model/storageKey';
+import { OLLAMA_CLOUD_PROXY_URL } from '../cloud/config';
 
 export type ProviderId = 'anthropic' | 'openai' | 'gemini' | 'ollama' | 'ollama-cloud' | 'lmstudio';
 
@@ -52,9 +53,9 @@ export const PROVIDERS: Record<ProviderId, ProviderInfo> = {
     label: 'Ollama Cloud',
     needsKey: true,
     defaultModel: 'gpt-oss:120b-cloud',
-    defaultBaseUrl: 'https://ollama.com',
+    defaultBaseUrl: OLLAMA_CLOUD_PROXY_URL || 'https://ollama.com',
     keyUrl: 'https://ollama.com/settings/keys',
-    help: 'Uses the Ollama Cloud API directly from your browser. Create an API key in your Ollama account settings.',
+    help: 'Create an API key in your Ollama account settings. Browser access requires the MakerLab Cloudflare Worker proxy because Ollama Cloud does not allow browser CORS requests.',
   },
   lmstudio: {
     label: 'LM Studio (local)',
@@ -110,6 +111,7 @@ async function call(url: string, init: RequestInit, s: AiSettings): Promise<any>
     if ((e as Error).name === 'AbortError') throw e;
     const info = PROVIDERS[s.provider];
     if (!info.needsKey) throw new ProviderError(`Couldn't reach ${info.label} at ${baseOf(s)}. Is it running, and does it allow browser requests (CORS)? ${info.help}`);
+    if (s.provider === 'ollama-cloud') throw new ProviderError(`Couldn't reach Ollama Cloud from this browser. Configure the MakerLab Cloudflare Worker proxy URL ending in /ollama; direct browser requests are blocked by Ollama Cloud's CORS policy.`);
     throw new ProviderError(`Network error talking to ${info.label}. Check your connection.`);
   }
   const text = await res.text();

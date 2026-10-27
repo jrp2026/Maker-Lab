@@ -67,6 +67,15 @@ signing up from their Firebase sign-in, and marks the account verified in Firest
 
 The free Workers plan allows 100,000 requests a day; each sign-up uses one.
 
+### Ollama Cloud browser access
+
+Ollama Cloud does not allow cross-origin browser requests. The same Worker can relay its chat and
+model-list requests without storing the Ollama key. Deploy the updated Worker with `npx wrangler
+deploy`, then add the repository variable `VITE_OLLAMA_CLOUD_PROXY_URL` with the Worker address and
+`/ollama` suffix (for example, `https://makerlab-captcha.<you>.workers.dev/ollama`). Re-run the Pages
+workflow. The key is sent through your Worker to Ollama for each request; it is not stored by the
+Worker. Keep `ALLOWED_ORIGINS` limited to your app and local development origins.
+
 (The older Cloud Function in `firebase/functions` still works if you'd rather use the Blaze plan.
 Leave `VITE_CAPTCHA_URL` empty and run `firebase deploy --only firestore:rules,functions`.)
 

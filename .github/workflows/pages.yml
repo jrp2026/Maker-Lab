@@ -35,6 +35,7 @@ jobs:
           VITE_FIREBASE_FUNCTIONS_REGION: ${{ vars.VITE_FIREBASE_FUNCTIONS_REGION }}
           VITE_HCAPTCHA_SITE_KEY: ${{ vars.VITE_HCAPTCHA_SITE_KEY }}
           VITE_CAPTCHA_URL: ${{ vars.VITE_CAPTCHA_URL }}
+          VITE_OLLAMA_CLOUD_PROXY_URL: ${{ vars.VITE_OLLAMA_CLOUD_PROXY_URL }}
       - run: touch dist/.nojekyll
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

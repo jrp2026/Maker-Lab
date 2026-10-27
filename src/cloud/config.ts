@@ -18,6 +18,8 @@ export const USE_EMULATORS = env.VITE_FIREBASE_EMULATORS === '1';
 export const HCAPTCHA_SITE_KEY = env.VITE_HCAPTCHA_SITE_KEY ?? '';
 /** the Cloudflare Worker that checks the captcha (cloudflare/captcha-worker); without it the verifyCaptcha Cloud Function is used */
 export const CAPTCHA_URL = env.VITE_CAPTCHA_URL ?? '';
+/** optional Ollama Cloud relay URL, ending in /ollama (e.g. https://worker.example/ollama) */
+export const OLLAMA_CLOUD_PROXY_URL = env.VITE_OLLAMA_CLOUD_PROXY_URL ?? '';
 
 /**
  * Accounts are switched off for now: sign-in and cloud saving are hidden and nothing talks to

@@ -131,7 +131,7 @@ function corsHeaders(origin, env) {
     ok,
     headers: ok ? {
       'access-control-allow-origin': origin,
-      'access-control-allow-methods': 'POST, OPTIONS',
+      'access-control-allow-methods': 'GET, POST, OPTIONS',
       'access-control-allow-headers': 'authorization, content-type',
       'access-control-max-age': '86400',
       vary: 'origin',
@@ -141,9 +141,42 @@ function corsHeaders(origin, env) {
 
 const json = (status, body, headers) => new Response(JSON.stringify(body), { status, headers: { ...headers, 'content-type': 'application/json' } });
 
+async function ollamaProxy(request, cors) {
+  const url = new URL(request.url);
+  const path = url.pathname.slice('/ollama'.length);
+  if (!['/api/tags', '/api/chat'].includes(path)) return json(404, { error: 'Unknown Ollama endpoint.' }, cors.headers);
+  if (!cors.ok) return json(403, { error: 'This website may not use the Ollama proxy.' }, cors.headers);
+  if (request.method !== (path === '/api/tags' ? 'GET' : 'POST')) return json(405, { error: 'Method not allowed.' }, cors.headers);
+
+  const authorization = request.headers.get('authorization') || '';
+  if (!/^Bearer\s+\S+/i.test(authorization)) return json(401, { error: 'Add your Ollama Cloud API key.' }, cors.headers);
+
+  const headers = { authorization };
+  let body;
+  if (request.method === 'POST') {
+    body = await request.text();
+    if (body.length > 2_000_000) return json(413, { error: 'Request is too large.' }, cors.headers);
+    headers['content-type'] = 'application/json';
+  }
+
+  try {
+    const upstream = await fetch(`https://ollama.com${path}`, { method: request.method, headers, body });
+    const responseHeaders = new Headers(cors.headers);
+    responseHeaders.set('content-type', upstream.headers.get('content-type') || 'application/json');
+    return new Response(upstream.body, { status: upstream.status, headers: responseHeaders });
+  } catch {
+    return json(502, { error: 'Could not reach Ollama Cloud.' }, cors.headers);
+  }
+}
+
 export default {
   async fetch(request, env) {
     const cors = corsHeaders(request.headers.get('origin'), env);
+    const path = new URL(request.url).pathname;
+    if (path === '/ollama' || path.startsWith('/ollama/')) {
+      if (request.method === 'OPTIONS') return new Response(null, { status: cors.ok ? 204 : 403, headers: cors.headers });
+      return ollamaProxy(request, cors);
+    }
     if (request.method === 'OPTIONS') return new Response(null, { status: cors.ok ? 204 : 403, headers: cors.headers });
     if (!cors.ok) return json(403, { error: 'This website may not use the captcha check.' }, cors.headers);
     if (request.method !== 'POST') return json(405, { error: 'Use POST.' }, cors.headers);

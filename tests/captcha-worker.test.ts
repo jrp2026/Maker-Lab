@@ -109,4 +109,41 @@ describe('captcha worker (Cloudflare)', () => {
     await call({ authorization: `Bearer ${t}` });
     expect(tokenCalls).toBe(1);
   });
+
+  it('proxies only the Ollama Cloud model and chat endpoints with CORS and bearer auth', async () => {
+    const previousFetch = globalThis.fetch;
+    const upstream = vi.fn(async (url: string, init?: RequestInit) => {
+      expect((init?.headers as Record<string, string>).authorization).toBe('Bearer ollama-key');
+      const body = url.endsWith('/api/tags') ? { models: [{ name: 'gpt-oss:120b' }] } : { message: { content: 'ok' } };
+      return new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } });
+    });
+    globalThis.fetch = upstream as unknown as typeof fetch;
+    try {
+      const preflight = await worker.fetch(new Request('https://w.example/ollama/api/chat', { method: 'OPTIONS', headers: { origin: ORIGIN } }), env);
+      expect(preflight.status).toBe(204);
+      expect(preflight.headers.get('access-control-allow-methods')).toContain('POST');
+
+      const res = await worker.fetch(new Request('https://w.example/ollama/api/chat', {
+        method: 'POST',
+        headers: { origin: ORIGIN, authorization: 'Bearer ollama-key', 'content-type': 'application/json' },
+        body: JSON.stringify({ model: 'gpt-oss:120b', stream: false }),
+      }), env);
+      expect(res.status).toBe(200);
+      expect(res.headers.get('access-control-allow-origin')).toBe(ORIGIN);
+      expect(await res.json()).toEqual({ message: { content: 'ok' } });
+      expect(upstream).toHaveBeenCalledWith('https://ollama.com/api/chat', expect.objectContaining({ method: 'POST' }));
+
+      const models = await worker.fetch(new Request('https://w.example/ollama/api/tags', {
+        headers: { origin: ORIGIN, authorization: 'Bearer ollama-key' },
+      }), env);
+      expect(models.status).toBe(200);
+      expect(await models.json()).toEqual({ models: [{ name: 'gpt-oss:120b' }] });
+      expect(upstream).toHaveBeenCalledWith('https://ollama.com/api/tags', expect.objectContaining({ method: 'GET' }));
+
+      const badPath = await worker.fetch(new Request('https://w.example/ollama/anything', { headers: { origin: ORIGIN } }), env);
+      expect(badPath.status).toBe(404);
+    } finally {
+      globalThis.fetch = previousFetch;
+    }
+  });
 });
