@@ -5,7 +5,7 @@
  */
 import { storageKey } from '../model/storageKey';
 
-export type ProviderId = 'anthropic' | 'openai' | 'gemini' | 'ollama' | 'lmstudio';
+export type ProviderId = 'anthropic' | 'openai' | 'gemini' | 'ollama' | 'ollama-cloud' | 'lmstudio';
 
 export interface ProviderInfo {
   label: string;
@@ -47,6 +47,14 @@ export const PROVIDERS: Record<ProviderId, ProviderInfo> = {
     defaultModel: 'llama3.1',
     defaultBaseUrl: 'http://localhost:11434',
     help: 'Runs on your machine. Allow this page to call it by starting Ollama with OLLAMA_ORIGINS=* (e.g. `OLLAMA_ORIGINS=* ollama serve`). Larger models (≥ 14B) follow the part format far better.',
+  },
+  'ollama-cloud': {
+    label: 'Ollama Cloud',
+    needsKey: true,
+    defaultModel: 'gpt-oss:120b-cloud',
+    defaultBaseUrl: 'https://ollama.com',
+    keyUrl: 'https://ollama.com/settings/keys',
+    help: 'Uses the Ollama Cloud API directly from your browser. Create an API key in your Ollama account settings.',
   },
   lmstudio: {
     label: 'LM Studio (local)',
@@ -163,11 +171,14 @@ export async function complete(s: AiSettings, system: string, messages: ChatMess
       }, s);
       return (data?.candidates?.[0]?.content?.parts ?? []).map((p: any) => p.text ?? '').join('');
     }
-    case 'ollama': {
+    case 'ollama':
+    case 'ollama-cloud': {
+      const headers: Record<string, string> = { ...json };
+      if (s.provider === 'ollama-cloud') headers.authorization = `Bearer ${keyOf(s)}`;
       const data = await call(`${base}/api/chat`, {
         method: 'POST',
         signal,
-        headers: json,
+        headers,
         body: JSON.stringify({ model, stream: false, format: 'json', options: { temperature: 0.3, num_ctx: 16384 }, messages: [{ role: 'system', content: system }, ...messages] }),
       }, s);
       return data?.message?.content ?? '';
@@ -198,8 +209,11 @@ export async function listModels(s: AiSettings): Promise<string[]> {
         .filter((m: any) => (m.supportedGenerationMethods ?? []).includes('generateContent'))
         .map((m: any) => String(m.name).replace(/^models\//, ''));
     }
-    case 'ollama': {
-      const data = await call(`${base}/api/tags`, {}, s);
+    case 'ollama':
+    case 'ollama-cloud': {
+      const headers: Record<string, string> = {};
+      if (s.provider === 'ollama-cloud') headers.authorization = `Bearer ${keyOf(s)}`;
+      const data = await call(`${base}/api/tags`, { headers }, s);
       return (data?.models ?? []).map((m: any) => m.name);
     }
   }

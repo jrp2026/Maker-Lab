@@ -171,7 +171,7 @@ export function LibraryPanel() {
         <span>✨</span>
         <div>
           <b>Make a part with AI</b>
-          <small>Claude · ChatGPT · Gemini · Ollama · LM Studio</small>
+          <small>Claude · ChatGPT · Gemini · Ollama · Ollama Cloud · LM Studio</small>
         </div>
       </button>
       {aiOpen && <AiPartDialog onClose={() => { setAiOpen(false); if (useAiParts.getState().saved.length) setCat('ai'); }} />}

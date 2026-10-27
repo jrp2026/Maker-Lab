@@ -129,13 +129,14 @@ describe('AI part in the simulator', () => {
 
 describe('providers', () => {
   afterEach(() => vi.unstubAllGlobals());
-  const settings = (provider: AiSettings['provider']): AiSettings => ({ provider, models: {}, keys: { anthropic: 'k1', openai: 'k2', gemini: 'k3' }, baseUrls: {} });
+  const settings = (provider: AiSettings['provider']): AiSettings => ({ provider, models: {}, keys: { anthropic: 'k1', openai: 'k2', gemini: 'k3', 'ollama-cloud': 'k4' }, baseUrls: {} });
 
   it.each([
     ['anthropic', 'https://api.anthropic.com/v1/messages', { content: [{ type: 'text', text: 'hi' }] }],
     ['openai', 'https://api.openai.com/v1/chat/completions', { choices: [{ message: { content: 'hi' } }] }],
     ['gemini', 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent', { candidates: [{ content: { parts: [{ text: 'hi' }] } }] }],
     ['ollama', 'http://localhost:11434/api/chat', { message: { content: 'hi' } }],
+    ['ollama-cloud', 'https://ollama.com/api/chat', { message: { content: 'hi' } }],
     ['lmstudio', 'http://localhost:1234/v1/chat/completions', { choices: [{ message: { content: 'hi' } }] }],
   ] as const)('%s: correct endpoint, auth and response parsing', async (provider, url, reply) => {
     const fetch = vi.fn(async () => new Response(JSON.stringify(reply), { status: 200 }));
@@ -156,6 +157,10 @@ describe('providers', () => {
     }
     if (provider === 'gemini') expect(headers['x-goog-api-key']).toBe('k3');
     if (provider === 'ollama') expect(body.format).toBe('json');
+    if (provider === 'ollama-cloud') {
+      expect(headers.authorization).toBe('Bearer k4');
+      expect(body.format).toBe('json');
+    }
   });
 
   it('asks for a key before calling a cloud provider, and explains local connection failures', async () => {
@@ -167,6 +172,15 @@ describe('providers', () => {
   it('lists models (Gemini filters to generateContent models)', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ models: [{ name: 'models/gemini-x', supportedGenerationMethods: ['generateContent'] }, { name: 'models/embed', supportedGenerationMethods: ['embedContent'] }] }))));
     expect(await listModels(settings('gemini'))).toEqual(['gemini-x']);
+  });
+
+  it('lists Ollama Cloud models with API-key authentication', async () => {
+    const fetch = vi.fn(async () => new Response(JSON.stringify({ models: [{ name: 'gpt-oss:120b-cloud' }] })));
+    vi.stubGlobal('fetch', fetch);
+    expect(await listModels(settings('ollama-cloud'))).toEqual(['gpt-oss:120b-cloud']);
+    const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('https://ollama.com/api/tags');
+    expect((init.headers as Record<string, string>).authorization).toBe('Bearer k4');
   });
 
   it('generatePart repairs an invalid first answer', async () => {
