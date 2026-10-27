@@ -4,7 +4,8 @@
  * - everything else from this site (hashed JS/CSS bundles, icons, Blockly media): cache first,
  *   filled as it is first used
  */
-const CACHE = 'makerlab-v1';
+// Bump this when deploying a new build so stale cached shells don't keep serving an old blank page.
+const CACHE = 'makerlab-v2';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon.svg'];
 
 self.addEventListener('install', (e) => {
